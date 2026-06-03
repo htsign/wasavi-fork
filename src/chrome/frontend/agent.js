@@ -2020,7 +2020,7 @@ var handleBackendMessage = (function () {
 })();
 
 function handleConnect (req) {
-	if (!req || !('tabId' in req) || !req.tabId) {
+	if (!req || (!isOptionsPage && (!('tabId' in req) || !req.tabId))) {
 		if (logMode) {
 			var missing = '?';
 			if (!req) {
@@ -2036,7 +2036,7 @@ function handleConnect (req) {
 		return;
 	}
 
-	extension.tabId = req.tabId;
+	if (!isOptionsPage) extension.tabId = req.tabId;
 	allowedElements = req.targets;
 	shortcutCode = req.shortcutCode;
 	fontFamily = req.fontFamily;
