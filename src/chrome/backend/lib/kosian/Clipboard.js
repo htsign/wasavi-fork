@@ -26,13 +26,13 @@
 	function Clipboard () {}
 	Clipboard.prototype = {
 		set: function (data) {},
-		get: function () {return ''}
+		get: function (callback) {callback && callback('')}
 	};
 
 	//
 	function ExecCommandClipboard () {}
 	ExecCommandClipboard.prototype = Object.create(Clipboard.prototype, {
-		set: {value: function (data) {
+		setViaExecCommand: {value: function (data) {
 			var buffer = document.getElementById('clipboard-buffer');
 			data || (data = '');
 			try {
@@ -46,7 +46,7 @@
 			catch (e) {
 			}
 		}},
-		get: {value: function () {
+		getViaExecCommand: {value: function () {
 			var buffer = document.getElementById('clipboard-buffer');
 			var data = '';
 			try {
@@ -61,6 +61,35 @@
 				data = '';
 			}
 			return data;
+		}},
+		set: {value: function (data) {
+			data || (data = '');
+			if (data == '') {
+				return;
+			}
+			var that = this;
+			if (navigator.clipboard && navigator.clipboard.writeText) {
+				navigator.clipboard.writeText(data).catch(function () {
+					that.setViaExecCommand(data);
+				});
+			}
+			else {
+				this.setViaExecCommand(data);
+			}
+		}},
+		get: {value: function (callback) {
+			callback || (callback = function () {});
+			var that = this;
+			if (navigator.clipboard && navigator.clipboard.readText) {
+				navigator.clipboard.readText().then(function (text) {
+					callback(text);
+				}, function () {
+					callback(that.getViaExecCommand());
+				});
+			}
+			else {
+				callback(this.getViaExecCommand());
+			}
 		}}
 	});
 	ExecCommandClipboard.prototype.constructor = Clipboard;
