@@ -34,7 +34,8 @@ const LOG_MAP_MANAGER = false;
 const LOG_LAST_SIMPLE_COMMAND = false;
 
 g.Wasavi = Object.defineProperties({}, {
-	IS_GECKO: {value: 'InstallTrigger' in g},
+	IS_GECKO: {value: typeof g.browser !== 'undefined'
+		&& typeof g.browser.runtime !== 'undefined'},
 
 	BRACKETS: {value: BRACKETS},
 	CLOSE_BRACKETS: {value: CLOSE_BRACKETS},

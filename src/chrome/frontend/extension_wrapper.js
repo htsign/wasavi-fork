@@ -25,8 +25,9 @@
 
 !this.WasaviExtensionWrapper && (function (global) {
 	/* <<<1 consts */
-	const IS_GECKO = 'InstallTrigger' in global;
-	const IS_FX_WEBEXT = IS_GECKO && global.chrome && global.chrome.extension;
+	const IS_GECKO = typeof global.browser !== 'undefined'
+		&& typeof global.browser.runtime !== 'undefined';
+	const IS_FX_WEBEXT = IS_GECKO;
 	/* >>> */
 
 	/* <<<1 vars */
