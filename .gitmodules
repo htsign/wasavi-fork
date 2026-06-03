@@ -1,3 +1,0 @@
-[submodule "src/chrome/backend/lib/kosian"]
-	path = src/chrome/backend/lib/kosian
-	url = git@github.com:akahuku/kosian.git
