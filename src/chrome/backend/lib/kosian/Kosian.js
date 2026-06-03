@@ -433,10 +433,6 @@
 	};
 
 	exports.Kosian = Kosian;
-
-	if (require('sdk/self')) {
-		require('./FirefoxImpl');
-	}
 })();
 
 // vim:set ts=4 sw=4 fenc=UTF-8 ff=unix ft=javascript fdm=marker :
