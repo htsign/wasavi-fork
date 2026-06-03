@@ -746,7 +746,10 @@
 	}
 
 	function handleGetClipboard (command, data, sender, respond) {
-		respond({data: ext.clipboard.get()});
+		ext.clipboard.get(function (text) {
+			respond({data: text});
+		});
+		return true;
 	}
 
 	function handleSetMemorandum (command, data, sender, respond) {

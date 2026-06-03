@@ -34,7 +34,11 @@ const LOG_MAP_MANAGER = false;
 const LOG_LAST_SIMPLE_COMMAND = false;
 
 g.Wasavi = Object.defineProperties({}, {
-	IS_GECKO: {value: 'InstallTrigger' in g},
+	IS_GECKO: {value: typeof g.browser !== 'undefined'
+		&& typeof g.browser.runtime !== 'undefined'
+		// Chrome 148+ also defines `browser` as an alias of `chrome`,
+		// so check the extension origin scheme to identify Firefox
+		&& g.browser.runtime.getURL('').startsWith('moz-extension://')},
 
 	BRACKETS: {value: BRACKETS},
 	CLOSE_BRACKETS: {value: CLOSE_BRACKETS},

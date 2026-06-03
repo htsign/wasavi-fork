@@ -1,0 +1,131 @@
+name: Build Firefox XPI
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+    branches: [master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '20'
+
+      - name: Install web-ext
+        run: npm install -g web-ext
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            TAG=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')
+            VERSION="${TAG:-0.0.1}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare source directory
+        run: |
+          mkdir -p .build/firefox
+          # src/firefox is a symlink to src/chrome; rsync -L follows symlinks
+          rsync -rptL --delete \
+            --exclude '*.sw?' --exclude '*.bak' --exclude '*~' --exclude '*.sh' \
+            --exclude 'banner*.xcf' --exclude 'banner*.png' \
+            --exclude '.*' \
+            --exclude 'consumer_keys.json' --exclude 'consumer_keys.json.template' \
+            --exclude 'consumer_keys.bin' \
+            --exclude 'FirefoxImpl.js' --exclude 'OperaImpl.js' \
+            --exclude 'wasavi_frame_noscript.html' \
+            src/firefox/ .build/firefox/
+
+      - name: Place consumer keys (optional)
+        env:
+          CONSUMER_KEYS_BIN: ${{ secrets.CONSUMER_KEYS_BIN }}
+        run: |
+          if [ -n "${CONSUMER_KEYS_BIN}" ]; then
+            printf '%s' "${CONSUMER_KEYS_BIN}" | base64 -d > .build/firefox/consumer_keys.bin
+            echo "consumer_keys.bin placed from secret"
+          else
+            echo "CONSUMER_KEYS_BIN secret not set; cloud storage will be unavailable"
+          fi
+
+      - name: Update manifest version and strip update_url
+        run: |
+          node - <<'EOF'
+          const fs = require('fs');
+          const path = '.build/firefox/manifest.json';
+          const m = JSON.parse(fs.readFileSync(path, 'utf8'));
+          m.version = process.env.VERSION || '0.0.1';
+          delete m.update_url;
+          if (m.browser_specific_settings && m.browser_specific_settings.gecko) {
+            delete m.browser_specific_settings.gecko.update_url;
+          }
+          fs.writeFileSync(path, JSON.stringify(m, null, 2) + '\n');
+          console.log('manifest version set to', m.version);
+          EOF
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+
+      - name: Build XPI
+        run: |
+          web-ext build \
+            --source-dir .build/firefox \
+            --artifacts-dir dist \
+            --overwrite-dest
+          # web-ext names the file after the extension name and version; rename to wasavi.xpi
+          shopt -s nullglob
+          files=(dist/*.zip dist/*.xpi)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "no build artifact found in dist/" >&2
+            exit 1
+          fi
+          mv "${files[0]}" dist/wasavi.xpi
+
+      - name: Upload XPI artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wasavi-xpi
+          path: dist/wasavi.xpi
+          retention-days: 90
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Determine version
+        id: version
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Download XPI artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: wasavi-xpi
+          path: dist
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          name: wasavi ${{ steps.version.outputs.version }}
+          files: dist/wasavi.xpi
+          generate_release_notes: true
