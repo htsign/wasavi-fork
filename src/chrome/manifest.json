@@ -5,10 +5,10 @@
   "version": "0.0.1",
   "description": "__MSG_wasavi_desc__",
   "default_locale": "en_US",
-  "applications": {
+  "browser_specific_settings": {
     "gecko": {
       "id": "jid1-bmMwuNrx3u5hqQ@jetpack",
-      "strict_min_version": "42.0",
+      "strict_min_version": "109.0",
       "update_url": "https://github.com/akahuku/wasavi/raw/master/dist/firefox.json"
     }
   },
