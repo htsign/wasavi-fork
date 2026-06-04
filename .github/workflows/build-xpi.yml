@@ -81,15 +81,37 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
 
-      - name: Build XPI
+      - name: Build XPI (signed on tagged releases)
+        env:
+          # web-ext sign reads these automatically
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+          IS_TAG: ${{ startsWith(github.ref, 'refs/tags/v') }}
         run: |
-          web-ext build \
-            --source-dir .build/firefox \
-            --artifacts-dir dist \
-            --overwrite-dest
-          # web-ext names the file after the extension name and version; rename to wasavi.xpi
           shopt -s nullglob
-          files=(dist/*.zip dist/*.xpi)
+          # drop the committed artifact so the glob below only sees this build's
+          # fresh output (web-ext build emits .zip, web-ext sign emits .xpi)
+          rm -f dist/wasavi.xpi
+          # AMO rejects re-signing an already-seen version, so only sign tagged
+          # releases (each tag is a fresh version). master/PR builds stay unsigned.
+          if [ "${IS_TAG}" = "true" ] && [ -n "${WEB_EXT_API_KEY}" ] && [ -n "${WEB_EXT_API_SECRET}" ]; then
+            echo "tagged release with AMO credentials; signing via the unlisted channel"
+            # sign validates on AMO (a few minutes) and downloads the signed xpi
+            web-ext sign \
+              --source-dir .build/firefox \
+              --artifacts-dir dist \
+              --channel unlisted
+          else
+            if [ "${IS_TAG}" = "true" ]; then
+              echo "::warning::tagged release but AMO credentials are absent; building an unsigned XPI"
+            fi
+            web-ext build \
+              --source-dir .build/firefox \
+              --artifacts-dir dist \
+              --overwrite-dest
+          fi
+          # web-ext names the file after the extension name and version; rename to wasavi.xpi
+          files=(dist/*.xpi dist/*.zip)
           if [ "${#files[@]}" -eq 0 ]; then
             echo "no build artifact found in dist/" >&2
             exit 1
