@@ -24,6 +24,21 @@ cd "$root"
 
 manifest=src/chrome/manifest.json
 
+# the files this script rewrites
+# JSON "version" fields (the leading quote keeps the pattern off
+# "strict_min_version"); <updatecheck version="..."> attributes; <em:version>.
+json_files=("$manifest" package.json dist/firefox.json)
+gupdate_files=(dist/chrome.xml dist/opera-blink.xml)
+rdf_file=dist/firefox.rdf
+files=("${json_files[@]}" "${gupdate_files[@]}" "$rdf_file")
+
+# refuse to run when the target files already carry staged or unstaged changes,
+# so the bump commit can only ever contain this script's edits
+if ! git diff --quiet -- "${files[@]}" || ! git diff --cached --quiet -- "${files[@]}"; then
+	echo "error: target files have pending changes; commit or stash them first" >&2
+	exit 1
+fi
+
 read_version() {
 	# first "version" field of the manifest (its add-on version)
 	perl -ne 'if (/"version":\s*"([^"]*)"/) { print $1; exit }' "$manifest"
@@ -40,7 +55,8 @@ case "$1" in
 	rest="${current#*.}"
 	minor="${rest%%.*}"
 	patch="${rest#*.}"
-	version="${major}.${minor}.$((patch + 1))"
+	# 10# forces base-10 so a zero-padded patch is not read as octal
+	version="${major}.${minor}.$((10#$patch + 1))"
 	;;
 *)
 	version="$1"
@@ -50,14 +66,6 @@ case "$1" in
 	fi
 	;;
 esac
-
-# JSON "version" fields. The leading quote in the pattern keeps it from matching
-# keys such as "strict_min_version".
-json_files=("$manifest" package.json dist/firefox.json)
-# Chrome / Opera update manifests: the version is an attribute on <updatecheck>.
-gupdate_files=(dist/chrome.xml dist/opera-blink.xml)
-# Firefox RDF update manifest: <em:version> element.
-rdf_file=dist/firefox.rdf
 
 for f in "${json_files[@]}"; do
 	perl -i -pe 's/"version":\s*"[^"]*"/"version": "'"$version"'"/' "$f"
@@ -72,10 +80,11 @@ perl -i -pe 's{<em:version>[^<]*</em:version>}{<em:version>'"$version"'</em:vers
 
 echo "bumped version to $version"
 
-# stage and commit only the files this script edits
-git add "${json_files[@]}" "${gupdate_files[@]}" "$rdf_file"
-if git diff --cached --quiet; then
+# stage and commit only the files this script edits (the pathspec on the diff
+# check and the commit keeps any other staged change out of the bump commit)
+git add "${files[@]}"
+if git diff --cached --quiet -- "${files[@]}"; then
 	echo "no version changes to commit"
 	exit 0
 fi
-git commit -m "bump version to $version"
+git commit -m "bump version to $version" -- "${files[@]}"
