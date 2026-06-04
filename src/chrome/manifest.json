@@ -9,7 +9,7 @@
     "gecko": {
       "id": "wasavi-fork@htsign",
       "strict_min_version": "109.0",
-      "update_url": "https://github.com/akahuku/wasavi/raw/master/dist/firefox.json"
+      "update_url": "https://github.com/htsign/wasavi/raw/master/dist/firefox.json"
     }
   },
   "icons": {
@@ -78,5 +78,5 @@
     "open_in_tab": true
   },
   "homepage_url": "http://appsweets.net/",
-  "update_url":"https://github.com/akahuku/wasavi/raw/master/dist/chrome.xml"
+  "update_url":"https://github.com/htsign/wasavi/raw/master/dist/chrome.xml"
 }
