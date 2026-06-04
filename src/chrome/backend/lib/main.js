@@ -187,19 +187,26 @@
 
 			return Promise.all([
 				new Promise(resolve => {
-					let defaults = {};
-
+					// Seed resolved defaults first. Function-valued defs (shortcut,
+					// shortcutCode) cannot be structured-cloned, so passing them to
+					// storage.sync.get throws a DataCloneError on Firefox and drops
+					// every synced value. Resolving them here also keeps the defaults
+					// available even when the storage read fails.
+					// The iteration follows the configInfo.sync definition order, so
+					// shortcut is seeded before shortcutCode, whose def reads it back.
 					for (let i in info.sync) {
-						defaults[i] = info.sync[i].def;
+						values[i] = getDefaultValue(i);
 					}
 
-					chrome.storage.sync.get(defaults, items => {
+					chrome.storage.sync.get(null, items => {
 						if (chrome.runtime.lastError) {
 							ext.log(`!ERROR: failed to retrieve sync storage: ${chrome.runtime.lastError.message}`);
 						}
 						else {
 							for (let i in items) {
-								values[i] = items[i];
+								if (i in info.sync) {
+									values[i] = items[i];
+								}
 							}
 							console.log('got sync stroage');
 							console.dir(items);
