@@ -7,7 +7,7 @@
   "default_locale": "en_US",
   "browser_specific_settings": {
     "gecko": {
-      "id": "jid1-bmMwuNrx3u5hqQ@jetpack",
+      "id": "wasavi-fork@htsign",
       "strict_min_version": "109.0",
       "update_url": "https://github.com/akahuku/wasavi/raw/master/dist/firefox.json"
     }
