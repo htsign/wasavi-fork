@@ -26,27 +26,21 @@
 	 * timer wrapper
 	 */
 
-	var timers = require('sdk/timers');
-	if (!timers) {
-		timers = {
-			setInterval: function () {return global.setInterval.apply(global, arguments)},
-			setTimeout: function () {return global.setTimeout.apply(global, arguments)},
-			clearInterval: function () {return global.clearInterval.apply(global, arguments)},
-			clearTimeout: function () {return global.clearTimeout.apply(global, arguments)}
-		};
-	}
+	var timers = {
+		setInterval: function () {return global.setInterval.apply(global, arguments)},
+		setTimeout: function () {return global.setTimeout.apply(global, arguments)},
+		clearInterval: function () {return global.clearInterval.apply(global, arguments)},
+		clearTimeout: function () {return global.clearTimeout.apply(global, arguments)}
+	};
 
 	/*
 	 * base64 wrapper
 	 */
 
-	var base64 = require('sdk/base64');
-	if (!base64) {
-		base64 = {
-			decode: function () {return global.atob.apply(global, arguments)},
-			encode: function () {return global.btoa.apply(global, arguments)}
-		};
-	}
+	var base64 = {
+		decode: function () {return global.atob.apply(global, arguments)},
+		encode: function () {return global.btoa.apply(global, arguments)}
+	};
 
 	/*
 	 * JSON utils

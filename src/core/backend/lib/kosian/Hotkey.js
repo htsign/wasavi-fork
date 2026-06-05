@@ -204,110 +204,12 @@
 	HotkeyChrome.prototype = Object.create(Hotkey.prototype);
 	HotkeyChrome.prototype.constructor = Hotkey;
 
-	// firefox
-	function HotkeyFirefox (emit) {
-		Hotkey.apply(this, arguments);
-		this.canProcess = true;
-		this.emit = emit;
-		this.tabs = require('sdk/tabs');
-		this.hotkeyFactory = require('sdk/hotkeys').Hotkey;
-		this.hotkeyObjects = null;
-		this.handlePressBinded = this.handlePress.bind(this);
-	}
-	HotkeyFirefox.prototype = Object.create(Hotkey.prototype, {
-		constructor: Hotkey,
-		translateTable: {value: {
-			enter:'return', ret:'return',
-			ins:'insert',
-			del:'delete',
-			comma:',',
-			dot:'.', period:'.',
-			slash:'/',
-			backslash:'\\'
-		}},
-		register: {value: function (hotkeys) {
-			if (this.hotkeyObjects) {
-				this.hotkeysObject.forEach(function (hotkey) {
-					hotkey.destroy();
-				}, this);
-			}
-
-			this.hotkeyObjects = [];
-			this.parseHotkeys(hotkeys).forEach(function (hotkey) {
-				this.hotkeyObjects.push(this.hotkeyFactory({
-					combo:hotkey,
-					onPress:this.handlePressBinded
-				}));
-			}, this);
-		}},
-		parseHotkeys: {value: function (hotkeys) {
-			var result = [];
-
-			hotkeys = (hotkeys || '').replace(/^\s+|\s+$/g, '') || this.defaultHotkeysDesc_;
-			hotkeys.toLowerCase().split(/\s*,\s*/).forEach(function (sc) {
-				var re = /^<([^>]+)>$/.exec(sc);
-				if (!re) return;
-
-				var modifiers = re[1].split('-');
-				var key = modifiers.pop();
-				if (key in this.translateTable) {
-					key = this.translateTable[key];
-				}
-				if (!(key in keyTable)) return;
-
-				var codes = {shift:false, control:false, alt:false, meta:false, accel:false};
-				modifiers.forEach(function (m) {
-					switch (m.toLowerCase()) {
-					case 's':
-						codes.shift = true;
-						break;
-					case 'c':
-						codes.control = true;
-						break;
-					case 'a':
-						codes.alt = true;
-						break;
-					case 'm':
-						codes.meta = true;
-						break;
-					case 'x':
-						codes.accel = true;
-						break;
-					}
-				});
-
-				codes = Object.keys(codes).filter(function (m) {return codes[m]});
-				if (codes.length) {
-					codes.push(key);
-					result.push(codes.join('-'));
-				}
-			}, this);
-
-			if (result.length == 0) {
-				result = this.parseHotkeys('');
-			}
-
-			return result;
-		}},
-		handlePress: {value: function () {
-			if (this.emit) {
-				this.emit(this.onPress, this);
-			}
-			else if (this.onPress) {
-				this.onPress(this);
-			}
-		}}
-	});
-
 	function create (useDefault) {
 		var ext = require('./Kosian').Kosian();
 
 		if (!useDefault) {
 			if (global.chrome) {
 				return new HotkeyChrome(ext.emit);
-			}
-			else if (require('sdk/self')) {
-				return new HotkeyFirefox(ext.emit);
 			}
 		}
 

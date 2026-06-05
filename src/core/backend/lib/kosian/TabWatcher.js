@@ -81,71 +81,12 @@
 	ChromeTabWatcher.prototype.constructor = TabWatcher;
 
 	/*
-	 * for firefox (addon sdk)
-	 */
-
-	function FirefoxJetpackTabWatcher (emit) {
-		var tabs = require('sdk/tabs');
-		var targets = [];
-		var timer;
-
-		function startTimer () {
-			if (timer) return;
-			timer = u.setInterval(function () {
-				var newTargets = [];
-
-				targets.forEach(function (target) {
-					var currentUrl;
-					try {
-						currentUrl = target.tab.url || '';
-					}
-					catch (e) {
-						currentUrl = '';
-					}
-
-					var isGoalUrl = u.baseUrl(currentUrl) == u.baseUrl(target.goalUrl);
-					if (currentUrl == '' || isGoalUrl) {
-						emit(target.callback, currentUrl);
-						target.callback = null;
-					}
-					else {
-						newTargets.push(target);
-					}
-				});
-
-				if (newTargets.length == 0) {
-					u.clearInterval(timer);
-					timer = null;
-				}
-				else {
-					targets = newTargets;
-				}
-			}, 1000);
-		}
-
-		this.add = function (id, url, callback) {
-			Array.prototype.some.call(tabs, function (tab) {
-				if (tab.id == id) {
-					targets.push({tab:tab, startUrl:tab.url, goalUrl:url, callback:callback});
-					startTimer();
-					return true;
-				}
-			});
-		};
-	}
-
-	FirefoxJetpackTabWatcher.prototype.constructor = TabWatcher;
-
-	/*
 	 * exports
 	 */
 
 	function create (window, emit) {
 		if (window.chrome) {
 			return new ChromeTabWatcher(emit);
-		}
-		else if (require('sdk/self')) {
-			return new FirefoxJetpackTabWatcher(emit);
 		}
 		return new TabWatcher;
 	}
