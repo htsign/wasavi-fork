@@ -42,7 +42,7 @@
 	 * task queue class
 	 */
 
-	function TaskQueue (fs, authorize, ls, read, write) {
+	function TaskQueue (fs, ls, read, write) {
 		var queue = [];
 		var timer;
 
@@ -53,23 +53,6 @@
 
 			var top = queue.shift();
 			switch (top.task) {
-			case 'authorize':
-				if (!fs.needAuthentication || fs.isAuthorized) {
-					DEBUG && console.log('TaskQueue#process: nothing to do');
-					run();
-					break;
-				}
-				if (top.state == 'error') {
-					DEBUG && console.log('TaskQueue#process: error');
-					queue.shift();
-					authorize(top);
-				}
-				else {
-					DEBUG && console.log('TaskQueue#process: calling authroize');
-					queue.unshift(top);
-					authorize(top);
-				}
-				break;
 			case 'ls':
 				DEBUG && console.log('TaskQueue#process: calling ls');
 				ls(top);
@@ -85,36 +68,9 @@
 			}
 		}
 
-		function pushAuthorizeTask (referencedTask) {
-			queue.unshift({
-				task: 'authorize',
-				state: 'initial-state',
-				retryCount: 0,
-				tabId: referencedTask && referencedTask.tabId,
-				options: referencedTask && referencedTask.options
-			});
-		}
-
 		function push (task) {
 			if (!task) return;
-
-			if (fs.needAuthentication && !fs.isAuthorized) {
-				if (queue.length == 0 || queue[0].task != 'authorize') {
-					pushAuthorizeTask(task);
-				}
-				else {
-					if (!queue[0].tabId && task.tabId) {
-						queue[0].tabId = task.tabId;
-					}
-					if (!queue[0].options && task.options) {
-						queue[0].options = task.options;
-					}
-				}
-			}
-
-			if (task.task != 'authorize') {
-				queue.push(task);
-			}
+			queue.push(task);
 		}
 
 		function run (task) {
@@ -127,22 +83,6 @@
 
 		function getTopTask () {
 			return queue[0];
-		}
-
-		function initCredentials (keys, callback) {
-			var obj = fs.loadCredentials();
-
-			if (!obj) return;
-			//if (keys.some(function (key) {return !(key in obj)})) return;
-
-			pushAuthorizeTask();
-			queue[0].state = 'pre-authorized';
-
-			try {
-				callback(obj);
-			}
-			catch (e) {
-			}
 		}
 
 		fs.ls = function (path, tabId, options) {
@@ -171,7 +111,6 @@
 			});
 		};
 
-		this.initCredentials = initCredentials;
 		this.push = push;
 		this.run = run;
 		this.__defineGetter__('topTask', getTopTask);
@@ -188,8 +127,6 @@
 
 	FileSystem.prototype = {
 		backend: '*null*',
-		needAuthentication: true,
-		isAuthorized: false,
 		write: function (path, content, tabId, options) {
 			this.response({task: 'write', tabId: tabId, options: options}, {
 				error: 'not implemented'
@@ -456,9 +393,8 @@
 
 		FileSystem.apply(this, arguments);
 		this.backend = 'file';
-		this.needAuthentication = false;
 		var self = this;
-		var taskQueue = this.taskQueue = new TaskQueue(this, null, ls, read, write);
+		var taskQueue = this.taskQueue = new TaskQueue(this, ls, read, write);
 		//var LFO_ID = 'igbjeepbgpdcjmpcjgkkfgelekeigbhc';	// develop version
 		var LFO_ID = 'dkbdmkncpnepdbaneikhbbeiboehjnol';	// release version
 	}
