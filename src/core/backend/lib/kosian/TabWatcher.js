@@ -81,63 +81,6 @@
 	ChromeTabWatcher.prototype.constructor = TabWatcher;
 
 	/*
-	 * for opera
-	 */
-
-	function OperaTabWatcher (emit) {
-		var targets = [];
-		var timer;
-
-		function startTimer () {
-			if (timer) return;
-			timer = setInterval(function () {
-				var newTargets = [];
-
-				targets.forEach(function (target) {
-					var currentUrl;
-					try {
-						currentUrl = target.tab.url || '';
-					}
-					catch (e) {
-						currentUrl = '';
-					}
-
-					var isGoalUrl = u.baseUrl(currentUrl) == u.baseUrl(target.goalUrl);
-					if (currentUrl == '' || isGoalUrl) {
-						emit(target.callback, currentUrl);
-						target.callback = null;
-					}
-					else {
-						newTargets.push(target);
-					}
-				});
-
-				if (newTargets.length == 0) {
-					clearInterval(timer);
-					timer = null;
-				}
-				else {
-					targets = newTargets;
-				}
-			}, 1000);
-		}
-
-		this.add = function (id, url, callback) {
-			opera.extension.tabs.getAll().some(function (tab) {
-				if (id instanceof MessagePort && tab.port == id
-				||  typeof id == 'number' && tab.id == id) {
-					targets.push({tab:tab, startUrl:tab.url, goalUrl:url, callback:callback});
-					startTimer();
-					return true;
-				}
-				return false;
-			});
-		};
-	}
-
-	OperaTabWatcher.prototype.constructor = TabWatcher;
-
-	/*
 	 * for firefox (addon sdk)
 	 */
 
@@ -200,9 +143,6 @@
 	function create (window, emit) {
 		if (window.chrome) {
 			return new ChromeTabWatcher(emit);
-		}
-		else if (window.opera) {
-			return new OperaTabWatcher(emit);
 		}
 		else if (require('sdk/self')) {
 			return new FirefoxJetpackTabWatcher(emit);
