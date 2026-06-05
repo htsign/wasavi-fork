@@ -69,17 +69,8 @@
 		cryptKeyPath: 'LICENSE',
 		writeDelaySecs: 10,
 		fstab: {
-			dropbox: {
-				isDefault: true,
-				enabled: true
-			},
-			gdrive: {
-				enabled: true
-			},
-			onedrive: {
-				enabled: true
-			},
 			file: {
+				isDefault: true,
 				enabled: true
 			}
 		}
@@ -136,10 +127,7 @@
 			},
 			fstab: {
 				def: {
-					dropbox:  {enabled: true, isDefault: true},
-					gdrive:   {enabled: true},
-					onedrive: {enabled: true},
-					file:     {enabled: true}
+					file: {enabled: true, isDefault: true}
 				},
 				set: function (value) {
 					ext.fileSystem.setInfo(value);
