@@ -1016,10 +1016,7 @@
 			if (ext.version != config.get('version')) {
 				var platform = ext.kind;
 				if (global.navigator) {
-					if (platform == 'Opera' && global.opera) {
-						platform = 'Presto Opera';
-					}
-					else if (platform == 'Chrome' && /\bOPR\b/.test(global.navigator.userAgent)) {
+					if (platform == 'Chrome' && /\bOPR\b/.test(global.navigator.userAgent)) {
 						platform = 'Opera';
 					}
 				}

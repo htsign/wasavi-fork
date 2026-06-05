@@ -204,13 +204,6 @@
 	HotkeyChrome.prototype = Object.create(Hotkey.prototype);
 	HotkeyChrome.prototype.constructor = Hotkey;
 
-	// opera
-	function HotkeyOpera () {
-		Hotkey.apply(this, arguments);
-	}
-	HotkeyOpera.prototype = Object.create(Hotkey.prototype);
-	HotkeyOpera.prototype.constructor = Hotkey;
-	
 	// firefox
 	function HotkeyFirefox (emit) {
 		Hotkey.apply(this, arguments);
@@ -312,9 +305,6 @@
 		if (!useDefault) {
 			if (global.chrome) {
 				return new HotkeyChrome(ext.emit);
-			}
-			else if (global.opera) {
-				return new HotkeyOpera(ext.emit);
 			}
 			else if (require('sdk/self')) {
 				return new HotkeyFirefox(ext.emit);
