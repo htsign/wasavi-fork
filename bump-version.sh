@@ -28,7 +28,7 @@ manifest=src/chrome/manifest.json
 # JSON "version" fields (the leading quote keeps the pattern off
 # "strict_min_version"); <updatecheck version="..."> attributes; <em:version>.
 json_files=("$manifest" package.json dist/firefox.json)
-gupdate_files=(dist/chrome.xml dist/opera-blink.xml)
+gupdate_files=(dist/chrome.xml)
 rdf_file=dist/firefox.rdf
 files=("${json_files[@]}" "${gupdate_files[@]}" "$rdf_file")
 
