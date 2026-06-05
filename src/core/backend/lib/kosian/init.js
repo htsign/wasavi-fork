@@ -39,9 +39,6 @@
 			if (global.chrome) {
 				return 'Chrome';
 			}
-			if (global.opera) {
-				return 'Opera';
-			}
 			return 'Null';
 		})() + 'Impl.js'
 	];

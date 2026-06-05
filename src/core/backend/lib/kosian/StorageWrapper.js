@@ -92,56 +92,12 @@
 	WebStorageWrapper.prototype.constructor = StorageWrapper;
 
 	/*
-	 * simplestorage wrapper
-	 */
-
-	function JetpackStorageWrapper (ss) {
-		StorageWrapper.apply(this, arguments);
-		this.ss = ss;
-	}
-
-	JetpackStorageWrapper.prototype = Object.create(StorageWrapper.prototype, {
-		getItem: {value: function (key) {
-			return StorageWrapper.prototype.toExternal(this.ss.storage[key]);
-		}},
-		setItem: {value: function (key, value) {
-			if (value === undefined) {
-				delete this.ss.storage[key];
-			}
-			else {
-				value = StorageWrapper.prototype.toInternal(value);
-				var current = this.ss.storage[key];
-				if (current === undefined || value != current) {
-					this.ss.storage[key] = value;
-				}
-			}
-		}},
-		keys: {value: function () {
-			return Object.keys(this.ss.storage);
-		}},
-		exists: {value: function (key) {
-			return key in this.ss.storage;
-		}},
-		clear: {value: function () {
-			Object.keys(this.ss.storage).forEach(function (key) {
-				delete this.ss.storage[key];
-			}, this);
-		}}
-	});
-	JetpackStorageWrapper.prototype.constructor = StorageWrapper;
-
-	/*
 	 * exports
 	 */
 
 	function create (window) {
-		var ss;
-
 		if (window.localStorage) {
 			return new WebStorageWrapper;
-		}
-		else if ((ss = require('sdk/simple-storage'))) {
-			return new JetpackStorageWrapper(ss);
 		}
 		else {
 			return new StorageWrapper;

@@ -17,7 +17,7 @@ syncsrc
 syncwww
 .embryo
 node_modules
-src/chrome/backend/oldlib/
+src/core/backend/oldlib/
 src/wd-tests/dst/
 src/wd-tests/lib/
 src/wd-tests/profile/

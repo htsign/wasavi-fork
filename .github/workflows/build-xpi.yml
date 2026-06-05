@@ -42,16 +42,15 @@ jobs:
       - name: Prepare source directory
         run: |
           mkdir -p .build/firefox
-          # src/firefox is a symlink to src/chrome; rsync -L follows symlinks
+          # src/core is the single shared source tree for both crx and xpi builds
           rsync -rptL --delete \
             --exclude '*.sw?' --exclude '*.bak' --exclude '*~' --exclude '*.sh' \
             --exclude 'banner*.xcf' --exclude 'banner*.png' \
             --exclude '.*' \
             --exclude 'consumer_keys.json' --exclude 'consumer_keys.json.template' \
             --exclude 'consumer_keys.bin' \
-            --exclude 'FirefoxImpl.js' --exclude 'OperaImpl.js' \
             --exclude 'wasavi_frame_noscript.html' \
-            src/firefox/ .build/firefox/
+            src/core/ .build/firefox/
 
       - name: Place consumer keys (optional)
         env:

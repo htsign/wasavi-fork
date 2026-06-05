@@ -23,7 +23,6 @@
 	'use strict';
 
 	var u = require('./Utils').Utils;
-	var self_ = require('sdk/self');
 
 	function ResourceLoader (transportGetter, locationGetter, emitter) {
 		var data = {};
@@ -43,13 +42,6 @@
 				xhr.removeEventListener('load', handleLoad, false);
 				xhr.removeEventListener('error', handleError, false);
 				xhr = null;
-			}
-
-			function handleLoadFirefox (res) {
-				if (!opts.noCache) {
-					data[resourcePath] = res;
-				}
-				emitter(callback, res);
 			}
 
 			function handleError () {
@@ -75,12 +67,6 @@
 			var sync = 'sync' in opts && opts.sync;
 			var isText = false;
 			var responseType = opts.responseType || 'text';
-
-			// special shortcut on firefox, if text is requested synchronously
-			if (self_ && responseType == 'text' && sync) {
-				handleLoadFirefox(self_.data.load(resourcePath));
-				return;
-			}
 
 			var xhr = transportGetter();
 			xhr.open('GET', locationGetter(resourcePath), !sync);
@@ -120,11 +106,6 @@
 					return new window.XMLHttpRequest;
 				};
 			}
-			else if (self_) {
-				transportGetter = function () {
-					return u.createXHR();
-				};
-			}
 		}
 
 		if (options.locationGetter) {
@@ -137,14 +118,6 @@
 						'//' +
 						window.location.host +
 						('/' + resourcePath).replace(/\/+/g, '/');
-				};
-			}
-			else if (self_) {
-				locationGetter = function (resourcePath) {
-					return self_.data.url(
-						resourcePath
-							.replace(/\/+/g, '/')
-							.replace(/^\//, ''));
 				};
 			}
 		}

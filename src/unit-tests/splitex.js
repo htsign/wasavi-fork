@@ -2,8 +2,8 @@
 
 const assert = require('assert');
 
-require('../chrome/frontend/init.js');
-require('../chrome/frontend/utils.js');
+require('../core/frontend/init.js');
+require('../core/frontend/utils.js');
 
 describe('splitex', () => {
 	it('should be split into exactly N elements', () => {

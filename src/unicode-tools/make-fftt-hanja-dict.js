@@ -7,7 +7,7 @@ const OptionParser = require('brisket/lib/optparse');
 const {fgets, getVersion, awk, pad, ensureFileExists} = require('./utils.js');
 
 const file_name = __dirname + '/unihan/Unihan_Readings.txt';
-const out_file = __dirname + '/../chrome/unicode/fftt_han_ja.dat';
+const out_file = __dirname + '/../core/unicode/fftt_han_ja.dat';
 
 const data = [];
 var version;
@@ -122,7 +122,7 @@ function make_dict () {
 function printHelp () {
 	console.log('runmode not specified. set one of the following switches:');
 	console.log('  --packmap  Output javascript code which defines packmap to stdout');
-	console.log('  --binary   Output data file to src/chrome/unicode/fftt_han_ja.dat');
+	console.log('  --binary   Output data file to src/core/unicode/fftt_han_ja.dat');
 	process.exit(1);
 }
 
@@ -130,7 +130,7 @@ function printHelp () {
 	.on('--packmap  Output javascript code which defines packmap to stdout', v => {
 		runmode.packmap = true;
 	})
-	.on('--binary   Output data file to src/chrome/unicode/fftt_han_ja.dat', v => {
+	.on('--binary   Output data file to src/core/unicode/fftt_han_ja.dat', v => {
 		runmode.binary = true;
 	})
 	.parse(process.argv);

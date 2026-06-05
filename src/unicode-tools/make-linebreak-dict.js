@@ -7,7 +7,7 @@ const OptionParser = require('brisket/lib/optparse');
 const {fgets, getVersion, awk, pad, ensureFileExists} = require('./utils.js');
 
 const file_name = __dirname + '/ucd/LineBreak.txt';
-const out_file = __dirname + '/../chrome/unicode/linebreak.dat';
+const out_file = __dirname + '/../core/unicode/linebreak.dat';
 
 const data = [];
 const props = {

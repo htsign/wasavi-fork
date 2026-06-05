@@ -431,10 +431,6 @@
 					.replace(/\n+/g, ' ')
 					.replace(/\/\*<(FONT_FAMILY)>\*\/.*?<\/\1>\*\//g, config.get('fontFamily'));
 
-				if (require('sdk/self')) {
-					style = style.replace(/box-sizing:/g, '-moz-$&');
-				}
-
 				wasaviFrameStyle = style;
 
 				var loaded = function (d) {
@@ -474,26 +470,9 @@
 					resolve();
 				};
 
-				var iframe;
-
 				// Chrome, Opera
 				if (global.document && document.getElementById) {
 					loaded(document);
-				}
-
-				// Firefox
-				else if ((iframe = require('sdk/frame/hidden-frame'))) {
-					var hiddenFrame = iframe.add(iframe.HiddenFrame({
-						onReady: function () {
-							this.element.contentWindow.location.href =
-								require('sdk/self').data.url('mock.html');
-							this.element.addEventListener('DOMContentLoaded', function (e) {
-								loaded(e.target);
-								iframe.remove(hiddenFrame);
-								iframe = hiddenFrame = null;
-							}, true);
-						}
-					}));
 				}
 
 				//
@@ -1016,10 +995,7 @@
 			if (ext.version != config.get('version')) {
 				var platform = ext.kind;
 				if (global.navigator) {
-					if (platform == 'Opera' && global.opera) {
-						platform = 'Presto Opera';
-					}
-					else if (platform == 'Chrome' && /\bOPR\b/.test(global.navigator.userAgent)) {
+					if (platform == 'Chrome' && /\bOPR\b/.test(global.navigator.userAgent)) {
 						platform = 'Opera';
 					}
 				}

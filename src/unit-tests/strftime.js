@@ -3,8 +3,8 @@
 const assert = require('assert');
 const exec = require('child_process').exec;
 
-require('../chrome/frontend/init.js');
-require('../chrome/frontend/utils.js');
+require('../core/frontend/init.js');
+require('../core/frontend/utils.js');
 
 const formats = [
 	'a: %a',

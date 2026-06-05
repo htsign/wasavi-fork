@@ -1,10 +1,10 @@
 #!/bin/sh
 
 # qeema
-cp node_modules/qeema/qeema.js src/chrome/frontend/qeema.js
+cp node_modules/qeema/qeema.js src/core/frontend/qeema.js
 
 # unistring
-cp node_modules/unistring/unistring.js src/chrome/frontend/unistring.js
+cp node_modules/unistring/unistring.js src/core/frontend/unistring.js
 
 # marked
-cp node_modules/marked/marked.min.js src/chrome/backend/lib/marked.js
+cp node_modules/marked/marked.min.js src/core/backend/lib/marked.js
