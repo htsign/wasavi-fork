@@ -25,7 +25,6 @@
 	var CORE_LIBS = [
 		'kosian/Utils.js',
 		'kosian/SHA1.js',
-		'kosian/Blowfish.js',
 		'kosian/ResourceLoader.js',
 		'kosian/FileSystemImpl.js',
 		'kosian/FileSystem.js',

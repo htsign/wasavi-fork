@@ -19,10 +19,7 @@
   },
   "permissions": [
     "tabs", "clipboardRead", "clipboardWrite", "contextMenus",
-    "identity", "storage",
-    "https://*.dropboxapi.com/*",
-    "https://*.google.com/*", "https://*.googleapis.com/*", "https://*.googleusercontent.com/*",
-    "https://apis.live.net/*"
+    "identity", "storage"
   ],
   "background": {
     "page": "backend/main.html"

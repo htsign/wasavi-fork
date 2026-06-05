@@ -35,12 +35,7 @@ TEST_MOCHA_OPTS = --timeout=10000 \
 RSYNC_OPT = -rptL --delete \
 	--exclude '*.sw?' --exclude '*.bak' --exclude '*~' --exclude '*.sh' \
 	--exclude 'banner*.xcf' --exclude 'banner*.png' \
-	--exclude '.*' \
-	--exclude '$(CRYPT_SRC_FILE)*'
-
-CRYPT_KEY_FILE = LICENSE
-CRYPT_SRC_FILE = consumer_keys.json
-CRYPT_DST_FILE = consumer_keys.bin
+	--exclude '.*'
 
 # shared source root for both crx and xpi builds
 CORE_SRC_DIR = core
@@ -61,8 +56,6 @@ FIREFOX_UPDATE_LOCATION = https://github.com/akahuku/$(PRODUCT)/raw/master/dist/
 # ========================================
 
 CORE_SRC_PATH = $(SRC_DIR)/$(CORE_SRC_DIR)
-
-BINKEYS_PATH = $(CORE_SRC_PATH)/$(CRYPT_DST_FILE)
 
 CHROME_TARGET_PATH = $(DIST_DIR)/$(PRODUCT).$(CHROME_SUFFIX)
 CHROME_MTIME_PATH = $(EMBRYO_DIR)/.$(CHROME_SUFFIX)
@@ -93,12 +86,6 @@ xpi: $(FIREFOX_TARGET_PATH)
 clean:
 	rm -rf ./$(EMBRYO_DIR)
 
-$(BINKEYS_PATH): $(CORE_SRC_PATH)/$(CRYPT_KEY_FILE) $(CORE_SRC_PATH)/$(CRYPT_SRC_FILE)
-	$(TOOL_DIR)/make-binkey.js \
-		--key $(CORE_SRC_PATH)/$(CRYPT_KEY_FILE) \
-		--src $(CORE_SRC_PATH)/$(CRYPT_SRC_FILE) \
-		--dst $@
-
 FORCE:
 
 .PHONY: all crx xpi \
@@ -116,7 +103,7 @@ FORCE:
 #
 
 # wasavi.crx
-$(CHROME_TARGET_PATH): $(CHROME_MTIME_PATH) $(BINKEYS_PATH)
+$(CHROME_TARGET_PATH): $(CHROME_MTIME_PATH)
 #	copy all of sources to embryo dir
 	$(RSYNC) $(RSYNC_OPT) --exclude 'wasavi_frame_noscript.html' \
 		$(CORE_SRC_PATH)/ $(CHROME_EMBRYO_SRC_PATH)
@@ -173,7 +160,7 @@ $(CHROME_MTIME_PATH): FORCE
 #
 
 # wasavi.xpi
-$(FIREFOX_TARGET_PATH): $(FIREFOX_MTIME_PATH) $(BINKEYS_PATH)
+$(FIREFOX_TARGET_PATH): $(FIREFOX_MTIME_PATH)
 #	copy all of sources to embryo dir
 	$(RSYNC) $(RSYNC_OPT) \
 		$(CORE_SRC_PATH)/ $(FIREFOX_EMBRYO_SRC_PATH)
@@ -204,15 +191,6 @@ $(FIREFOX_TARGET_PATH): $(FIREFOX_MTIME_PATH) $(BINKEYS_PATH)
 $(FIREFOX_MTIME_PATH): FORCE
 	@mkdir -p $(FIREFOX_EMBRYO_SRC_PATH) $(DIST_DIR)
 	$(TOOL_DIR)/mtime.js --dir $(CORE_SRC_PATH) --base $(FIREFOX_TARGET_PATH) --out $@
-
-
-
-#
-# rules to make binary formed consumer keys
-# ========================================
-#
-
-binkeys: $(BINKEYS_PATH)
 
 
 

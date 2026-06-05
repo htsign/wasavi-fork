@@ -66,7 +66,6 @@
 
 	var ext = require('./kosian/Kosian').Kosian(global, {
 		appName: 'wasavi',
-		cryptKeyPath: 'LICENSE',
 		writeDelaySecs: 10,
 		fstab: {
 			file: {
