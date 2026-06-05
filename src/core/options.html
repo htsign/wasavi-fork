@@ -210,6 +210,22 @@
 				visibility:hidden;
 				color:#dd0000;
 			}
+			.opt-unit2 > div {
+				display:flex;
+				align-items:center;
+			}
+			.opt-unit2 .io {
+				margin-left:auto;
+			}
+			.opt-unit2 .io button {
+				margin-left:0.5em;
+			}
+			.opt-unit2 #io-result {
+				margin-right:0.5em;
+			}
+			.opt-unit2 #io-result.error {
+				color:#c00;
+			}
 			input[type="radio"][disabled] + span {
 				color:#999;
 			}
@@ -317,6 +333,12 @@
 			<div>
 				<button id="save">__MSG_option_save__</button>
 				<span id="save-result">__MSG_option_saved__</span>
+				<span class="io">
+					<span id="io-result"></span>
+					<button id="export">__MSG_option_export__</button>
+					<button id="import">__MSG_option_import__</button>
+				</span>
+				<input type="file" id="import-file" accept="application/json,.json" hidden>
 			</div>
 		</div>
 

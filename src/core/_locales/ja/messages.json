@@ -49,6 +49,22 @@
 		"message": "保存しました。",
 		"description": "saved."
 	},
+	"option_export": {
+		"message": "エクスポート",
+		"description": "Export"
+	},
+	"option_import": {
+		"message": "インポート",
+		"description": "Import"
+	},
+	"option_import_done": {
+		"message": "インポートしました。",
+		"description": "Imported."
+	},
+	"option_import_error": {
+		"message": "設定ファイルが不正です。",
+		"description": "Invalid settings file."
+	},
 	"option_exrc_head": {
 		"message": "exrc",
 		"description": "exrc"

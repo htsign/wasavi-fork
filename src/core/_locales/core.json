@@ -49,6 +49,22 @@
         "message": "saved.",
         "description": ""
     },
+    "option_export": {
+        "message": "Export",
+        "description": ""
+    },
+    "option_import": {
+        "message": "Import",
+        "description": ""
+    },
+    "option_import_done": {
+        "message": "Imported.",
+        "description": ""
+    },
+    "option_import_error": {
+        "message": "Invalid settings file.",
+        "description": ""
+    },
     "option_exrc_head": {
         "message": "exrc",
         "description": ""
