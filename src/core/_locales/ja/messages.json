@@ -65,10 +65,6 @@
 		"message": "フォントファミリー",
 		"description": "font family"
 	},
-	"option_preferred_storage_head": {
-		"message": "利用するストレージ",
-		"description": "preferred storage"
-	},
 	"option_init_head": {
 		"message": "初期化",
 		"description": "Initialize"

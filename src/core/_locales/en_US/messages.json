@@ -65,10 +65,6 @@
 		"message": "font family",
 		"description": "font family"
 	},
-	"option_preferred_storage_head": {
-		"message": "preferred storage",
-		"description": "preferred storage"
-	},
 	"option_init_head": {
 		"message": "Initialize",
 		"description": "Initialize"

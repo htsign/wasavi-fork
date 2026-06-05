@@ -152,18 +152,6 @@ function initPage (req) {
 		el.value = req.fontFamily;
 	}
 
-	// fstab
-	var defaultFs = req.fstab
-		.filter(function (fs) {return fs.isDefault})[0];
-	el = document.querySelector([
-		'input',
-		'[name="fstab"]',
-		'[value="' + (defaultFs ? defaultFs.name : '') + '"]'
-	].join(''));
-	if (el) {
-		el.checked = true;
-	}
-
 	// log mode
 	el = $('log-mode');
 	if (el && el.nodeName == 'INPUT' && el.type == 'checkbox') {
@@ -364,27 +352,6 @@ function handleOptionsSave () {
 	if (el && el.nodeName == 'INPUT') {
 		items.push({key:'fontFamily', value:el.value});
 	}
-
-	// fstab
-	(function () {
-		var fstab = {};
-		Array.prototype.forEach.call(
-			document.querySelectorAll(
-				'#fstab-container input[type="radio"][name="fstab"]'),
-			function (node) {
-				fstab[node.value] = {enabled: false};
-
-				if (!node.disabled) {
-					fstab[node.value].enabled = true;
-				}
-				if (node.checked) {
-					fstab[node.value].isDefault = true;
-				}
-			}
-		);
-
-		items.push({key:'fstab', value:fstab});
-	})();
 
 	// log mode
 	el = $('log-mode');
