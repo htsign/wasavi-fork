@@ -7,7 +7,6 @@
 const webdriver = require('selenium-webdriver');
 const chrome = require('selenium-webdriver/chrome');
 const firefox = require('selenium-webdriver/firefox');
-const opera = require('selenium-webdriver/opera');
 const t = require('selenium-webdriver/testing');
 const {By, Key, until, promise} = webdriver;
 const clipboard = require('copy-paste');
@@ -94,23 +93,11 @@ function createDriver (name) {
 	case 'firefox':
 		var options = new firefox.Options();
 		var profile = new firefox.Profile();
-		profile.addExtension(`${sourceDir}/${name}`);
+		profile.addExtension(`${sourceDir}/core`);
 		options.setProfile(profile);
 		result = new webdriver.Builder()
 			.withCapabilities(webdriver.Capabilities.firefox())
 			.setFirefoxOptions(options)
-			.build()
-		break;
-
-	case 'opera':
-		var options = new opera.Options();
-		options.addArguments(
-			'--start-maximized',
-			'--lang=en',
-			'--user-data-dir=' + profilePath);
-		result = new webdriver.Builder()
-			.withCapabilities(webdriver.Capabilities.opera())
-			.setOperaOptions(options)
 			.build()
 		break;
 
