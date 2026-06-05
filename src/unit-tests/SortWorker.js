@@ -2,11 +2,11 @@
 
 const assert = require('assert');
 
-require('../chrome/frontend/init.js');
-require('../chrome/frontend/utils.js');
-require('../chrome/frontend/classes.js');
+require('../core/frontend/init.js');
+require('../core/frontend/utils.js');
+require('../core/frontend/classes.js');
 
-const unicodeUtils = require('../chrome/frontend/unicode_utils.js').unicodeUtils;
+const unicodeUtils = require('../core/frontend/unicode_utils.js').unicodeUtils;
 global.spc = unicodeUtils.getUnicodeGeneralSpaceRegex;
 
 describe('class SortWorker', function () {

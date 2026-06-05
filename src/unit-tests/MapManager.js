@@ -2,10 +2,10 @@
 
 const assert = require('assert');
 
-require('../chrome/frontend/init.js');
-require('../chrome/frontend/utils.js');
-require('../chrome/frontend/qeema.js');
-require('../chrome/frontend/classes.js');
+require('../core/frontend/init.js');
+require('../core/frontend/utils.js');
+require('../core/frontend/qeema.js');
+require('../core/frontend/classes.js');
 
 describe('class MapManager', () => {
 	function createMapManager () {

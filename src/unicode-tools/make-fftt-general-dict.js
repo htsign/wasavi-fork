@@ -7,7 +7,7 @@ const OptionParser = require('brisket/lib/optparse');
 const {fgets, getVersion, awk, pad} = require('./utils.js');
 
 const UCD_FILE_NAME = __dirname + '/ucd/UnicodeData.txt';
-const OUT_BIN_FILE = __dirname + '/../chrome/unicode/fftt_general.dat';
+const OUT_BIN_FILE = __dirname + '/../core/unicode/fftt_general.dat';
 const OUT_HTML_FILE = 'decomp-result.html';
 
 const UNICODE_SPACES = [

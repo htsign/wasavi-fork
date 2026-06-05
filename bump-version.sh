@@ -22,7 +22,7 @@ usage() {
 root="$(cd "$(dirname "$0")" && pwd)"
 cd "$root"
 
-manifest=src/chrome/manifest.json
+manifest=src/core/manifest.json
 
 # the files this script rewrites
 # JSON "version" fields (the leading quote keeps the pattern off

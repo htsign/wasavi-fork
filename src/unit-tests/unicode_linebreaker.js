@@ -3,14 +3,14 @@
 const assert = require('assert');
 const fs = require('fs');
 
-require('../chrome/frontend/init.js');
-require('../chrome/frontend/utils.js');
+require('../core/frontend/init.js');
+require('../core/frontend/utils.js');
 
-const unicodeUtils = require('../chrome/frontend/unicode_utils.js').unicodeUtils;
+const unicodeUtils = require('../core/frontend/unicode_utils.js').unicodeUtils;
 
 function loadDict () {
 	return fs.readFileSync(
-		__dirname + '/../chrome/unicode/linebreak.dat',
+		__dirname + '/../core/unicode/linebreak.dat',
 		'binary');
 }
 
