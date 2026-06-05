@@ -49,7 +49,6 @@ jobs:
             --exclude '.*' \
             --exclude 'consumer_keys.json' --exclude 'consumer_keys.json.template' \
             --exclude 'consumer_keys.bin' \
-            --exclude 'FirefoxImpl.js' --exclude 'OperaImpl.js' \
             --exclude 'wasavi_frame_noscript.html' \
             src/firefox/ .build/firefox/
 
