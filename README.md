@@ -1,7 +1,7 @@
 wasavi (VI editor for any web page)
 ====================================
 
-wasavi is an extension for Chrome, Opera and Firefox. wasavi transforms TEXTAREA element of any page into a VI editor, so you can edit the text in VI.  wasavi supports almost all VI commands and some ex commands.
+wasavi is an extension for Chrome and Firefox. wasavi transforms TEXTAREA element of any page into a VI editor, so you can edit the text in VI.  wasavi supports almost all VI commands and some ex commands.
 
 wasavi is under development. Any bug report or feature request is welcome.
 
@@ -42,15 +42,11 @@ Currently, wasavi is available for following browsers only. Select your browser 
 
 * [Google Chrome extension](https://chrome.google.com/webstore/detail/dgogifpkoilgiofhhhodbodcfgomelhe)
 
-* [Opera addon](https://addons.opera.com/en/extensions/details/wasavi/)
-
 * Firefox addon
 
 Source code and latest development releases are hosted at [Github](https://github.com/akahuku/wasavi):
 
 * [Latest and unstable version of wasavi for Chrome](https://github.com/akahuku/wasavi/raw/master/dist/wasavi.crx)
-
-* [Latest and unstable version of wasavi for Blink Opera](https://github.com/akahuku/wasavi/raw/master/dist/wasavi.nex)
 
 * [Latest and unstable version of wasavi for Firefox](https://github.com/akahuku/wasavi/raw/master/dist/wasavi.xpi)
 
@@ -93,26 +89,6 @@ The volume of any beeps can be controlled with `set bellvolume=N`.  Range of val
 ## How to access local files
 
 See [document](https://github.com/akahuku/wasavi/wiki/Local-access).
-
-## How to use wasavi with Vimperator/Keysnail/VimFx on Firefox
-
-### Vimperator
-
-Put [wasavi_mediator.js](https://raw.github.com/akahuku/wasavi/master/src/mediators/vimperator/wasavi_mediator.js) in your Vimperator plugin directory, for example,  `~/.vimperator/plugin` or `%HOME%\vimperator\plugin`.
-
-This plugin will control the pass-through mode of Vimperator according to the state of wasavi.
-
-### Keysnail
-
-Put [wasavi_mediator.ks.js](https://raw.github.com/akahuku/wasavi/master/src/mediators/keysnail/wasavi_mediator.ks.js) in your Keysnail plugin directory.
-
-This plugin will control suspend mode of Keysnail according to the state of wasavi.
-
-### VimFx
-
-Latest VimFx recognizes wasavi as editable element.  While wasavi is running, VimFx suspends temporarily.
-
-To use VimFx's key binding while wasavi is running, click outside area of wasavi or enter `:set esctoblur` and press `<esc>` in normal mode.  Then keyboard focus would be removed from wasavi, and you can use VimFx's key binding.
 
 ## How to use wasavi as an independent text editor
 

@@ -20,7 +20,7 @@ wasavi building and testing guide
   AMO_API_SECRET=<Secret key of your AMO account>
   ```
   * Information of your Dropbox, GoogleDrive, OneDrive accounts (to use filesystem functionality)  
-  copy `src/chrome/consumer_keys.json.template` to `src/chrome/consumer_keys.json` and edit it
+  copy `src/core/consumer_keys.json.template` to `src/core/consumer_keys.json` and edit it
 
 2. How to set up the source code
 
@@ -31,15 +31,15 @@ wasavi building and testing guide
   $ npm install
   ```
 
-3. How to run wasavi on Chrome (and Opera)
+3. How to run wasavi on Chrome
 
   * Start Chrome with special profile:
   ```
   $ make run-chrome
   ```
   * A special profile is placed `src/wd-tests/profile/chrome`.
-  * If it is first run, navigate to `chrome://extensions`, push `Load unpacked extension...`, then set `src/chrome` directory.
-  * If you want to build your own wasavi.crx and wasavi.nex, make a wasavi.pem file at `chrome://extensions` page and place it to repository root.
+  * If it is first run, navigate to `chrome://extensions`, push `Load unpacked extension...`, then set `src/core` directory.
+  * If you want to build your own wasavi.crx, make a wasavi.pem file at `chrome://extensions` page and place it to repository root.
 
 4. How to run wasavi on Firefox
 
@@ -64,9 +64,6 @@ wasavi building and testing guide
 
   ```
   $ make test-chrome
-  ```
-  ```
-  $ make test-opera
   ```
   ```
   $ make test-firefox
