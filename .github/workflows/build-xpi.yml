@@ -3,9 +3,9 @@ name: Build Firefox XPI
 on:
   push:
     branches: [master]
+    paths:
+      - 'src/core/**'
     tags: ['v*']
-  pull_request:
-    branches: [master]
 
 jobs:
   build:
