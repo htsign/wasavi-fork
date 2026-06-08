@@ -4761,21 +4761,21 @@ Wasavi.IncDec = function IncDec (app, defaultOpts) {
 	);
 };
 
-Wasavi.SortWorker = function (app, t, a) {
-	this.app = app;
-	this.t = t;
-	this.a = a;
-	this.content = this.opts = null;
-	this.terminalType = 0;
-}
-Wasavi.SortWorker.prototype = {
-	dosort: function (content, key, regex, opts) {
+Wasavi.SortWorker = class {
+	constructor(app, t, a) {
+		this.app = app;
+		this.t = t;
+		this.a = a;
+		this.content = this.opts = null;
+		this.terminalType = 0;
+	}
+	dosort(content, key, regex, opts) {
 		var callbacks = {
-			i: function (a, b) {
+			i(a, b) {
 				return a.toLowerCase().localeCompare(b.toLowerCase());
 			},
 
-			p: function (a, b) {
+			p(a, b) {
 				var re = regex.exec(a);
 				if (re) {
 					a = a.substring(re.index + re[0].length);
@@ -4786,7 +4786,7 @@ Wasavi.SortWorker.prototype = {
 				}
 				return a.localeCompare(b);
 			},
-			pr: function (a, b) {
+			pr(a, b) {
 				var re = regex.exec(a);
 				if (re) {
 					a = re[0];
@@ -4797,7 +4797,7 @@ Wasavi.SortWorker.prototype = {
 				}
 				return a.localeCompare(b);
 			},
-			pi: function (a, b) {
+			pi(a, b) {
 				var re = regex.exec(a);
 				if (re) {
 					a = a.substring(re.index + re[0].length);
@@ -4808,7 +4808,7 @@ Wasavi.SortWorker.prototype = {
 				}
 				return a.toLowerCase().localeCompare(b.toLowerCase());
 			},
-			pri: function (a, b) {
+			pri(a, b) {
 				var re = regex.exec(a);
 				if (re) {
 					a = re[0];
@@ -4820,21 +4820,21 @@ Wasavi.SortWorker.prototype = {
 				return a.toLowerCase().localeCompare(b.toLowerCase());
 			},
 
-			c: function (a, b) {
+			c(a, b) {
 				// TODO: expand tab?
 				a = a.substring(opts.columnNumber);
 				b = b.substring(opts.columnNumber);
 				return a.localeCompare(b);
 			},
-			ci: function (a, b) {
+			ci(a, b) {
 				a = a.substring(opts.columnNumber);
 				b = b.substring(opts.columnNumber);
 				return a.toLowerCase().localeCompare(b.toLowerCase());
 			}
 		};
 		return content.sort(callbacks[key]);
-	},
-	preSort: function (type, content) {
+	}
+	preSort(type, content) {
 		switch (type) {
 		case 1:
 			content = content.replace(/\\\n/g, '\n');
@@ -4858,8 +4858,8 @@ Wasavi.SortWorker.prototype = {
 			break;
 		}
 		return content;
-	},
-	postSort: function (type, content) {
+	}
+	postSort(type, content) {
 		switch (type) {
 		case 1:
 			content = content
@@ -4871,9 +4871,9 @@ Wasavi.SortWorker.prototype = {
 			break;
 		}
 		return content;
-	},
+	}
 
-	parseArgs: function (arg) {
+	parseArgs(arg) {
 		var re;
 		var s = arg != undefined ? arg : this.a.argv[0];
 		var opts = {
@@ -4916,8 +4916,8 @@ Wasavi.SortWorker.prototype = {
 		}
 		this.opts = opts;
 		return true;
-	},
-	buildContent: function (content) {
+	}
+	buildContent(content) {
 		if (!content) {
 			content = this.t.getValue(this.a.range[0], this.a.range[1], '\n');
 		}
@@ -4941,8 +4941,8 @@ Wasavi.SortWorker.prototype = {
 
 		this.content = this.preSort(this.terminalType, content).split('\n');
 		return true;
-	},
-	sort: function () {
+	}
+	sort() {
 		var opts = this.opts;
 		var front = [];
 
@@ -4990,8 +4990,8 @@ Wasavi.SortWorker.prototype = {
 		}
 
 		return true;
-	},
-	getContent: function () {
+	}
+	getContent() {
 		var result = this.content.join('\n');
 		this.content = null;
 		result = this.postSort(this.terminalType, result) + '\n';
