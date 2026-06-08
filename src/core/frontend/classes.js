@@ -27,41 +27,41 @@
 
 const Wasavi = g.Wasavi;
 
-Wasavi.Position = function (row, col) {
-	this.row = row;
-	this.col = col;
-}
-Wasavi.Position.prototype = {
-	toString: function () {
+Wasavi.Position = class {
+	constructor(row, col) {
+		this.row = row;
+		this.col = col;
+	}
+	toString() {
 		return '[object Position(' + this.row + ',' + this.col + ')]';
-	},
-	clone: function () {
+	}
+	clone() {
 		return new Wasavi.Position(this.row, this.col);
-	},
-	round: function (t) {
+	}
+	round(t) {
 		this.row = minmax(0, this.row, t.rowLength - 1);
 		this.col = minmax(0, this.col, t.rows(this.row).length - (this.row == t.rowLength - 1 ? 0 : 1));
 		return this;
-	},
-	isp: function (o) {
+	}
+	isp(o) {
 		return o && (o instanceof Wasavi.Position || 'row' in o && 'col' in o);
-	},
-	eq: function (o) {
+	}
+	eq(o) {
 		return this.isp(o) && this.row == o.row && this.col == o.col;
-	},
-	ne: function (o) {
+	}
+	ne(o) {
 		return this.isp(o) && (this.row != o.row || this.col != o.col);
-	},
-	gt: function (o) {
+	}
+	gt(o) {
 		return this.isp(o) && (this.row > o.row || this.row == o.row && this.col > o.col);
-	},
-	lt: function (o) {
+	}
+	lt(o) {
 		return this.isp(o) && (this.row < o.row || this.row == o.row && this.col < o.col);
-	},
-	ge: function (o) {
+	}
+	ge(o) {
 		return this.isp(o) && (this.row > o.row || this.row == o.row && this.col >= o.col);
-	},
-	le: function (o) {
+	}
+	le(o) {
 		return this.isp(o) && (this.row < o.row || this.row == o.row && this.col <= o.col);
 	}
 };
