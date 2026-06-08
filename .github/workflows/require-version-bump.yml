@@ -1,9 +1,11 @@
 name: Require version bump
 
-# Fails a PR into master unless both src/core/manifest.json and package.json
-# carry a version strictly greater than the base branch. Wire this as a
-# required status check (job name: version-bump) in the master ruleset so a
-# release bump (./bump-version.sh) is mandatory before merge.
+# For PRs into master that change the extension source (src/core/**), fails
+# unless both src/core/manifest.json and package.json carry a version strictly
+# greater than the base branch. PRs that don't touch src/core (CI, docs, dist)
+# skip the requirement. Wire this as a required status check (job name:
+# version-bump) in the master ruleset so a release bump (./bump-version.sh) is
+# mandatory before merging source changes.
 
 on:
   pull_request:
@@ -25,6 +27,13 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
+          # only require a bump when the extension source (src/core) actually
+          # changed; CI/docs/dist-only PRs do not need a version bump
+          if [ -z "$(git diff --name-only "${BASE_SHA}" HEAD -- src/core/)" ]; then
+            echo "no changes under src/core/; version bump not required"
+            exit 0
+          fi
+
           # read the "version" field of a JSON document supplied on stdin
           read_ver () {
             node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(0, "utf8")).version || ""))'
