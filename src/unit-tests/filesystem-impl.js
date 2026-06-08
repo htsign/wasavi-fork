@@ -1,6 +1,6 @@
 'use strict';
 
-const assert = require('assert');
+const assert = require('node:assert/strict');
 const {describe, it} = require('node:test');
 
 const {FileSystemImpl} = require('../core/backend/lib/kosian/FileSystemImpl.js');

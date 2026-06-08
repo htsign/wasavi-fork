@@ -1,6 +1,6 @@
 'use strict';
 
-const assert = require('assert');
+const assert = require('node:assert/strict');
 const {exec, execSync} = require('child_process');
 const {describe, it, before} = require('node:test');
 

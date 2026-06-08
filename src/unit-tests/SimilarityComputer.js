@@ -1,6 +1,6 @@
 'use strict';
 
-const assert = require('assert');
+const assert = require('node:assert/strict');
 const {describe, it} = require('node:test');
 
 // the export is a factory (returns a new instance), so it is called, not `new`ed
