@@ -422,9 +422,9 @@ function handleOptionsSave () {
 		function () {
 			var saveResult = $('save-result');
 			if (saveResult) {
-				saveResult.style.visibility = 'visible';
+				saveResult.style.display = 'inline';
 				setTimeout(function () {
-					saveResult.style.visibility = '';
+					saveResult.style.display = '';
 				}, 1000 * SAVED_MESSAGE_VISIBLE_SECS);
 			}
 		}

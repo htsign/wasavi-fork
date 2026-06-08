@@ -190,6 +190,7 @@
 				font-weight:bold;
 				padding-left:4em;
 				padding-right:4em;
+				flex-shrink:0;
 			}
 			button#capture {
 				font-size:medium;
@@ -207,21 +208,27 @@
 				display:inline;
 			}
 			span#save-result {
-				visibility:hidden;
+				display:none;
 				color:#dd0000;
 			}
 			.opt-unit2 > div {
 				display:flex;
 				align-items:center;
 			}
+			.opt-unit2 #io-result {
+				margin-left:1em;
+				min-width:0;
+				overflow:hidden;
+				white-space:nowrap;
+				text-overflow:ellipsis;
+			}
 			.opt-unit2 .io {
+				display:flex;
+				flex-shrink:0;
 				margin-left:auto;
 			}
 			.opt-unit2 .io button {
 				margin-left:0.5em;
-			}
-			.opt-unit2 #io-result {
-				margin-right:0.5em;
 			}
 			.opt-unit2 #io-result.error {
 				color:#c00;
@@ -333,8 +340,8 @@
 			<div>
 				<button id="save">__MSG_option_save__</button>
 				<span id="save-result">__MSG_option_saved__</span>
+				<span id="io-result"></span>
 				<span class="io">
-					<span id="io-result"></span>
 					<button id="export">__MSG_option_export__</button>
 					<button id="import">__MSG_option_import__</button>
 				</span>
