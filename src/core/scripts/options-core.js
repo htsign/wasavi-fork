@@ -460,8 +460,17 @@ var SETTING_TYPES = {
 };
 
 function isValidSettingValue (key, value) {
-	if (SETTING_TYPES[key] == 'object') {
-		return value != null && typeof value == 'object' && !Array.isArray(value);
+	if (key == 'targets') {
+		if (value == null || typeof value != 'object' || Array.isArray(value)) {
+			return false;
+		}
+		// only the known target checkboxes, each carrying a boolean
+		var known = Array.prototype.map.call(
+			document.querySelectorAll('#targets-container input[type="checkbox"]'),
+			function (node) {return node.id});
+		return Object.keys(value).every(function (k) {
+			return known.indexOf(k) >= 0 && typeof value[k] == 'boolean';
+		});
 	}
 	return typeof value == SETTING_TYPES[key];
 }
@@ -564,10 +573,17 @@ function handleImportFileChange (e) {
 			return;
 		}
 
+		// reflect only the validated values that were actually persisted,
+		// so the form never shows settings that import rejected
+		var applied = {};
+		items.forEach(function (item) {
+			applied[item.key] = item.value;
+		});
+
 		extension.postMessage(
 			{type:'set-storage', items:items},
 			function () {
-				applySettings(data.settings);
+				applySettings(applied);
 				showIoResult(getMessage('option_import_done'), false);
 			}
 		);
