@@ -436,53 +436,10 @@ function handleOptionsSave () {
  * ----------------
  */
 
-var SETTING_KEYS = [
-	'exrc',
-	'targets',
-	'quickActivation',
-	'shortcut',
-	'siteOverrides',
-	'fontFamily',
-	'logMode',
-	'upgradeNotify'
-];
-
-// expected value type of each setting, used to reject malformed import data
-var SETTING_TYPES = {
-	exrc: 'string',
-	targets: 'object',
-	quickActivation: 'boolean',
-	shortcut: 'string',
-	siteOverrides: 'string',
-	fontFamily: 'string',
-	logMode: 'boolean',
-	upgradeNotify: 'boolean'
-};
-
-function isValidSettingValue (key, value) {
-	if (key == 'targets') {
-		if (value == null || typeof value != 'object' || Array.isArray(value)) {
-			return false;
-		}
-		// only the known target checkboxes, each carrying a boolean
-		var known = Array.prototype.map.call(
-			document.querySelectorAll('#targets-container input[type="checkbox"]'),
-			function (node) {return node.id});
-		return Object.keys(value).every(function (k) {
-			return known.indexOf(k) >= 0 && typeof value[k] == 'boolean';
-		});
-	}
-	return typeof value == SETTING_TYPES[key];
-}
-
-function timestamp () {
-	var d = new Date();
-	return '' + d.getFullYear() +
-		String(d.getMonth() + 1).padStart(2, '0') +
-		String(d.getDate()).padStart(2, '0') +
-		String(d.getHours()).padStart(2, '0') +
-		String(d.getMinutes()).padStart(2, '0') +
-		String(d.getSeconds()).padStart(2, '0');
+function getKnownTargetIds () {
+	return Array.prototype.map.call(
+		document.querySelectorAll('#targets-container input[type="checkbox"]'),
+		function (node) {return node.id});
 }
 
 function showIoResult (msg, isError) {
@@ -506,19 +463,15 @@ function handleOptionsExport () {
 		(typeof chrome != 'undefined' && chrome.runtime && chrome.runtime.getManifest) ?
 		chrome.runtime.getManifest().version : '';
 
-	var envelope = {
-		format: 'wasavi-fork-settings',
-		version: version,
-		exportedAt: new Date().toISOString(),
-		settings: settings
-	};
+	var now = new Date();
+	var envelope = SettingsIO.buildExportEnvelope(settings, version, now);
 
 	var json = JSON.stringify(envelope, null, 2);
 	var blob = new Blob([json], {type:'application/json'});
 	var url = URL.createObjectURL(blob);
 	var a = document.createElement('a');
 	a.href = url;
-	a.download = 'wasavi-fork_' + timestamp() + '.json';
+	a.download = SettingsIO.exportFilename(now);
 	document.body.appendChild(a);
 	a.click();
 	document.body.removeChild(a);
@@ -540,38 +493,14 @@ function handleImportFileChange (e) {
 
 	var reader = new FileReader();
 	reader.onload = function () {
-		var data;
-		try {
-			data = JSON.parse(reader.result);
-		}
-		catch (ex) {
+		var result = SettingsIO.parseImportData(reader.result, getKnownTargetIds());
+		if (!result.ok) {
 			showIoResult(getMessage('option_import_error'), true);
 			input.value = '';
 			return;
 		}
 
-		if (!data ||
-			typeof data != 'object' ||
-			data.format !== 'wasavi-fork-settings' ||
-			!data.settings ||
-			typeof data.settings != 'object') {
-			showIoResult(getMessage('option_import_error'), true);
-			input.value = '';
-			return;
-		}
-
-		var items = [];
-		SETTING_KEYS.forEach(function (key) {
-			if (key in data.settings && isValidSettingValue(key, data.settings[key])) {
-				items.push({key:key, value:data.settings[key]});
-			}
-		});
-
-		if (items.length == 0) {
-			showIoResult(getMessage('option_import_error'), true);
-			input.value = '';
-			return;
-		}
+		var items = result.items;
 
 		// reflect only the validated values that were actually persisted,
 		// so the form never shows settings that import rejected
