@@ -111,58 +111,6 @@ jobs:
           path: dist/wasavi.xpi
           retention-days: 90
 
-  commit-dist:
-    # Commit the freshly built dist/wasavi.xpi back to master.
-    # Loop prevention is defense-in-depth:
-    #   1. Pushes made with GITHUB_TOKEN do not re-trigger workflows (GitHub spec).
-    #   2. The commit message carries [skip ci] as a fallback.
-    #   3. The actor guard below skips runs triggered by github-actions[bot].
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master' && github.actor != 'github-actions[bot]'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    concurrency:
-      group: commit-dist-${{ github.ref }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          ref: master
-
-      - name: Download XPI artifact
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: wasavi-xpi
-          path: dist
-
-      - name: Commit and push dist/wasavi.xpi
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          # keep the built artifact outside the worktree; each attempt
-          # re-places it on top of the latest master, so a concurrent
-          # push never causes a (binary) rebase conflict
-          cp dist/wasavi.xpi "${RUNNER_TEMP}/wasavi.xpi"
-          for i in 1 2 3; do
-            git fetch origin master || true
-            git reset --hard origin/master
-            cp "${RUNNER_TEMP}/wasavi.xpi" dist/wasavi.xpi
-            git add dist/wasavi.xpi
-            if git diff --cached --quiet; then
-              echo "dist/wasavi.xpi unchanged; nothing to commit"
-              exit 0
-            fi
-            git commit -m 'ci: update dist/wasavi.xpi [skip ci]'
-            if git push origin HEAD:master; then
-              exit 0
-            fi
-            sleep "$i"
-          done
-          echo "failed to push dist/wasavi.xpi after 3 attempts" >&2
-          exit 1
-
   release:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
