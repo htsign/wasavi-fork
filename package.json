@@ -19,6 +19,7 @@
   },
   "scripts": {
     "install": "./distribute-scripts",
-    "update": "./distribute-scripts"
+    "update": "./distribute-scripts",
+    "test": "node --test src/unit-tests/*.js"
   }
 }
