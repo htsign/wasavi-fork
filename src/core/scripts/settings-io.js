@@ -100,9 +100,7 @@ function parseImportData (text, knownTargetIds) {
 
 	var items = [];
 	SETTING_KEYS.forEach(function (key) {
-		// own property only: `in` would also accept keys inherited from a
-		// polluted Object.prototype, importing values the file never carried
-		if (Object.prototype.hasOwnProperty.call(data.settings, key) &&
+		if (Object.hasOwn(data.settings, key) &&
 			isValidSettingValue(key, data.settings[key], knownTargetIds)) {
 			items.push({key: key, value: data.settings[key]});
 		}
