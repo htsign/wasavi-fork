@@ -1,9 +1,12 @@
 {
   "name": "wasavi",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "description": "the vi editor in your browser",
   "homepage": "http://appsweets.net/wasavi/",
   "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/akahuku/wasavi.git"
@@ -19,6 +22,7 @@
   },
   "scripts": {
     "install": "./distribute-scripts",
-    "update": "./distribute-scripts"
+    "update": "./distribute-scripts",
+    "test": "node --test src/unit-tests/*.js"
   }
 }

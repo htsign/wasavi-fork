@@ -2,6 +2,7 @@
 
 const assert = require('assert');
 const fs = require('fs');
+const {describe, it} = require('node:test');
 
 require('../core/frontend/init.js');
 require('../core/frontend/utils.js');
@@ -14,13 +15,17 @@ function loadDict () {
 		'binary');
 }
 
+const TEST_DATA_PATH = __dirname + '/../unicode-tools/ucd/auxiliary/LineBreakTest.txt';
+
 function loadTestData () {
-	return fs.readFileSync(
-		__dirname + '/../unicode-tools/ucd/auxiliary/LineBreakTest.txt',
-		'utf8');
+	return fs.readFileSync(TEST_DATA_PATH, 'utf8');
 }
 
-describe('class LineBreakder', function () {
+// the UCD test data (LineBreakTest.txt) is a developer-local artifact that is
+// neither committed nor fetched by any build step, so skip when it is absent.
+const hasTestData = fs.existsSync(TEST_DATA_PATH);
+
+(hasTestData ? describe : describe.skip)('class LineBreakder', function () {
 	var dictData = loadDict();
 	var testData = loadTestData();
 	var count = 0;
