@@ -3,7 +3,7 @@
 		"wasavi-fork@htsign": {
 			"updates": [
 				{
-					"version": "0.8.1",
+					"version": "0.8.2",
 					"update_link": "https://github.com/htsign/wasavi/raw/master/dist/wasavi.xpi"
 				}
 			]
