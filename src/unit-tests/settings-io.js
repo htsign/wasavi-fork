@@ -154,6 +154,21 @@ describe('SettingsIO.parseImportData', () => {
 		assert.equal(result.ok, false);
 		assert.equal(result.reason, 'no-valid-settings');
 	});
+
+	it('should ignore keys inherited from a polluted prototype', () => {
+		// the parsed settings only carries fontFamily as an own property; an
+		// allowlisted key living on Object.prototype must not leak in
+		Object.prototype.exrc = 'injected';
+		try {
+			const json = envelopeJson({fontFamily: 'monospace'});
+			const result = SettingsIO.parseImportData(json, KNOWN_TARGETS);
+			assert.equal(result.ok, true);
+			assert.deepEqual(result.items.map(i => i.key), ['fontFamily']);
+		}
+		finally {
+			delete Object.prototype.exrc;
+		}
+	});
 });
 
 // vim:set ts=4 sw=4 fenc=UTF-8 ff=unix ft=javascript fdm=marker :
