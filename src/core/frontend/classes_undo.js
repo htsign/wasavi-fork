@@ -138,7 +138,7 @@ EditLogItemInsert.prototype = extend(new EditLogItemBase, {
 				this.toString() + '#undo: bad consistency!',
 				' position: ' + this.position,
 				'position2: ' + (this.position2 || '(N/A)'),
-				'       LO: ' + Object.hasOwn(this, 'isLineOrient') ? this.isLineOrient : '(N/A)',
+				'       LO: ' + (Object.hasOwn(this, 'isLineOrient') ? this.isLineOrient : '(N/A)'),
 				'       ss: ' + ss,
 				'       se: ' + se,
 				'selection: "' + toVisibleString(t.getSelection(ss, se)) + '"',
