@@ -12,6 +12,7 @@
     "skipLibCheck": true
   },
   "include": [
-    "src/core/scripts/settings-io.js"
+    "src/core/scripts/settings-io.js",
+    "src/core/backend/lib/SimilarityComputer.js"
   ]
 }

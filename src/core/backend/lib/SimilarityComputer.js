@@ -22,13 +22,25 @@
 (function () {
 	'use strict';
 
+	/**
+	 * @typedef {Record<string, number>} Ngram
+	 */
+
 	class SimilarityComputer {
+		/**
+		 * @param {number} [unitSize]
+		 */
 		constructor(unitSize) {
 			this.unitSize = unitSize || 3;
 		}
 
+		/**
+		 * @param {string} text
+		 * @returns {Ngram}
+		 */
 		getNgram(text) {
 			text = text.replace(/\s/g, '');
+			/** @type {Ngram} */
 			var result = {};
 			for (var i = 0, goal = text.length - (this.unitSize - 1); i < goal; i++) {
 				result[text.substr(i, this.unitSize)] = 1;
@@ -36,6 +48,11 @@
 			return result;
 		}
 
+		/**
+		 * @param {Ngram} t1ngram
+		 * @param {Ngram} t2ngram
+		 * @returns {number}
+		 */
 		getCommonLength(t1ngram, t2ngram) {
 			var result = 0;
 			for (var i in t1ngram) {
@@ -44,12 +61,25 @@
 			return result;
 		}
 
+		/**
+		 * @param {Ngram} t1ngram
+		 * @param {Ngram} t2ngram
+		 * @returns {number}
+		 */
 		getUnionLength(t1ngram, t2ngram) {
 			return Object.keys(t1ngram).length + Object.keys(t2ngram).length;
 		}
 
+		/**
+		 * @param {string | Ngram} t1
+		 * @param {string | Ngram} t2
+		 * @returns {number}
+		 */
 		getNgramRatio(t1, t2) {
-			var t1ngram, t2ngram;
+			/** @type {Ngram} */
+			var t1ngram;
+			/** @type {Ngram} */
+			var t2ngram;
 
 			if (t1 && t2 && typeof t1 == 'object' && typeof t2 == 'object') {
 				t1ngram = t1;
@@ -72,11 +102,17 @@
 			return result;
 		}
 
+		/**
+		 * @param {string} t1
+		 * @param {string} t2
+		 * @returns {number}
+		 */
 		getLevenshteinRatio(t1, t2) {
 			if (t1 == '' && t2 == '') return 1.0;
 
 			var x = t1.length;
 			var y = t2.length;
+			/** @type {number[][]} */
 			var m = [];
 			for (var i = 0; i <= x; i++) {
 				m[i] = [];
@@ -95,6 +131,13 @@
 			return result;
 		}
 
+		/**
+		 * @param {string} t1
+		 * @param {string} t2
+		 * @param {Ngram} t1data
+		 * @param {Ngram} t2data
+		 * @returns {number}
+		 */
 		getNgramRatio2(t1, t2, t1data, t2data) {
 			if (t1.length < this.unitSize || t2.length < this.unitSize) {
 				return this.getNgramRatio(t1, t2);
@@ -105,6 +148,10 @@
 		}
 	}
 
+	/**
+	 * @param {number} [unitsize]
+	 * @returns {SimilarityComputer}
+	 */
 	function create (unitsize) {
 		return new SimilarityComputer(unitsize);
 	}
