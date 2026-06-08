@@ -22,6 +22,21 @@ describe('SimilarityComputer', () => {
 		it('should yield nothing for text shorter than the unit size', () => {
 			assert.deepEqual(SimilarityComputer(3).getNgram('ab'), {});
 		});
+
+		it('should yield a single gram when length equals the unit size', () => {
+			assert.deepEqual(SimilarityComputer(3).getNgram('abc'), {abc: 1});
+		});
+
+		it('should deduplicate repeated grams', () => {
+			assert.deepEqual(SimilarityComputer(2).getNgram('aaaa'), {aa: 1});
+		});
+	});
+
+	describe('unitSize', () => {
+		it('should default to 3 for falsy sizes', () => {
+			assert.equal(SimilarityComputer().unitSize, 3);
+			assert.equal(SimilarityComputer(0).unitSize, 3);
+		});
 	});
 
 	describe('getCommonLength / getUnionLength', () => {
@@ -57,6 +72,8 @@ describe('SimilarityComputer', () => {
 
 		it('should throw on invalid arguments', () => {
 			assert.throws(() => sc.getNgramRatio(1, 2), /invalid arguments/);
+			// mixed object + string is neither path -> invalid
+			assert.throws(() => sc.getNgramRatio({a: 1}, 'abc'), /invalid arguments/);
 		});
 	});
 
@@ -74,6 +91,10 @@ describe('SimilarityComputer', () => {
 		it('should reflect a single edit over the longer length', () => {
 			approx(sc.getLevenshteinRatio('cat', 'hat'), 1 - 1 / 3);
 		});
+
+		it('should be 0 for an empty string against a non-empty one', () => {
+			approx(sc.getLevenshteinRatio('', 'abc'), 0);
+		});
 	});
 
 	describe('getNgramRatio2', () => {
@@ -87,6 +108,11 @@ describe('SimilarityComputer', () => {
 			const ng = sc.getNgram('hello');
 			// strings differ, but the supplied n-grams are identical -> 1.0
 			approx(sc.getNgramRatio2('hello', 'jelly', ng, ng), 1.0);
+		});
+
+		it('should ignore the supplied n-grams when a string is short', () => {
+			// t1 'ab' is short -> compares the strings directly, identical ngrams ignored
+			approx(sc.getNgramRatio2('ab', 'abcd', {x: 1}, {x: 1}), 0.5);
 		});
 	});
 });

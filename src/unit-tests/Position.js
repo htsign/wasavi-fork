@@ -108,6 +108,15 @@ describe('class Position', () => {
 			assert.deepEqual(roundedAt(5, 10), {row: 2, col: 3});
 		});
 
+		it('should clamp a negative col to 0', () => {
+			assert.deepEqual(roundedAt(1, -9), {row: 1, col: 0});
+		});
+
+		it('should return itself for chaining', () => {
+			const p = new Wasavi.Position(1, 1);
+			assert.ok(p.round(buffer) instanceof Wasavi.Position);
+		});
+
 		function roundedAt (r, c) {
 			const p = new Wasavi.Position(r, c).round(buffer);
 			return {row: p.row, col: p.col};
