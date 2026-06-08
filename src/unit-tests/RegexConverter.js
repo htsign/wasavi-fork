@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('assert');
+const {describe, it} = require('node:test');
 
 require('../core/frontend/init.js');
 require('../core/frontend/utils.js');

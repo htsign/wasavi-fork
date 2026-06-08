@@ -1,10 +1,20 @@
 'use strict';
 
 const assert = require('assert');
-const exec = require('child_process').exec;
+const {exec, execSync} = require('child_process');
+const {describe, it, before} = require('node:test');
 
 require('../core/frontend/init.js');
 require('../core/frontend/utils.js');
+
+const hasGnuDate = (() => {
+	try {
+		return /GNU coreutils/.test(
+			execSync('date --version', {stdio: ['ignore', 'pipe', 'ignore']}).toString());
+	} catch (e) {
+		return false;
+	}
+})();
 
 const formats = [
 	'a: %a',
@@ -51,12 +61,12 @@ const formats = [
 const format = formats.join('###');
 const testDate = '2017-01-02 03:04:05';
 
-describe('strftime', () => {
+(hasGnuDate ? describe : describe.skip)('strftime', () => {
 	var child;
 	var expected;
 	var actual;
 
-	before(done => {
+	before((t, done) => {
 		child = exec(
 			`LANG=en date --date="${testDate}" +"${format}"`,
 			(error, stdout, stderr) => {

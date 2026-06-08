@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('assert');
+const {describe, it, after} = require('node:test');
 
 require('../core/frontend/init.js');
 require('../core/frontend/utils.js');
@@ -17,16 +18,16 @@ describe('class MapManager', () => {
 				}
 			}
 		});
-		mm.maps.command.register('a', 'gg', true);
-		mm.maps.command.register('b', 'B', true);
-		mm.maps.command.register('bb', '^', true);
-		mm.maps.command.register('h', 'l', true);
-		mm.maps.command.register('Q', '1G', true);
-		mm.maps.command.register('QQ', 'G', true);
+		mm.maps.normal.register('a', 'gg', true);
+		mm.maps.normal.register('b', 'B', true);
+		mm.maps.normal.register('bb', '^', true);
+		mm.maps.normal.register('h', 'l', true);
+		mm.maps.normal.register('Q', '1G', true);
+		mm.maps.normal.register('QQ', 'G', true);
 		return mm;
 	}
 
-	it('should return an unmapped key as it is', done => {
+	it('should return an unmapped key as it is', (t, done) => {
 		const mm = createMapManager();
 
 		// z -> z
@@ -39,7 +40,7 @@ describe('class MapManager', () => {
 		});
 	});
 
-	it('should resolve unique mache', done => {
+	it('should resolve unique mache', (t, done) => {
 		const mm = createMapManager();
 		mm.onexpand = sequences => {
 			assert.equal(sequences.length, 1);
@@ -56,7 +57,7 @@ describe('class MapManager', () => {
 		});
 	});
 
-	it('should resolve ambiguous matches by timeout', done => {
+	it('should resolve ambiguous matches by timeout', (t, done) => {
 		const mm = createMapManager();
 		mm.onexpand = sequences => {
 			assert.equal(sequences.length, 1);
@@ -73,7 +74,7 @@ describe('class MapManager', () => {
 		});
 	});
 
-	it('should resolve ambiguous matches by subsequent input', done => {
+	it('should resolve ambiguous matches by subsequent input', (t, done) => {
 		const mm = createMapManager();
 		mm.onexpand = sequences => {
 			assert.equal(sequences.length, 1);
@@ -94,35 +95,43 @@ describe('class MapManager', () => {
 		});
 	});
 
-	it('should resolve ambiguous matches by subsequent input in different mode', done => {
+	it('should resolve an ambiguous match when the next key arrives in another mode', (t, done) => {
 		const mm = createMapManager();
 		mm.onexpand = sequences => {
 			assert.equal(sequences.length, 2);
+
+			// the waiting command-mode `b` expands to its rhs `B`, tagged with
+			// the map *type* of the waiting map (normal), not the mode name
 			assert.equal(sequences[0].char, 'B');
-			assert.equal(sequences[0].overrideMap, 'command');
+			assert.equal(sequences[0].overrideMap, 'normal');
+			assert.equal(sequences[0].mapExpanded, true);
+
+			// the trailing key is carried over tagged with the second mode's
+			// map type (insert -> input)
 			assert.equal(sequences[1].char, 'b');
-			assert.equal(sequences[1].overrideMap, 'edit');
+			assert.equal(sequences[1].overrideMap, 'input');
+
 			assert.equal(mm.isWaiting, false);
 			done();
 		};
 
-		// <command>b<edit>b -> <command>B<edit>b
+		// <command>b<insert>b -> <command>B<insert>b
 		const e1 = qeema.parseKeyDesc('b').prop;
 		mm.process('command', e1)
 		.then(e => {
 			assert.equal(e, undefined);
-			return mm.process('edit', e1);
+			return mm.process('insert', qeema.parseKeyDesc('b').prop);
 		})
 		.then(e => {
 			assert.equal(e, undefined);
 		});
 	});
 
-	it('should resolve halfway input by timeout #1', done => {
+	it('should resolve halfway input by timeout #1', (t, done) => {
 		const mm = createMapManager();
-		mm.maps.command.remove('b', 'bb');
-		mm.maps.command.register('bbb', 'B');
-		mm.maps.command.register('bbbb', '^');
+		mm.maps.normal.remove('b', 'bb');
+		mm.maps.normal.register('bbb', 'B');
+		mm.maps.normal.register('bbbb', '^');
 		mm.onexpand = sequences => {
 			assert.equal(sequences.length, 1);
 			assert.equal(sequences[0].char, 'b');
@@ -139,11 +148,11 @@ describe('class MapManager', () => {
 		});
 	});
 
-	it('should resolve halfway input by timeout #2', done => {
+	it('should resolve halfway input by timeout #2', (t, done) => {
 		const mm = createMapManager();
-		mm.maps.command.remove('b', 'bb');
-		mm.maps.command.register('bbb', 'B');
-		mm.maps.command.register('bbbb', '^');
+		mm.maps.normal.remove('b', 'bb');
+		mm.maps.normal.register('bbb', 'B');
+		mm.maps.normal.register('bbbb', '^');
 		mm.onexpand = sequences => {
 			assert.equal(sequences.length, 2);
 			assert.equal(sequences[0].char, 'b');
@@ -166,11 +175,11 @@ describe('class MapManager', () => {
 		});
 	});
 
-	it('should resolve halfway input by unmapped key #1', done => {
+	it('should resolve halfway input by unmapped key #1', (t, done) => {
 		const mm = createMapManager();
-		mm.maps.command.remove('b', 'bb');
-		mm.maps.command.register('bbb', 'B');
-		mm.maps.command.register('bbbb', '^');
+		mm.maps.normal.remove('b', 'bb');
+		mm.maps.normal.register('bbb', 'B');
+		mm.maps.normal.register('bbbb', '^');
 		mm.onexpand = sequences => {
 			assert.equal(sequences.length, 3, '#0');
 			assert.equal(sequences[0].char, 'b', '#1');
@@ -198,7 +207,7 @@ describe('class MapManager', () => {
 		});
 	});
 
-	it('should resolve halfway input by unmapped key #2', done => {
+	it('should resolve halfway input by unmapped key #2', (t, done) => {
 		const mm = createMapManager();
 		mm.onexpand = sequences => {
 			assert.equal(sequences.length, 3);
@@ -219,8 +228,7 @@ describe('class MapManager', () => {
 		});
 	});
 
-	after(function (done) {
-		this.timeout(1500);
+	after((t, done) => {
 		setTimeout(done, 1000);
 	});
 });
