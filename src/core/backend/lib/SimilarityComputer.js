@@ -22,33 +22,33 @@
 (function () {
 	'use strict';
 
-	function SimilarityComputer (unitSize) {
-		this.unitSize = unitSize || 3;
-	}
+	class SimilarityComputer {
+		constructor(unitSize) {
+			this.unitSize = unitSize || 3;
+		}
 
-	SimilarityComputer.prototype = {
-		getNgram: function (text) {
+		getNgram(text) {
 			text = text.replace(/\s/g, '');
 			var result = {};
 			for (var i = 0, goal = text.length - (this.unitSize - 1); i < goal; i++) {
 				result[text.substr(i, this.unitSize)] = 1;
 			}
 			return result;
-		},
+		}
 
-		getCommonLength: function (t1ngram, t2ngram) {
+		getCommonLength(t1ngram, t2ngram) {
 			var result = 0;
 			for (var i in t1ngram) {
 				i in t2ngram && result++;
 			}
 			return result;
-		},
+		}
 
-		getUnionLength: function (t1ngram, t2ngram) {
+		getUnionLength(t1ngram, t2ngram) {
 			return Object.keys(t1ngram).length + Object.keys(t2ngram).length;
-		},
+		}
 
-		getNgramRatio: function (t1, t2) {
+		getNgramRatio(t1, t2) {
 			var t1ngram, t2ngram;
 
 			if (t1 && t2 && typeof t1 == 'object' && typeof t2 == 'object') {
@@ -70,9 +70,9 @@
 			var unionLength = this.getUnionLength(t1ngram, t2ngram);
 			var result = 2.0 * commonLength / unionLength;
 			return result;
-		},
+		}
 
-		getLevenshteinRatio: function (t1, t2) {
+		getLevenshteinRatio(t1, t2) {
 			if (t1 == '' && t2 == '') return 1.0;
 
 			var x = t1.length;
@@ -93,9 +93,9 @@
 			}
 			var result = 1.0 - (m[x][y] / Math.max(x, y));
 			return result;
-		},
+		}
 
-		getNgramRatio2: function (t1, t2, t1data, t2data) {
+		getNgramRatio2(t1, t2, t1data, t2data) {
 			if (t1.length < this.unitSize || t2.length < this.unitSize) {
 				return this.getNgramRatio(t1, t2);
 			}
@@ -103,7 +103,7 @@
 				return this.getNgramRatio(t1data, t2data);
 			}
 		}
-	};
+	}
 
 	function create (unitsize) {
 		return new SimilarityComputer(unitsize);

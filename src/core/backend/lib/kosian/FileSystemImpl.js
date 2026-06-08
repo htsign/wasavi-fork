@@ -120,27 +120,26 @@
 	 * file system base class
 	 */
 
-	function FileSystem (extension, options) {
-		this.extension = extension;
-		options || (options = {});
-	}
-
-	FileSystem.prototype = {
-		backend: '*null*',
-		write: function (path, content, tabId, options) {
+	class FileSystem {
+		backend = '*null*';
+		constructor(extension, options) {
+			this.extension = extension;
+			options || (options = {});
+		}
+		write(path, tabId, content, options) {
 			this.response({task: 'write', tabId: tabId, options: options}, {
 				error: 'not implemented'
 			});
-		},
-		read: function (path, tabId) {
-			this.response({task: 'read', tabId: tabId}, {
+		}
+		read(path, tabId, options) {
+			this.response({task: 'read', tabId: tabId, options: options}, {
 				error: 'not implemented'
 			});
-		},
-		ls: function (path, tabId, options) {
+		}
+		ls(path, tabId, options) {
 			options && this.extension.emit(options.onload, {});
-		},
-		response: function (task, data) {
+		}
+		response(task, data) {
 			if (!task.options) {
 				return;
 			}
@@ -151,8 +150,8 @@
 
 			data.type = 'fileio-' + name + '-response';
 			this.extension.emit(options.onresponse, data, task);
-		},
-		responseError: function (task, data) {
+		}
+		responseError(task, data) {
 			var errorMessage = false;
 
 			switch (u.objectType(data)) {
@@ -196,21 +195,21 @@
 
 			this.response(task, {error: errorMessage});
 			task.options && this.extension.emit(task.options.onerror, errorMessage);
-		},
-		getInternalPath: function (path) {
+		}
+		getInternalPath(path) {
 			var schema = this.backend + ':';
 			if (path.indexOf(schema) == 0) {
 				path = path.substring(schema.length);
 			}
 			return path;
-		},
-		getExternalPath: function (path) {
+		}
+		getExternalPath(path) {
 			if (path.charAt(0) != '/') {
 				path = '/' + path;
 			}
 			return this.backend + ':' + path;
-		},
-		getPathPrefix: function (fragments, root) {
+		}
+		getPathPrefix(fragments, root) {
 			var prefix = Array.prototype.slice.call(fragments);
 			var rootFragments = u.splitPath(root);
 			while (rootFragments.length) {
@@ -218,88 +217,45 @@
 				prefix.shift();
 			}
 			return prefix;
-		},
-		match: function (url) {
+		}
+		match(url) {
 			return url.indexOf(this.backend + ':') == 0;
-		},
-		get credentialKeyName () {
+		}
+		get credentialKeyName() {
 			return 'filesystem.' + this.backend + '.tokens';
-		},
-		saveCredentials: function (data) {
+		}
+		saveCredentials(data) {
 			this.extension.storage.setItem(this.credentialKeyName, data);
-		},
-		loadCredentials: function () {
+		}
+		loadCredentials() {
 			return this.extension.storage.getItem(this.credentialKeyName);
-		},
-		clearCredentials: function () {
+		}
+		clearCredentials() {
 			this.extension.storage.setItem(this.credentialKeyName, undefined);
 		}
-	};
+	}
 
 	/*
 	 * file system class for local file system
 	 * this class depends on Chrome apps named "Local File Operator for wasavi"
 	 */
 
-	function FileSystemLocalFileChrome (extension, options) {
+	class FileSystemLocalFileChrome extends FileSystem {
+		constructor(extension, options) {
+			super(extension, options);
 
-		/*
-		 * tasks
-		 */
+			/*
+			 * tasks
+			 */
 
-		function ls (task) {
-			chrome.runtime.sendMessage(
-				LFO_ID,
-				{
-					command: 'ls',
-					path: task.path
-				},
-				function (response) {
-					if (chrome.runtime.lastError) {
-						return self.responseError(
-							task, chrome.runtime.lastError.message);
-					}
-					else if (!response) {
-						return self.responseError(
-							task, _('Invalid response.'));
-					}
-					else if (response.error) {
-						return self.responseError(
-							task, response.error);
-					}
-
-					var data = {
-						name: response.name,
-						size: '',
-						bytes: 0,
-						path: response.path,
-						is_dir: true,
-						is_deleted: false,
-						id: null,
-						modified: null,
-						created: null,
-						mime_type: PSEUDO_MIME_DIRECTORY,
-						contents: response.entries
-					};
-
-					self.response(task, {data: data});
-					extension.emit(task.options.onload, data);
-				}
-			);
-			taskQueue.run();
-		}
-
-		function read (task) {
-			self.response(task, {state: 'reading', progress: 0});
-
-			chrome.runtime.sendMessage(
-				LFO_ID,
-				{
-					command: 'read',
-					path: task.path
-				},
-				function (response) {
-					try {
+			function ls(task) {
+				chrome.runtime.sendMessage(
+					LFO_ID,
+					{
+						command: 'ls',
+						path: task.path
+					},
+					function (response) {
 						if (chrome.runtime.lastError) {
 							return self.responseError(
 								task, chrome.runtime.lastError.message);
@@ -313,94 +269,136 @@
 								task, response.error);
 						}
 
-						self.response(task, {
-							state: 'complete',
-							status: 200,
-							content: response.content,
-							meta: {
-								name: response.name,
-								size: u.readableSize(response.size),
-								bytes: response.size,
-								path: self.getExternalPath(response.path),
-								is_dir: false,
-								is_deleted: false,
-								id: null,
-								modified: new Date(response.lastModified),
-								created: null,
-								mime_type: PSEUDO_MIME_GENERIC,
+						var data = {
+							name: response.name,
+							size: '',
+							bytes: 0,
+							path: response.path,
+							is_dir: true,
+							is_deleted: false,
+							id: null,
+							modified: null,
+							created: null,
+							mime_type: PSEUDO_MIME_DIRECTORY,
+							contents: response.entries
+						};
+
+						self.response(task, {data: data});
+						extension.emit(task.options.onload, data);
+					}
+				);
+				taskQueue.run();
+			}
+
+			function read(task) {
+				self.response(task, {state: 'reading', progress: 0});
+
+				chrome.runtime.sendMessage(
+					LFO_ID,
+					{
+						command: 'read',
+						path: task.path
+					},
+					function (response) {
+						try {
+							if (chrome.runtime.lastError) {
+								return self.responseError(
+									task, chrome.runtime.lastError.message);
 							}
-						});
-					}
-					finally {
-						taskQueue.run();
-					}
-				}
-			);
-		}
-
-		function write (task) {
-			self.response(task, {state: 'writing', progress: 0});
-
-			chrome.runtime.sendMessage(
-				LFO_ID,
-				{
-					command: 'write',
-					path: task.path,
-					content: task.content
-				},
-				function (response) {
-					try {
-						if (chrome.runtime.lastError) {
-							return self.responseError(
-								task, chrome.runtime.lastError.message);
-						}
-						else if (!response) {
-							return self.responseError(
-								task, _('Invalid response.'));
-						}
-						else if (response.error) {
-							return self.responseError(
-								task, response.error);
-						}
-
-						self.response(task, {
-							state: 'complete',
-							status: 200,
-							meta: {
-								name: response.name,
-								size: u.readableSize(response.size),
-								bytes: response.size,
-								path: self.getExternalPath(response.path),
-								is_dir: false,
-								is_deleted: false,
-								id: null,
-								modified: null,
-								created: null,
-								mime_type: PSEUDO_MIME_GENERIC
+							else if (!response) {
+								return self.responseError(
+									task, _('Invalid response.'));
 							}
-						});
+							else if (response.error) {
+								return self.responseError(
+									task, response.error);
+							}
+
+							self.response(task, {
+								state: 'complete',
+								status: 200,
+								content: response.content,
+								meta: {
+									name: response.name,
+									size: u.readableSize(response.size),
+									bytes: response.size,
+									path: self.getExternalPath(response.path),
+									is_dir: false,
+									is_deleted: false,
+									id: null,
+									modified: new Date(response.lastModified),
+									created: null,
+									mime_type: PSEUDO_MIME_GENERIC,
+								}
+							});
+						}
+						finally {
+							taskQueue.run();
+						}
 					}
-					finally {
-						taskQueue.run();
+				);
+			}
+
+			function write(task) {
+				self.response(task, {state: 'writing', progress: 0});
+
+				chrome.runtime.sendMessage(
+					LFO_ID,
+					{
+						command: 'write',
+						path: task.path,
+						content: task.content
+					},
+					function (response) {
+						try {
+							if (chrome.runtime.lastError) {
+								return self.responseError(
+									task, chrome.runtime.lastError.message);
+							}
+							else if (!response) {
+								return self.responseError(
+									task, _('Invalid response.'));
+							}
+							else if (response.error) {
+								return self.responseError(
+									task, response.error);
+							}
+
+							self.response(task, {
+								state: 'complete',
+								status: 200,
+								meta: {
+									name: response.name,
+									size: u.readableSize(response.size),
+									bytes: response.size,
+									path: self.getExternalPath(response.path),
+									is_dir: false,
+									is_deleted: false,
+									id: null,
+									modified: null,
+									created: null,
+									mime_type: PSEUDO_MIME_GENERIC
+								}
+							});
+						}
+						finally {
+							taskQueue.run();
+						}
 					}
-				}
-			);
+				);
+			}
+
+			/*
+			 * init
+			 */
+
+			this.backend = 'file';
+			var self = this;
+			var taskQueue = this.taskQueue = new TaskQueue(this, ls, read, write);
+			//var LFO_ID = 'igbjeepbgpdcjmpcjgkkfgelekeigbhc';	// develop version
+			var LFO_ID = 'dkbdmkncpnepdbaneikhbbeiboehjnol';	// release version
 		}
-
-		/*
-		 * init
-		 */
-
-		FileSystem.apply(this, arguments);
-		this.backend = 'file';
-		var self = this;
-		var taskQueue = this.taskQueue = new TaskQueue(this, ls, read, write);
-		//var LFO_ID = 'igbjeepbgpdcjmpcjgkkfgelekeigbhc';	// develop version
-		var LFO_ID = 'dkbdmkncpnepdbaneikhbbeiboehjnol';	// release version
 	}
-
-	FileSystemLocalFileChrome.prototype = Object.create(FileSystem.prototype);
-	FileSystemLocalFileChrome.prototype.constructor = FileSystemLocalFileChrome;
 
 	/*
 	 * export
