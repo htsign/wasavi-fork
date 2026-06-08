@@ -4,6 +4,9 @@
   "description": "the vi editor in your browser",
   "homepage": "http://appsweets.net/wasavi/",
   "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/akahuku/wasavi.git"
