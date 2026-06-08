@@ -1,0 +1,57 @@
+name: Require version bump
+
+# Fails a PR into master unless both src/core/manifest.json and package.json
+# carry a version strictly greater than the base branch. Wire this as a
+# required status check (job name: version-bump) in the master ruleset so a
+# release bump (./bump-version.sh) is mandatory before merge.
+
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  version-bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Require manifest.json and package.json to be bumped
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          # read the "version" field of a JSON document supplied on stdin
+          read_ver () {
+            node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(0, "utf8")).version || ""))'
+          }
+
+          fail=0
+          check () {
+            file="$1"
+            new=$(read_ver < "$file")
+            old=$(git show "${BASE_SHA}:${file}" 2>/dev/null | read_ver)
+
+            if [ -z "$new" ]; then
+              echo "::error file=${file}::cannot read a version from ${file}"
+              fail=1; return
+            fi
+            if [ "$new" = "$old" ]; then
+              echo "::error file=${file}::version not bumped (still ${old}); run ./bump-version.sh"
+              fail=1; return
+            fi
+            highest=$(printf '%s\n%s\n' "$old" "$new" | sort -V | tail -n1)
+            if [ "$highest" != "$new" ]; then
+              echo "::error file=${file}::version ${new} must be greater than the base version ${old}"
+              fail=1; return
+            fi
+            echo "${file}: ${old:-<absent>} -> ${new}"
+          }
+
+          check src/core/manifest.json
+          check package.json
+          exit "$fail"
