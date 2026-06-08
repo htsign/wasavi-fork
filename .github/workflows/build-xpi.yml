@@ -47,21 +47,8 @@ jobs:
             --exclude '*.sw?' --exclude '*.bak' --exclude '*~' --exclude '*.sh' \
             --exclude 'banner*.xcf' --exclude 'banner*.png' \
             --exclude '.*' \
-            --exclude 'consumer_keys.json' --exclude 'consumer_keys.json.template' \
-            --exclude 'consumer_keys.bin' \
             --exclude 'wasavi_frame_noscript.html' \
             src/core/ .build/firefox/
-
-      - name: Place consumer keys (optional)
-        env:
-          CONSUMER_KEYS_BIN: ${{ secrets.CONSUMER_KEYS_BIN }}
-        run: |
-          if [ -n "${CONSUMER_KEYS_BIN}" ]; then
-            printf '%s' "${CONSUMER_KEYS_BIN}" | base64 -d > .build/firefox/consumer_keys.bin
-            echo "consumer_keys.bin placed from secret"
-          else
-            echo "CONSUMER_KEYS_BIN secret not set; cloud storage will be unavailable"
-          fi
 
       - name: Update manifest version and strip update_url
         run: |

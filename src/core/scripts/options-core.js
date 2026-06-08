@@ -103,6 +103,85 @@ function markup (node, text) {
 	}
 }
 
+function applySettings (src) {
+	/*
+	 * apply settings to form elements. each key is applied only when it is
+	 * present in src, so partial application is possible.
+	 */
+
+	var el;
+
+	// exrc
+	if ('exrc' in src) {
+		el = $('exrc');
+		if (el && el.nodeName == 'TEXTAREA') {
+			el.value = src.exrc;
+		}
+	}
+
+	// targets
+	if (src.targets) {
+		for (var i in src.targets) {
+			el = $(i);
+			if (el && el.nodeName == 'INPUT' && el.type == 'checkbox') {
+				el.checked = src.targets[i];
+			}
+		}
+	}
+
+	// quick activation
+	if ('quickActivation' in src) {
+		el = document.querySelector([
+			'input',
+			'[name="quick-activation"]',
+			'[value="' + (src.quickActivation ? '1' : '0') + '"]'
+		].join(''));
+		if (el) {
+			el.checked = true;
+		}
+	}
+
+	// site overrides
+	if ('siteOverrides' in src) {
+		el = $('site-overrides');
+		if (el && el.nodeName == 'TEXTAREA') {
+			el.value = src.siteOverrides;
+		}
+	}
+
+	// shortcut
+	if ('shortcut' in src) {
+		el = $('shortcut');
+		if (el && el.nodeName == 'INPUT') {
+			el.value = src.shortcut;
+		}
+	}
+
+	// font family
+	if ('fontFamily' in src) {
+		el = $('font-family');
+		if (el && el.nodeName == 'INPUT') {
+			el.value = src.fontFamily;
+		}
+	}
+
+	// log mode
+	if ('logMode' in src) {
+		el = $('log-mode');
+		if (el && el.nodeName == 'INPUT' && el.type == 'checkbox') {
+			el.checked = src.logMode;
+		}
+	}
+
+	// upgrade action
+	if ('upgradeNotify' in src) {
+		el = $('upgrade-notify');
+		if (el && el.nodeName == 'INPUT' && el.type == 'checkbox') {
+			el.checked = src.upgradeNotify;
+		}
+	}
+}
+
 function initPage (req) {
 	/*
 	 * initialize form elements
@@ -110,71 +189,7 @@ function initPage (req) {
 
 	var el;
 
-	// exrc
-	el = $('exrc');
-	if (el && el.nodeName == 'TEXTAREA') {
-		el.value = req.exrc;
-	}
-
-	// targets
-	for (var i in req.targets) {
-		el = $(i);
-		if (el && el.nodeName == 'INPUT' && el.type == 'checkbox') {
-			el.checked = req.targets[i];
-		}
-	}
-
-	// quick activation
-	el = document.querySelector([
-		'input',
-		'[name="quick-activation"]',
-		'[value="' + (req.quickActivation ? '1' : '0') + '"]'
-	].join(''));
-	if (el) {
-		el.checked = true;
-	}
-
-	// site overrides
-	el = $('site-overrides');
-	if (el && el.nodeName == 'TEXTAREA') {
-		el.value = req.siteOverrides;
-	}
-
-	// shortcut
-	el = $('shortcut');
-	if (el && el.nodeName == 'INPUT') {
-		el.value = req.shortcut;
-	}
-
-	// font family
-	el = $('font-family');
-	if (el && el.nodeName == 'INPUT') {
-		el.value = req.fontFamily;
-	}
-
-	// fstab
-	var defaultFs = req.fstab
-		.filter(function (fs) {return fs.isDefault})[0];
-	el = document.querySelector([
-		'input',
-		'[name="fstab"]',
-		'[value="' + (defaultFs ? defaultFs.name : '') + '"]'
-	].join(''));
-	if (el) {
-		el.checked = true;
-	}
-
-	// log mode
-	el = $('log-mode');
-	if (el && el.nodeName == 'INPUT' && el.type == 'checkbox') {
-		el.checked = req.logMode;
-	}
-
-	// upgrade action
-	el = $('upgrade-notify');
-	if (el && el.nodeName == 'INPUT' && el.type == 'checkbox') {
-		el.checked = req.upgradeNotify;
-	}
+	applySettings(req);
 
 	/*
 	 * replace all message ids to translated one
@@ -222,6 +237,21 @@ function initPage (req) {
 	el = $('save');
 	if (el) {
 		el.addEventListener('click', handleOptionsSave, false);
+	}
+
+	el = $('export');
+	if (el) {
+		el.addEventListener('click', handleOptionsExport, false);
+	}
+
+	el = $('import');
+	if (el) {
+		el.addEventListener('click', handleOptionsImport, false);
+	}
+
+	el = $('import-file');
+	if (el) {
+		el.addEventListener('change', handleImportFileChange, false);
 	}
 
 	el = $('opt-init');
@@ -314,7 +344,7 @@ function handleCapture (e) {
  * ----------------
  */
 
-function handleOptionsSave () {
+function collectSettingItems () {
 	var items = [];
 	var el;
 
@@ -365,27 +395,6 @@ function handleOptionsSave () {
 		items.push({key:'fontFamily', value:el.value});
 	}
 
-	// fstab
-	(function () {
-		var fstab = {};
-		Array.prototype.forEach.call(
-			document.querySelectorAll(
-				'#fstab-container input[type="radio"][name="fstab"]'),
-			function (node) {
-				fstab[node.value] = {enabled: false};
-
-				if (!node.disabled) {
-					fstab[node.value].enabled = true;
-				}
-				if (node.checked) {
-					fstab[node.value].isDefault = true;
-				}
-			}
-		);
-
-		items.push({key:'fstab', value:fstab});
-	})();
-
 	// log mode
 	el = $('log-mode');
 	if (el && el.nodeName == 'INPUT' && el.type == 'checkbox') {
@@ -398,6 +407,12 @@ function handleOptionsSave () {
 		items.push({key:'upgradeNotify', value:el.checked});
 	}
 
+	return items;
+}
+
+function handleOptionsSave () {
+	var items = collectSettingItems();
+
 	/*
 	 * post
 	 */
@@ -407,13 +422,183 @@ function handleOptionsSave () {
 		function () {
 			var saveResult = $('save-result');
 			if (saveResult) {
-				saveResult.style.visibility = 'visible';
+				saveResult.style.display = 'inline';
 				setTimeout(function () {
-					saveResult.style.visibility = '';
+					saveResult.style.display = '';
 				}, 1000 * SAVED_MESSAGE_VISIBLE_SECS);
 			}
 		}
 	);
+}
+
+/**
+ * import / export handler
+ * ----------------
+ */
+
+var SETTING_KEYS = [
+	'exrc',
+	'targets',
+	'quickActivation',
+	'shortcut',
+	'siteOverrides',
+	'fontFamily',
+	'logMode',
+	'upgradeNotify'
+];
+
+// expected value type of each setting, used to reject malformed import data
+var SETTING_TYPES = {
+	exrc: 'string',
+	targets: 'object',
+	quickActivation: 'boolean',
+	shortcut: 'string',
+	siteOverrides: 'string',
+	fontFamily: 'string',
+	logMode: 'boolean',
+	upgradeNotify: 'boolean'
+};
+
+function isValidSettingValue (key, value) {
+	if (key == 'targets') {
+		if (value == null || typeof value != 'object' || Array.isArray(value)) {
+			return false;
+		}
+		// only the known target checkboxes, each carrying a boolean
+		var known = Array.prototype.map.call(
+			document.querySelectorAll('#targets-container input[type="checkbox"]'),
+			function (node) {return node.id});
+		return Object.keys(value).every(function (k) {
+			return known.indexOf(k) >= 0 && typeof value[k] == 'boolean';
+		});
+	}
+	return typeof value == SETTING_TYPES[key];
+}
+
+function timestamp () {
+	var d = new Date();
+	return '' + d.getFullYear() +
+		String(d.getMonth() + 1).padStart(2, '0') +
+		String(d.getDate()).padStart(2, '0') +
+		String(d.getHours()).padStart(2, '0') +
+		String(d.getMinutes()).padStart(2, '0') +
+		String(d.getSeconds()).padStart(2, '0');
+}
+
+function showIoResult (msg, isError) {
+	var el = $('io-result');
+	if (!el) return;
+
+	el.textContent = msg;
+	el.classList.toggle('error', isError);
+}
+
+function handleOptionsExport () {
+	showIoResult('', false);
+
+	var items = collectSettingItems();
+	var settings = {};
+	items.forEach(function (item) {
+		settings[item.key] = item.value;
+	});
+
+	var version =
+		(typeof chrome != 'undefined' && chrome.runtime && chrome.runtime.getManifest) ?
+		chrome.runtime.getManifest().version : '';
+
+	var envelope = {
+		format: 'wasavi-fork-settings',
+		version: version,
+		exportedAt: new Date().toISOString(),
+		settings: settings
+	};
+
+	var json = JSON.stringify(envelope, null, 2);
+	var blob = new Blob([json], {type:'application/json'});
+	var url = URL.createObjectURL(blob);
+	var a = document.createElement('a');
+	a.href = url;
+	a.download = 'wasavi-fork_' + timestamp() + '.json';
+	document.body.appendChild(a);
+	a.click();
+	document.body.removeChild(a);
+	URL.revokeObjectURL(url);
+}
+
+function handleOptionsImport () {
+	var input = $('import-file');
+	input && input.click();
+}
+
+function handleImportFileChange (e) {
+	var input = e.target;
+	var file = input.files && input.files[0];
+	if (!file) {
+		input.value = '';
+		return;
+	}
+
+	var reader = new FileReader();
+	reader.onload = function () {
+		var data;
+		try {
+			data = JSON.parse(reader.result);
+		}
+		catch (ex) {
+			showIoResult(getMessage('option_import_error'), true);
+			input.value = '';
+			return;
+		}
+
+		if (!data ||
+			typeof data != 'object' ||
+			data.format !== 'wasavi-fork-settings' ||
+			!data.settings ||
+			typeof data.settings != 'object') {
+			showIoResult(getMessage('option_import_error'), true);
+			input.value = '';
+			return;
+		}
+
+		var items = [];
+		SETTING_KEYS.forEach(function (key) {
+			if (key in data.settings && isValidSettingValue(key, data.settings[key])) {
+				items.push({key:key, value:data.settings[key]});
+			}
+		});
+
+		if (items.length == 0) {
+			showIoResult(getMessage('option_import_error'), true);
+			input.value = '';
+			return;
+		}
+
+		// reflect only the validated values that were actually persisted,
+		// so the form never shows settings that import rejected
+		var applied = {};
+		items.forEach(function (item) {
+			applied[item.key] = item.value;
+		});
+
+		extension.postMessage(
+			{type:'set-storage', items:items},
+			function () {
+				applySettings(applied);
+				showIoResult(getMessage('option_import_done'), false);
+			}
+		);
+
+		input.value = '';
+	};
+	reader.onerror = function () {
+		showIoResult(getMessage('option_import_error'), true);
+		input.value = '';
+	};
+	reader.readAsText(file);
+}
+
+function getMessage (id) {
+	return extension.getMessage(id) || id;
 }
 
 /**

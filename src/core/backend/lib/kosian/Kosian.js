@@ -47,7 +47,6 @@
 				instance = bearer(global, options);
 				instance.appName = 'wow!';
 				instance.logMode = false;
-				instance.cryptKeyPath = '';
 				instance.openBaseURLPattern = null;
 				instance.utils = require('./Utils').Utils;
 				instance.storage = require('./StorageWrapper').StorageWrapper(global);
@@ -99,13 +98,6 @@
 			return result;
 		}},
 
-		setCryptKeyPath: {value: function (arg) {
-			var result = this.cryptKeyPath;
-			arg = arg + '';
-			this.cryptKeyPath = arg;
-			return result;
-		}},
-
 		setOpenBaseUrlPattern: {value: function (pattern) {
 			var result = this.openBaseURLPattern;
 			/*
@@ -143,9 +135,6 @@
 			}
 			if ('openBaseUrlPattern' in options) {
 				this.setOpenBaseUrlPattern(options.openBaseUrlPattern);
-			}
-			if ('cryptKeyPath' in options) {
-				this.setCryptKeyPath(options.cryptKeyPath);
 			}
 			if ('writeDelaySecs' in options) {
 				this.setWriteDelaySecs(options.writeDelaySecs);

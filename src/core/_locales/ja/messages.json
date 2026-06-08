@@ -49,6 +49,22 @@
 		"message": "保存しました。",
 		"description": "saved."
 	},
+	"option_export": {
+		"message": "エクスポート",
+		"description": "Export"
+	},
+	"option_import": {
+		"message": "インポート",
+		"description": "Import"
+	},
+	"option_import_done": {
+		"message": "インポートしました。",
+		"description": "Imported."
+	},
+	"option_import_error": {
+		"message": "設定ファイルが不正です。",
+		"description": "Invalid settings file."
+	},
 	"option_exrc_head": {
 		"message": "exrc",
 		"description": "exrc"
@@ -64,10 +80,6 @@
 	"option_font_family_head": {
 		"message": "フォントファミリー",
 		"description": "font family"
-	},
-	"option_preferred_storage_head": {
-		"message": "利用するストレージ",
-		"description": "preferred storage"
 	},
 	"option_init_head": {
 		"message": "初期化",

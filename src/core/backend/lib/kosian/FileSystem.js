@@ -33,91 +33,18 @@
 	}
 
 	FileSystem.prototype.init = function () {
-		/*
-		 * consumer_keys.json sample:
-		 *
-		 * {
-		 *     "dropbox": {
-		 *         "key":    "YOUR-CONSUMER-KEY",
-		 *         "secret": "YOUR-CONSUMER-SECRET"
-		 *     }
-		 * }
-		 *
-		 * in production package, consumer_keys.json is encrypted.
-		 */
+		var FileSystemImpl = require('./FileSystemImpl').FileSystemImpl;
 
-		function initFileSystemCore (data) {
-			var FileSystemImpl = require('./FileSystemImpl').FileSystemImpl;
-
-			data = this.ext.utils.parseJson(data, false);
-			if (data === false) {
-				this.ext.log('!ERROR: cannot restore consumer keys.');
-				data = {};
-			}
-
-			for (var i in this.fstab) {
-				if (!data[i]) continue;
-				if (!('key' in data[i])) continue;
-
-				this.fstab[i].isNull = false;
-				this.fstab[i].instance = FileSystemImpl(i, this.ext, data[i]);
-			}
-
-			this.fstab.nullFs = {
-				enabled:true,
-				isNull:true,
-				instance:FileSystemImpl(null, this.ext)
-			};
+		for (var i in this.fstab) {
+			this.fstab[i].isNull = false;
+			this.fstab[i].instance = FileSystemImpl(i, this.ext);
 		}
 
-		function handleConsumerKeysLoad (consumerKeys) {
-			if (consumerKeys === false) {
-				this.ext.log('!ERROR: cannot load consumer keys.');
-				return;
-			}
-			this.ext.resource(this.ext.cryptKeyPath, function (cryptKey) {
-				if (cryptKey === false) {
-					this.ext.log('!ERROR: cannot load crypt key.');
-					return;
-				}
-
-				var Blowfish = require('./Blowfish').Blowfish;
-				var SHA1 = require('./SHA1').SHA1;
-
-				var cryptKeyHash = SHA1.calc(cryptKey);
-				var bf = new Blowfish(cryptKeyHash.substring(0, 16));
-
-				if (consumerKeys.charAt(0) == '{') {
-					/*
-					this.ext.isDev && this.ext.log(
-						'!INFO: crypted code:>>>>' +
-						bf.encrypt64(consumerKeys) +
-						'<<<<');
-					 */
-				}
-				else{
-					consumerKeys = bf.decrypt64(consumerKeys);
-				}
-
-				initFileSystemCore.call(this, consumerKeys);
-			}, {noCache:true, bind:this});
-		}
-
-		this.ext.resource('consumer_keys.bin', function (binkeys) {
-			if (binkeys !== false) {
-				handleConsumerKeysLoad.call(this, binkeys);
-			}
-			else {
-				this.ext.resource(
-					'consumer_keys.json',
-					handleConsumerKeysLoad,
-					{noCache:true, bind:this});
-			}
-		}, {
-			noCache:true,
-			mimeType:'text/plain;charset=x-user-defined',
-			bind:this
-		});
+		this.fstab.nullFs = {
+			enabled: true,
+			isNull: true,
+			instance: FileSystemImpl(null, this.ext)
+		};
 	};
 
 	FileSystem.prototype.getInstance = function (path) {
