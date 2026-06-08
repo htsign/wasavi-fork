@@ -124,9 +124,9 @@ EditLogItemInsert.prototype = extend(new EditLogItemBase, {
 
 		var ss = this.position.clone();
 		var se = this.position2 ? this.position2.clone() : t.offsetBy(ss, this.data.length);
-		var data2 = this.hasOwnProperty('data2') ? this.data2 : false;
+		var data2 = Object.hasOwn(this, 'data2') ? this.data2 : false;
 
-		if (this.hasOwnProperty('isLineOrient')) {
+		if (Object.hasOwn(this, 'isLineOrient')) {
 			t.isLineOrientSelection = this.isLineOrient;
 		}
 		else {
@@ -138,7 +138,7 @@ EditLogItemInsert.prototype = extend(new EditLogItemBase, {
 				this.toString() + '#undo: bad consistency!',
 				' position: ' + this.position,
 				'position2: ' + (this.position2 || '(N/A)'),
-				'       LO: ' + this.hasOwnProperty('isLineOrient') ? this.isLineOrient : '(N/A)',
+				'       LO: ' + Object.hasOwn(this, 'isLineOrient') ? this.isLineOrient : '(N/A)',
 				'       ss: ' + ss,
 				'       se: ' + se,
 				'selection: "' + toVisibleString(t.getSelection(ss, se)) + '"',
