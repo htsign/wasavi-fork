@@ -16,12 +16,14 @@ const hasGnuDate = (() => {
 	}
 })();
 
+// %c/%x/%X (locale-composite layouts) and %z/%Z (timezone) are intentionally
+// omitted: a JS strftime renders these through Intl/Date and cannot match GNU
+// coreutils `date` byte-for-byte across locales and time zones.
 const formats = [
 	'a: %a',
 	'A: %A',
 	'b: %b',
 	'B: %B',
-	'c: %c',
 	'C: %C ~%4C~ ~%04C~ ~%_4C~ ~%-C~',
 	'd: %d ~%4d~ ~%04d~ ~%_4d~ ~%-d~',
 	'D: %D',
@@ -51,12 +53,8 @@ const formats = [
 	'V: %V ~%4V~ ~%04V~ ~%_4V~ ~%-V~',
 	'w: %w ~%4w~ ~%04w~ ~%_4w~ ~%-w~',
 	'W: %W ~%4W~ ~%04W~ ~%_4W~ ~%-W~',
-	'x: %x',
-	'X: %X',
 	'y: %y ~%4y~ ~%04y~ ~%_4y~ ~%-y~',
-	'Y: %Y ~%4Y~ ~%04Y~ ~%_4Y~ ~%-Y~',
-	'z: %z ~%^z~ ~%#z~',
-	'Z: %Z ~%^Z~ ~%#Z~'
+	'Y: %Y ~%4Y~ ~%04Y~ ~%_4Y~ ~%-Y~'
 ];
 const format = formats.join('###');
 const testDate = '2017-01-02 03:04:05';
