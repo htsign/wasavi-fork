@@ -138,6 +138,15 @@ describe('SettingsIO.parseImportData', () => {
 		assert.equal(result.reason, 'invalid-format');
 	});
 
+	it('should reject non-object JSON values', () => {
+		// falsy primitives and arrays are not valid envelopes
+		['0', 'false', 'null', '""', '[]'].forEach(json => {
+			const result = SettingsIO.parseImportData(json, KNOWN_TARGETS);
+			assert.equal(result.ok, false, json + ' should be rejected');
+			assert.equal(result.reason, 'invalid-format', json);
+		});
+	});
+
 	it('should ignore unknown keys but keep valid known keys', () => {
 		const json = envelopeJson({exrc: 'set number', bogusKey: 'ignored'});
 		const result = SettingsIO.parseImportData(json, KNOWN_TARGETS);
