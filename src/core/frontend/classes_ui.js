@@ -27,12 +27,22 @@
 
 const Wasavi = g.Wasavi;
 
-Wasavi.Theme = function (app) {
+// methods are attached via publish(this, ...), which tsc cannot model;
+// assert the constructor shape declared in wasavi-namespace.d.ts.
+Wasavi.Theme = /** @type {new (app: WasaviApp) => WasaviTheme} */ (/** @type {unknown} */ (
+	/** @param {WasaviApp} app */
+	function (app) {
+	/** @type {HTMLElement | null} */
 	var container;
+	/** @type {string} */
 	var fontStyle;
+	/** @type {number} */
 	var lineHeight;
+	/** @type {boolean} */
 	var useStripe;
+	/** @type {string} */
 	var currentColorSetName;
+	/** @type {Record<string, string | number | [string, string]>} */
 	var colors = {
 		statusHue:-1,
 		background:'',
@@ -57,6 +67,7 @@ Wasavi.Theme = function (app) {
 		boundFg:['#wasavi_editor>div span.' + Wasavi.BOUND_CLASS, ''],
 		boundBg:['#wasavi_editor>div span.' + Wasavi.BOUND_CLASS, '']
 	};
+	/** @type {Record<string, Record<string, string>>} */
 	var colorSets = {
 		solarized: {
 			statusHue:'#eee8d5',
@@ -151,17 +162,21 @@ Wasavi.Theme = function (app) {
 		}
 	};
 
+	/** @returns {string[]} */
 	function getCSSRules () {
+		/** @type {Record<string, string[]>} */
 		var pieces = {};
 		for (var i in colors) {
-			if (!(colors[i] instanceof Array)) continue;
+			var color = colors[i];
+			if (!(color instanceof Array)) continue;
 			if (i == 'rowBgOdd' && !useStripe) continue;
-			var selector = colors[i][0];
-			var rule = colors[i][1];
+			var selector = color[0];
+			var rule = color[1];
 			(pieces[selector] || (pieces[selector] = []))
 				.push((/Fg$/.test(i) ? 'color' : 'background-color') + ':' + rule);
 		}
 
+		/** @type {string[]} */
 		var buffer = [];
 		for (var i in pieces) {
 			buffer.push(i + '{', pieces[i].join(';') + ';', '}');
@@ -169,20 +184,30 @@ Wasavi.Theme = function (app) {
 
 		return buffer;
 	}
+	/**
+	 * @param {(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D | null) => void} callback
+	 * @returns {string}
+	 */
 	function getImageFromCanvas (callback) {
 		var result = '';
-		var canvas = container.appendChild(document.createElement('canvas'));
+		var canvas = /** @type {HTMLElement} */ (container).appendChild(document.createElement('canvas'));
 		try {
 			callback(canvas, canvas.getContext('2d'));
 			result = canvas.toDataURL('image/png');
 		}
 		finally {
-			canvas.parentNode.removeChild(canvas);
+			/** @type {ParentNode} */ (canvas.parentNode).removeChild(canvas);
 		}
 		return result;
 	}
+	/**
+	 * @param {string} forecolor
+	 * @param {string} backcolor
+	 * @returns {string}
+	 */
 	function getOverTextMarker (forecolor, backcolor) {
-		return getImageFromCanvas(function (canvas, ctx) {
+		return getImageFromCanvas(function (canvas, ctxOrNull) {
+			var ctx = /** @type {CanvasRenderingContext2D} */ (ctxOrNull);
 			ctx.font = fontStyle;
 			canvas.width = ctx.measureText('~').width;
 			canvas.height = window.screen.height;
@@ -199,16 +224,23 @@ Wasavi.Theme = function (app) {
 			}
 		});
 	}
+	/** @returns {Record<string, string | number>} */
 	function getMirror () {
+		/** @type {Record<string, string | number>} */
 		var result = {};
 		for (var i in colors) {
-			result[i] = colors[i] instanceof Array ? colors[i][1] : colors[i];
+			var color = colors[i];
+			result[i] = color instanceof Array ? color[1] : color;
 		}
 		return result;
 	}
 	function getStyleElement () {
 		return $('wasavi_theme_styles');
 	}
+	/**
+	 * @param {string | number} key
+	 * @returns {string}
+	 */
 	function getStatuslineBackground (key) {
 		switch (typeof key) {
 		case 'number':
@@ -223,16 +255,26 @@ Wasavi.Theme = function (app) {
 		}
 		return '#888';
 	}
+	/**
+	 * @param {Record<string, string>} colorSet
+	 * @returns {boolean}
+	 */
 	function doSelect (colorSet) {
+		/** @type {Record<string, string | [string, string]>} */
 		var newColors = {};
 		for (var i in colors) {
 			if (!(i in colorSet)) return false;
-			newColors[i] = colors[i] instanceof Array ?
-				[colors[i][0], colorSet[i]] : colorSet[i];
+			var color = colors[i];
+			newColors[i] = color instanceof Array ?
+				[color[0], colorSet[i]] : colorSet[i];
 		}
 		colors = newColors;
 		return true;
 	}
+	/**
+	 * @param {string} colorSetName
+	 * @returns {boolean | undefined}
+	 */
 	function select (colorSetName) {
 		if (!colorSetName || colorSetName == '' || !(colorSetName in colorSets)) {
 			colorSetName = 'blight';
@@ -243,56 +285,65 @@ Wasavi.Theme = function (app) {
 		currentColorSetName = colorSetName;
 		return doSelect(colorSets[colorSetName]);
 	}
+	/** @this {WasaviTheme} */
 	function update () {
 		if (!container || !colors || colors.background == '') return;
 
 		var styles = getCSSRules();
 
-		var otm = getOverTextMarker(colors.overTextMarkerFg, colors.background);
+		var otm = getOverTextMarker(/** @type {string} */ (colors.overTextMarkerFg), /** @type {string} */ (colors.background));
 		styles.push(
 			'#wasavi_editor{',
 			'background:' + colors.background + ' url(' + otm + ') left top no-repeat;',
 			'}');
 
-		var statuslineBackground = getStatuslineBackground(colors.statusHue);
+		var statuslineBackground = getStatuslineBackground(/** @type {string | number} */ (colors.statusHue));
 		styles.push(
 			'#wasavi_footer_status_container,',
 			'#wasavi_footer_input_container{',
 			'background:' + statuslineBackground + ';',
 			'}');
 
-		var node = getStyleElement();
+		var node = /** @type {HTMLElement} */ (getStyleElement());
 		emptyNodeContents(node);
 		node.appendChild(document.createTextNode(styles.join('\n')));
 
-		this.colors = getMirror();
+		this.colors = /** @type {Record<string, string>} */ (getMirror());
 	}
 	function dispose () {
-		app = container = null;
 	}
 
-	this.colors = getMirror();
+	/** @type {WasaviTheme} */ (/** @type {unknown} */ (this)).colors = /** @type {Record<string, string>} */ (getMirror());
 
 	publish(this,
 		select, update, dispose,
 		{
-			container:[function () {}, function (v) {container = v}],
-			fontStyle:[function () {}, function (v) {fontStyle = v}],
-			lineHeight:[function () {}, function (v) {lineHeight = v}],
-			useStripe:[function () {}, function (v) {useStripe = v}],
+			container:[function () {}, /** @param {HTMLElement | null} v */ function (v) {container = v}],
+			fontStyle:[function () {}, /** @param {string} v */ function (v) {fontStyle = v}],
+			lineHeight:[function () {}, /** @param {number} v */ function (v) {lineHeight = v}],
+			useStripe:[function () {}, /** @param {boolean} v */ function (v) {useStripe = v}],
 			colorSets:function () {return Object.keys(colorSets)}
 		}
 	);
-};
+}));
 
-Wasavi.Bell = function (app) {
+// methods are attached via publish(this, ...), which tsc cannot model;
+// assert the constructor shape declared in wasavi-namespace.d.ts.
+Wasavi.Bell = /** @type {new (app: WasaviApp) => WasaviBell} */ (/** @type {unknown} */ (
+	/** @param {WasaviApp} app */
+	function (app) {
+	/**
+	 * @param {string} [key]
+	 * @param {boolean} [forcePlay]
+	 */
 	function play (key, forcePlay) {
 		if (!forcePlay && app.config.vars.visualbell) {
-			let cover = $('wasavi_cover');
+			let cover = /** @type {HTMLElement} */ ($('wasavi_cover'));
 			cover.classList.add('visualbell');
-			cover.addEventListener('animationend', function animationend (e) {
-				e.target.removeEventListener(e.type, animationend);
-				e.target.classList.remove('visualbell');
+			cover.addEventListener('animationend', /** @param {AnimationEvent} e */ function animationend (e) {
+				var target = /** @type {HTMLElement} */ (e.target);
+				target.removeEventListener(e.type, /** @type {EventListener} */ (animationend));
+				target.classList.remove('visualbell');
 			});
 		}
 		else {
@@ -305,46 +356,64 @@ Wasavi.Bell = function (app) {
 	}
 
 	publish(this, play);
-};
+}));
 
-Wasavi.CursorUI = function (app, comCursor, comCursorLine, comCursorColumn, comFocusHolder, input) {
+// methods are attached via publish(this, ...), which tsc cannot model;
+// assert the constructor shape declared in wasavi-namespace.d.ts.
+Wasavi.CursorUI = /** @type {new (app: WasaviApp, comCursor: unknown, comCursorLine: unknown, comCursorColumn: unknown, comFocusHolder: unknown, input: unknown) => WasaviCursorUI} */ (/** @type {unknown} */ (
+	/**
+	 * @param {WasaviApp} app
+	 * @param {HTMLElement} comCursor
+	 * @param {HTMLElement} comCursorLine
+	 * @param {HTMLElement} comCursorColumn
+	 * @param {HTMLElement} comFocusHolder
+	 * @param {HTMLElement} input
+	 */
+	function (app, comCursor, comCursorLine, comCursorColumn, comFocusHolder, input) {
 	var buffer = app.buffer;
 	var locked = false;
 	var focused = false;
 	var visible = false;
+	/** @type {CursorBase | null} */
 	var wrapper = null;
+	/** @type {Record<string, CursorBase>} */
 	var wrappers = {};
 
-	/*constructor*/function CursorBase () {
+	class CursorBase {
+		/** @type {string | undefined} */
+		type;
+
+		reset () {}
+		hide () {}
+		show () {}
+		lostFocus () {}
+		windup () {}
+		/** @param {string} [data] */
+		compositionUpdate (data) {}
+		/** @param {string} [data] */
+		compositionComplete (data) {}
+		dispose () {}
 	}
-	CursorBase.prototype = {
-		reset: function () {},
-		hide: function () {},
-		show: function () {},
-		lostFocus: function () {},
-		windup: function () {},
-		compositionUpdate: function () {},
-		compositionComplete: function () {},
-		dispose: function () {}
-	};
 
-	/*constructor*/function CommandCursor () {
-		var cursorBlinkTimer;
+	class CommandCursor extends CursorBase {
+		/** @type {ReturnType<typeof setInterval> | null | undefined} */
+		#cursorBlinkTimer;
 
-		function getCursorSpan () {
+		/** @returns {HTMLElement | null} */
+		#getCursorSpan () {
 			var spans = buffer.getSpans(Wasavi.CURSOR_SPAN_CLASS);
-			return spans.length ? spans[0] : null;
+			return spans.length ? /** @type {HTMLElement} */ (spans[0]) : null;
 		}
-		function startBlink () {
-			stopBlink();
+		#startBlink () {
+			this.#stopBlink();
 			if (app.config.vars.cursorblink) {
-				cursorBlinkTimer = setInterval(function () {
+				this.#cursorBlinkTimer = setInterval(() => {
 					if (!comCursor) {
-						stopBlink();
+						this.#stopBlink();
 						return;
 					}
 
-					var span = getCursorSpan();
+					var span = this.#getCursorSpan();
 					if (span) {
 						if (span.getAttribute('data-blink-active') == '1') {
 							span.style.color = span.style.backgroundColor = '';
@@ -357,26 +426,26 @@ Wasavi.CursorUI = function (app, comCursor, comCursorLine, comCursorColumn, comF
 						}
 					}
 					else {
-						var s = document.defaultView.getComputedStyle(comCursor, '');
+						var s = /** @type {WindowProxy} */ (document.defaultView).getComputedStyle(comCursor, '');
 						comCursor.style.visibility = s.visibility == 'visible' ? 'hidden' : 'visible';
 					}
 				}, 500);
 			}
 		}
-		function stopBlink () {
-			cursorBlinkTimer && clearInterval(cursorBlinkTimer);
-			cursorBlinkTimer = null;
+		#stopBlink () {
+			this.#cursorBlinkTimer && clearInterval(this.#cursorBlinkTimer);
+			this.#cursorBlinkTimer = null;
 		}
-		function locate () {
+		#locate () {
 			var ch = buffer.charAt(buffer.selectionStart);
 			var cursorLine = 0;
 			var cursorColumn = 0;
 			if (ch != '' && /[^\u0000-\u001f\u007f]/.test(ch)) {
 				comCursor.style.display = 'none';
 
-				var span = getCursorSpan();
+				var span = this.#getCursorSpan();
 				if (!span) {
-					var clusters = buffer.getGraphemeClusters();
+					var clusters = /** @type {{ clusterAt(i: number): { length: number }, getClusterIndexFromUTF16Index(i: number): number }} */ (buffer.getGraphemeClusters());
 					span = buffer.emphasis(
 						undefined,
 						clusters.clusterAt(clusters.getClusterIndexFromUTF16Index(buffer.selectionStartCol)).length,
@@ -397,15 +466,15 @@ Wasavi.CursorUI = function (app, comCursor, comCursorLine, comCursorColumn, comF
 				comCursor.style.visibility = 'visible';
 				comCursor.childNodes[0].textContent = ' ';
 
-				var coord = getCommandCursorCoord();
-				comCursor.style.left = (coord.left - buffer.elm.scrollLeft) + 'px';
-				comCursor.style.top = (coord.top - buffer.elm.scrollTop) + 'px';
+				var coord2 = getCommandCursorCoord();
+				comCursor.style.left = (coord2.left - buffer.elm.scrollLeft) + 'px';
+				comCursor.style.top = (coord2.top - buffer.elm.scrollTop) + 'px';
 				comCursor.style.height = app.lineHeight + 'px';
 				comCursor.style.color = app.theme.colors.invertFg;
 				comCursor.style.backgroundColor = app.theme.colors.invertBg;
 
-				cursorLine = coord.bottom - buffer.elm.scrollTop;
-				cursorColumn = coord.left - buffer.elm.scrollLeft;
+				cursorLine = coord2.bottom - buffer.elm.scrollTop;
+				cursorColumn = coord2.left - buffer.elm.scrollLeft;
 			}
 
 			if (app.config.vars.cursorline && app.inputMode == 'command') {
@@ -426,33 +495,33 @@ Wasavi.CursorUI = function (app, comCursor, comCursorLine, comCursorColumn, comF
 
 			buffer.adjustBackgroundImage();
 			buffer.adjustLineNumber(app.config.vars.relativenumber);
-			buffer.adjustWrapGuide(app.config.vars.textwidth, app.charWidth);
+			buffer.adjustWrapGuide(/** @type {number} */ (app.config.vars.textwidth), app.charWidth);
 			buffer.updateActiveRow();
 		}
 
-		this.reset = function () {
-			cursorBlinkTimer = undefined;
-		};
-		this.hide = function () {
-			stopBlink();
+		reset () {
+			this.#cursorBlinkTimer = undefined;
+		}
+		hide () {
+			this.#stopBlink();
 			buffer.unEmphasis(Wasavi.CURSOR_SPAN_CLASS);
 			comCursor.style.display =
 			comCursorLine.style.display =
 			comCursorColumn.style.display = 'none';
-		};
-		this.show = function () {
+		}
+		show () {
 			if (app.backlog.visible) return;
 
-			locate();
+			this.#locate();
 			comFocusHolder.focus();
-			startBlink();
-		};
-		this.lostFocus = function () {
+			this.#startBlink();
+		}
+		lostFocus () {
 			if (app.backlog.visible) return;
 
-			locate();
-			stopBlink();
-			var span = getCursorSpan();
+			this.#locate();
+			this.#stopBlink();
+			var span = this.#getCursorSpan();
 			if (span) {
 				span.style.color = app.theme.colors.blurFg;
 				span.style.backgroundColor = app.theme.colors.blurBg;
@@ -461,48 +530,45 @@ Wasavi.CursorUI = function (app, comCursor, comCursorLine, comCursorColumn, comF
 				comCursor.style.color = app.theme.colors.blurFg;
 				comCursor.style.backgroundColor = app.theme.colors.blurBg;
 			}
-		};
-		this.dispose = function () {
-			stopBlink();
-		};
-		this.windup = this.hide;
+		}
+		dispose () {
+			this.#stopBlink();
+		}
+		windup () {
+			this.hide();
+		}
 	}
-	CommandCursor.prototype = Object.create(CursorBase.prototype);
-	CommandCursor.prototype.constructor = CursorBase;
 
-	/*constructor*/function InputCursor () {
-		this.hide = function () {
-			window.getSelection().removeAllRanges();
+	class InputCursor extends CursorBase {
+		hide () {
+			/** @type {Selection} */ (window.getSelection()).removeAllRanges();
 			var n = buffer.selectionStart;
-			var node = buffer.rowNodes(n);
+			var node = /** @type {HTMLElement} */ (buffer.rowNodes(n));
 			node.removeAttribute('contenteditable');
 			node.blur();
-		};
-		this.show = function () {
+		}
+		show () {
 			buffer.adjustBackgroundImage(app.lineHeight);
 			buffer.adjustLineNumber();
 			buffer.updateActiveRow();
 
 			var n = buffer.selectionStart;
-			var node = buffer.rowNodes(n);
+			var node = /** @type {HTMLElement} */ (buffer.rowNodes(n));
 			node.contentEditable = 'true';
 			node.focus();
 			app.keyManager.editable.setSelectionRange(node, n.col);
-		};
+		}
 	}
-	InputCursor.prototype = Object.create(CursorBase.prototype);
-	InputCursor.prototype.constructor = CursorBase;
 
-	/*constructor*/function LineInputCursor () {
-		this.show = function () {
+	class LineInputCursor extends CursorBase {
+		show () {
 			input.focus();
-		};
+		}
 	}
-	LineInputCursor.prototype = Object.create(CursorBase.prototype);
-	LineInputCursor.prototype.constructor = CursorBase;
 
+	/** @returns {{ left: number, top: number, right: number, bottom: number }} */
 	function getCommandCursorCoord () {
-		var r = buffer.charRectAt(buffer.selectionStart);
+		var r = /** @type {{ left: number, top: number, right: number, bottom: number }} */ (buffer.charRectAt(buffer.selectionStart));
 		var result = {
 			left:r.left + buffer.scrollLeft,
 			top:r.top + buffer.scrollTop,
@@ -511,14 +577,17 @@ Wasavi.CursorUI = function (app, comCursor, comCursorLine, comCursorColumn, comF
 		};
 		return result;
 	}
+	/** @param {boolean} [smooth] */
 	function ensureVisible (smooth) {
 		if (!buffer.selected) {
-			var needFix1 = !app.low.isEditing();
-			var needFix2 = !app.requestedState.inputMode || !app.low.isEditing(app.requestedState.inputMode.mode);
+			var low = app.low;
+			var requestedState = app.requestedState;
+			var needFix1 = !low.isEditing();
+			var needFix2 = !requestedState.inputMode || !low.isEditing(requestedState.inputMode.mode);
 			if (needFix1 && needFix2) {
 				var n = buffer.selectionStart;
 				if (n.col > 0) {
-					var clusters = buffer.getGraphemeClusters(n);
+					var clusters = /** @type {{ rawIndexAt(i: number): number, length: number }} */ (buffer.getGraphemeClusters(n));
 					if (n.col >= clusters.rawIndexAt(clusters.length)) {
 						n.col = clusters.rawIndexAt(clusters.length - 1);
 						buffer.setSelectionRange(n);
@@ -528,7 +597,7 @@ Wasavi.CursorUI = function (app, comCursor, comCursorLine, comCursorColumn, comF
 		}
 
 		buffer.adjustLineNumberClass(
-			app.config.vars.number, app.config.vars.relativenumber);
+			/** @type {boolean} */ (app.config.vars.number), /** @type {boolean} */ (app.config.vars.relativenumber));
 
 		var caret = getCommandCursorCoord();
 		var elm = buffer.elm;
@@ -551,8 +620,14 @@ Wasavi.CursorUI = function (app, comCursor, comCursorLine, comCursorColumn, comF
 			}
 		}
 	}
+	/**
+	 * @param {string} mode
+	 * @returns {{ type: string, ctor: new () => CursorBase }}
+	 */
 	function getTypeInfo (mode) {
+		/** @type {string} */
 		var type;
+		/** @type {new () => CursorBase} */
 		var ctor;
 
 		switch (mode) {
@@ -584,20 +659,22 @@ Wasavi.CursorUI = function (app, comCursor, comCursorLine, comCursorColumn, comF
 		};
 	}
 
+	/** @param {{ visible?: boolean, focused?: boolean, type?: string }} [opts] */
 	function update (opts) {
 		if (locked) return;
 
+		/** @type {{ type: string, ctor: new () => CursorBase } | undefined} */
 		var typeInfo;
 
 		if (opts) {
 			if ('visible' in opts) {
-				visible = opts.visible;
+				visible = /** @type {boolean} */ (opts.visible);
 			}
 			if ('focused' in opts) {
-				focused = opts.focused;
+				focused = /** @type {boolean} */ (opts.focused);
 			}
 			if ('type' in opts) {
-				typeInfo = getTypeInfo(opts.type);
+				typeInfo = getTypeInfo(/** @type {string} */ (opts.type));
 				if (!wrapper || typeInfo.type != wrapper.type) {
 					wrapper && wrapper.hide();
 				}
@@ -609,47 +686,52 @@ Wasavi.CursorUI = function (app, comCursor, comCursorLine, comCursorColumn, comF
 
 		if (typeInfo) {
 			wrapper = wrappers[typeInfo.type]
-				|| (wrappers[typeInfo.type] = new typeInfo.ctor);
+				|| (wrappers[typeInfo.type] = new typeInfo.ctor());
 			wrapper.type = typeInfo.type
 			wrapper.reset();
 		}
 
+		var w = /** @type {CursorBase} */ (wrapper);
 		if (!visible) {
-			wrapper.hide();
+			w.hide();
 		}
 		else {
 			if (focused) {
-				wrapper.show();
+				w.show();
 			}
 			else {
-				wrapper.lostFocus();
+				w.lostFocus();
 			}
 		}
 	}
+	/** @param {CompositionEvent} e */
 	function handleCompositionStart (e) {
-		wrapper.compositionUpdate(e.data);
+		(/** @type {CursorBase} */ (wrapper)).compositionUpdate(e.data);
 	}
+	/** @param {CompositionEvent} e */
 	function handleCompositionUpdate (e) {
-		wrapper.compositionUpdate(e.data);
+		(/** @type {CursorBase} */ (wrapper)).compositionUpdate(e.data);
 	}
+	/** @param {CompositionEvent} e */
 	function handleCompositionEnd (e) {
 		setTimeout(function () {
 			buffer.ensureNewline(buffer.selectionStart);
 		}, 1);
-		return wrapper.compositionComplete(e.data);
+		return (/** @type {CursorBase} */ (wrapper)).compositionComplete(e.data);
 	}
+	/** @param {boolean} install */
 	function setupEventHandlers (install) {
+		/** @type {'addListener' | 'removeListener'} */
 		var method = install ? 'addListener' : 'removeListener';
 		app.keyManager[method]('compositionstart', handleCompositionStart);
 		app.keyManager[method]('compositionupdate', handleCompositionUpdate);
 		app.keyManager[method]('compositionend', handleCompositionEnd);
 	}
 	function windup () {
-		wrapper.windup();
+		(/** @type {CursorBase} */ (wrapper)).windup();
 	}
 	function dispose () {
 		wrapper && wrapper.dispose();
-		app = buffer = comCursor = wrapper = null;
 	}
 
 	publish(this,
@@ -659,22 +741,38 @@ Wasavi.CursorUI = function (app, comCursor, comCursorLine, comCursorColumn, comF
 			focused:function () {return focused},
 			visible:function () {return visible},
 			commandCursor:function () {return comCursor},
-			locked:[function () {return locked}, function (v) {locked = v}]
+			locked:[function () {return locked}, /** @param {boolean} v */ function (v) {locked = v}]
 		}
 	);
-};
+}));
 
-Wasavi.Scroller = function (app, cursor, modeLine) {
+// methods are attached via publish(this, ...), which tsc cannot model;
+// assert the constructor shape declared in wasavi-namespace.d.ts.
+Wasavi.Scroller = /** @type {new (app: WasaviApp, cursor: WasaviCursorUI, modeLine: unknown) => WasaviScroller} */ (/** @type {unknown} */ (
+	/**
+	 * @param {WasaviApp} app
+	 * @param {WasaviCursorUI} cursor
+	 * @param {HTMLElement} modeLine
+	 */
+	function (app, cursor, modeLine) {
 	let buffer = app.buffer;
 	let running = false;
 	let consumeMsecs = 250;
 	let timerPrecision = 1;
 	let lastRan = 0;
+	/** @type {number} */
 	let distance;
+	/** @type {number} */
 	let scrollTopStart;
+	/** @type {number} */
 	let scrollTopDest;
+	/** @type {ReturnType<typeof setInterval> | undefined} */
 	let scrollTimer;
 
+	/**
+	 * @param {number} dest
+	 * @returns {Promise<boolean>}
+	 */
 	function run (dest) {
 		return new Promise(resolve => {
 			if (!app.targetElement || !cursor || !modeLine) {
@@ -714,7 +812,6 @@ Wasavi.Scroller = function (app, cursor, modeLine) {
 	}
 
 	function dispose () {
-		app = buffer = cursor = modeLine = null;
 	}
 
 	publish(this,
@@ -723,21 +820,41 @@ Wasavi.Scroller = function (app, cursor, modeLine) {
 			running:function () {return running},
 			consumeMsecs:[
 				function () {return consumeMsecs},
-				function (v) {consumeMsecs = v}
+				/** @param {number} v */ function (v) {consumeMsecs = v}
 			],
 			timerPrecision:[
 				function () {return timerPrecision},
-				function (v) {timerPrecision = v}
+				/** @param {number} v */ function (v) {timerPrecision = v}
 			]
 		}
 	);
-};
+}));
 
-Wasavi.Backlog = function (app, container, con) {
+/**
+ * @typedef {object} BacklogLine
+ * @property {string} text
+ * @property {boolean} [emphasis]
+ */
+// methods are attached via publish(this, ...), which tsc cannot model;
+// assert the constructor shape declared in wasavi-namespace.d.ts.
+Wasavi.Backlog = /** @type {new (app: WasaviApp, container: unknown, con: unknown) => WasaviBacklog} */ (/** @type {unknown} */ (
+	/**
+	 * @param {WasaviApp} app
+	 * @param {HTMLElement} container
+	 * @param {HTMLElement} con
+	 */
+	function (app, container, con) {
+	/** @type {BacklogLine[]} */
 	var buffer = [];
+	/** @type {number} */
 	var charWidth;
+	/** @type {number} */
 	var charHeight;
 
+	/**
+	 * @param {BacklogLine} line
+	 * @returns {HTMLDivElement}
+	 */
 	function append (line) {
 		let el = con.appendChild(document.createElement('div'));
 		el.className = 'backlog-row';
@@ -785,18 +902,20 @@ Wasavi.Backlog = function (app, container, con) {
 		}
 	}
 
+	/** @param {unknown} arg */
 	function push (arg) {
 		if (isArray(arg)) {
 			arg.forEach(push);
 		}
 		else if (isObject(arg)) {
 			if (!('text' in arg)) arg.text = '';
-			buffer.push(arg);
+			buffer.push(/** @type {BacklogLine} */ (arg));
 		}
 		else {
 			buffer.push({text:'' + arg});
 		}
 	}
+	/** @param {unknown} arg */
 	function pushEmphasis (arg) {
 		if (isArray(arg)) {
 			arg.forEach(push);
@@ -804,7 +923,7 @@ Wasavi.Backlog = function (app, container, con) {
 		else if (isObject(arg)) {
 			if (!('text' in arg)) arg.text = '';
 			arg.emphasis = true;
-			buffer.push(arg);
+			buffer.push(/** @type {BacklogLine} */ (arg));
 		}
 		else {
 			buffer.push({text:'' + arg, emphasis:true});
@@ -819,6 +938,7 @@ Wasavi.Backlog = function (app, container, con) {
 	function clear () {
 		buffer.length = 0;
 	}
+	/** @param {boolean} [byLine] */
 	function open (byLine) {
 		var totalHeight = 0;
 		var goalHeight = getRows() * charHeight;
@@ -831,7 +951,7 @@ Wasavi.Backlog = function (app, container, con) {
 		}
 
 		while (buffer.length) {
-			var line = buffer.shift();
+			var line = /** @type {BacklogLine} */ (buffer.shift());
 			var el = append(line);
 
 			if (totalHeight > 0
@@ -841,8 +961,10 @@ Wasavi.Backlog = function (app, container, con) {
 				break;
 			}
 			else {
-				app.lastMessage +=
-					(app.lastMessage == '' || app.lastMessage.substr(-1) == '\n' ? '' : '\n') +
+				var lastMessage = app.lastMessage;
+				app.lastMessage =
+					lastMessage +
+					(lastMessage == '' || lastMessage.substr(-1) == '\n' ? '' : '\n') +
 					toNativeControl(line.text);
 				con.scrollTop = con.scrollHeight - con.clientHeight;
 				totalHeight += el.offsetHeight;
@@ -855,30 +977,35 @@ Wasavi.Backlog = function (app, container, con) {
 			false, true, true);
 	}
 	function dispose () {
-		app = container = con = null;
 	}
 
+	/** @returns {BacklogLine[]} */
 	function getBuffer () {
 		return buffer;
 	}
+	/** @returns {boolean} */
 	function getQueued () {
 		return buffer.length > 0;
 	}
+	/** @returns {number} */
 	function getRows () {
 		ensureSetCharSize();
 		return Math.floor(con.offsetHeight / charHeight);
 	}
+	/** @returns {number} */
 	function getCols () {
 		ensureSetCharSize();
 		return Math.floor(con.offsetWidth / charWidth);
 	}
+	/** @returns {boolean} */
 	function getVisible () {
-		return document.defaultView.getComputedStyle(container, '').visibility != 'hidden';
+		return /** @type {WindowProxy} */ (document.defaultView).getComputedStyle(container, '').visibility != 'hidden';
 	}
+	/** @returns {string} */
 	function getText () {
 		return Array.prototype.map.call(
 			con.getElementsByClassName('backlog-row'),
-			function (o) {return o.textContent}
+			/** @param {Element} o */ function (o) {return o.textContent}
 		)
 		.join('\n');
 	}
@@ -894,24 +1021,46 @@ Wasavi.Backlog = function (app, container, con) {
 			text:getText
 		}
 	);
-};
+}));
 
-Wasavi.Notifier = function (app, container) {
+/**
+ * @typedef {string | ((container: HTMLElement) => void)} NotifierMessage
+ */
+// methods are attached via publish(this, ...), which tsc cannot model;
+// assert the constructor shape declared in wasavi-namespace.d.ts.
+Wasavi.Notifier = /** @type {new (app: WasaviApp, container: unknown) => WasaviNotifier} */ (/** @type {unknown} */ (
+	/**
+	 * @param {WasaviApp} app
+	 * @param {HTMLElement} container
+	 */
+	function (app, container) {
 	const delayIntervalMsecs = 500;
 	const hideIntervalMsecs = 2000;
+	/** @type {ReturnType<typeof setTimeout> | null} */
 	var showTimer;
+	/** @type {ReturnType<typeof setTimeout> | null} */
 	var hideTimer;
+	/** @type {NotifierMessage | null} */
 	var registeredMessage;
 
+	/**
+	 * @param {NotifierMessage} message
+	 * @param {number} [intervalMsecs]
+	 * @param {number} [delayMsecs]
+	 */
 	function register (message, intervalMsecs, delayMsecs) {
 		registeredMessage = message;
 		if (showTimer) return;
 		showTimer = setTimeout(function () {
 			showTimer = null;
-			show(registeredMessage, intervalMsecs);
+			show(/** @type {NotifierMessage} */ (registeredMessage), intervalMsecs);
 			registeredMessage = null;
 		}, delayMsecs || delayIntervalMsecs);
 	}
+	/**
+	 * @param {NotifierMessage} message
+	 * @param {number} [intervalMsecs]
+	 */
 	function show (message, intervalMsecs) {
 		hideTimer && clearTimeout(hideTimer);
 		if (typeof message == 'function') {
@@ -933,12 +1082,11 @@ Wasavi.Notifier = function (app, container) {
 		showTimer = hideTimer = null;
 	}
 	function dispose () {
-		app = container = null;
 	}
 
 	publish(this, register, show, hide, dispose);
-};
+}));
 
-})(typeof global == 'object' ? global : window);
+})(typeof globalThis == 'object' ? globalThis : window);
 
 // vim:set ts=4 sw=4 fenc=UTF-8 ff=unix ft=javascript fdm=marker :

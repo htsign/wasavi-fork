@@ -51,13 +51,13 @@ interface WasaviApp {
   cursor: WasaviCursorUI;
   scroller: WasaviScroller;
   searchUtils: WasaviSearchUtils;
-  low: unknown;
+  low: WasaviAppLow;
   config: WasaviConfigurator;
   edit: unknown;
   exvm: unknown;
-  extensionChannel: unknown;
+  extensionChannel: WasaviExtensionWrapperInstance;
   lastRegexFindCommand: WasaviRegexFinderInfo;
-  keyManager: unknown;
+  keyManager: WasaviAppKeyManager;
   fileName: unknown;
   motion: WasaviMotion;
   targetElement: unknown;
@@ -71,19 +71,86 @@ interface WasaviApp {
   isJumpBaseUpdateRequested: unknown;
   version: unknown;
   preferredNewline: unknown;
-  lineHeight: unknown;
-  lastMessage: unknown;
+  lineHeight: number;
+  lastMessage: string;
   inputMode: unknown;
   terminated: unknown;
-  requestedState: unknown;
-  charWidth: unknown;
+  requestedState: WasaviRequestedState;
+  charWidth: number;
   state: unknown;
   isVerticalMotion: unknown;
   isTestMode: unknown;
   devMode: unknown;
 }
 
+/**
+ * Low-level methods exposed on `app.low` (frozen object built in wasavi.js
+ * `AppProxy`). Signatures are typed from the wasavi.js implementations; values
+ * that the implementation genuinely leaves open are `unknown`.
+ */
+interface WasaviAppLow {
+  log(...args: readonly unknown[]): void;
+  info(...args: readonly unknown[]): void;
+  error(...args: readonly unknown[]): void;
+  getLocalStorage(keyName: string, callback?: (value: unknown) => void): void;
+  setLocalStorage(keyName: string, value: unknown): void;
+  isEditing(mode?: unknown): boolean;
+  isBound(mode?: unknown): string | false;
+  pushInputMode(context: Record<string, unknown>, newInputMode: unknown, newInputModeOpts?: unknown): void;
+  popInputMode(context?: Record<string, unknown>): void;
+  showPrefixInput(message?: string): void;
+  showMessage(text: string, em?: unknown, pc?: unknown, plm?: unknown): void;
+  showMessageCore(message: string, emphasis?: unknown, pseudoCursor?: unknown, preserveLastMessage?: unknown): void;
+  requestShowMessage(message: string, emphasis?: unknown, pseudoCursor?: unknown, preserveLastMessage?: unknown): string;
+  requestNotice(args?: unknown): void;
+  requestInputMode(mode: unknown, opts?: Record<string, unknown>): unknown;
+  requestConsoleOpen(): void;
+  requestConsoleClose(): void;
+  executeViCommand(arg: string): void;
+  getFindRegex(src: string | RegExp | Record<string, unknown>): RegExp | null;
+  getFileIoResultInfo(aFileName: string, charLength: number, isNew?: boolean): string;
+  getFileInfo(fullPath?: boolean): string;
+  notifyToParent(eventName: string, payload?: Record<string, unknown>, callback?: (response: unknown) => void): boolean;
+  notifyActivity(code: string, key: string, note: string): void;
+  notifyCommandComplete(eventName?: string | null, modeOverridden?: unknown): void;
+  extractDriveName(path: string, callback: (whole: string, drive: string) => void): string;
+  getFileSystemIndex(name: string): number;
+  splitPath(path: string, escapeChar?: string): string[];
+  regalizeFilePath(path: string, completeDriveName?: boolean): string;
+  notifyError(message: unknown, fileName?: string, lineNumber?: number, columnNumber?: number, errObj?: unknown): void;
+  getContainerRect(): DOMRect;
+}
+
+/**
+ * The subset of the wasavi.js `requestedState` object reachable cross-file via
+ * `app.requestedState`. The full object carries more transient fields, set and
+ * cleared inside wasavi.js; only the members read through `app` are declared.
+ */
+interface WasaviRequestedState {
+  console?: { open: boolean } | null;
+  showInput?: { message: unknown } | null;
+  inputMode?: { mode: unknown } | null;
+}
+
 // === instance interfaces =================================================
+
+/**
+ * Keyboard input manager (the `qeema` library instance assigned to
+ * `app.keyManager`). Only the surface reached cross-file via `app.keyManager`
+ * is declared; the full library type lives outside this file.
+ */
+interface WasaviAppKeyManager {
+  lock(): void;
+  unlock(): void;
+  createSequences(s: string): unknown;
+  insertFnKeyHeader(s: string): string;
+  isInputEvent(e: unknown): boolean;
+  addListener<E>(type: string, handler: (e: E) => unknown): void;
+  removeListener<E>(type: string, handler?: (e: E) => unknown): void;
+  editable: {
+    setSelectionRange(node: HTMLElement, col: number): void;
+  };
+}
 
 /** Localization helper (classes.js). */
 interface WasaviL10n {
@@ -254,7 +321,7 @@ interface WasaviEditor {
   getSpans(className: string, start?: unknown, end?: unknown): readonly unknown[];
   invalidateUnicodeCache(): void;
   initUnicodeCache(): unknown;
-  getGraphemeClusters(n: unknown): unknown;
+  getGraphemeClusters(n?: unknown): unknown;
   getWords(n: unknown): unknown;
   getClosestOffsetToPixels(n: unknown, pixels: number): unknown;
   setRow(arg: unknown, text: string): unknown;
@@ -262,7 +329,7 @@ interface WasaviEditor {
   adjustBackgroundImage(...args: readonly unknown[]): unknown;
   adjustLineNumberClass(isAbsolute?: boolean, isRelative?: boolean): unknown;
   adjustLineNumber(...args: readonly unknown[]): unknown;
-  adjustWrapGuide(width: number, unit: string): unknown;
+  adjustWrapGuide(width: number, unit: number): unknown;
   updateActiveRow(...args: readonly unknown[]): unknown;
   insertChars(pos: WasaviPositionLike, text: string): unknown;
   overwriteChars(pos: WasaviPositionLike, text: string): unknown;
@@ -281,7 +348,7 @@ interface WasaviEditor {
   extendSelectionTo(n: unknown): unknown;
   linearPositionToBinaryPosition(n: number): WasaviPosition | null;
   binaryPositionToLinearPosition(a: WasaviPositionLike): number;
-  emphasis(pos: WasaviPositionLike, length: number, className?: string): readonly HTMLSpanElement[];
+  emphasis(pos: WasaviPositionLike | undefined, length: number, className?: string): readonly HTMLSpanElement[];
   unEmphasis(className?: string, start?: unknown, end?: unknown): unknown;
   offsetBy(s: unknown, offset: number, treatLastLineAsNormal?: boolean): unknown;
   regalizeSelectionRelation(): unknown;
@@ -520,67 +587,81 @@ interface WasaviExParseRangeResult {
 interface WasaviTheme {
   /** Snapshot of the active color set (set on the instance in the ctor/select). */
   colors: Record<string, string>;
-  select(colorSetName: string): unknown;
-  update(): unknown;
+  /** Apply a named color set; returns `false` on an unknown key, `undefined` when already active, else `true`. */
+  select(colorSetName: string): boolean | undefined;
+  update(): void;
   dispose(): void;
-  container: unknown;
-  fontStyle: unknown;
-  lineHeight: unknown;
-  useStripe: unknown;
+  /** write-only; the getter is a no-op stub. */
+  container: HTMLElement | null;
+  /** write-only; the getter is a no-op stub. */
+  fontStyle: string;
+  /** write-only; the getter is a no-op stub. */
+  lineHeight: number;
+  /** write-only; the getter is a no-op stub. */
+  useStripe: boolean;
   /** Names of available color sets (a fresh array; callers may sort it). */
   readonly colorSets: string[];
 }
 
 /** Visual/audible bell (classes_ui.js). */
 interface WasaviBell {
-  play(key?: string, forcePlay?: boolean): unknown;
+  play(key?: string, forcePlay?: boolean): void;
 }
 
 /** On-screen cursor manager (classes_ui.js). */
 interface WasaviCursorUI {
-  ensureVisible(smooth?: boolean): unknown;
-  update(opts?: unknown): unknown;
-  setupEventHandlers(install: boolean): unknown;
-  windup(): unknown;
+  ensureVisible(smooth?: boolean): void;
+  update(opts?: { visible?: boolean; focused?: boolean; type?: string }): void;
+  setupEventHandlers(install: boolean): void;
+  windup(): void;
   dispose(): void;
   readonly type: string | null;
   readonly focused: boolean;
   readonly visible: boolean;
-  readonly commandCursor: unknown;
+  readonly commandCursor: HTMLElement;
   locked: boolean;
 }
 
 /** Smooth scroller (classes_ui.js). */
 interface WasaviScroller {
-  run(dest: unknown): unknown;
+  run(dest: number): Promise<boolean>;
   dispose(): void;
   readonly running: boolean;
   consumeMsecs: number;
   timerPrecision: number;
 }
 
+/** A single backlog/console line (classes_ui.js internal). */
+interface WasaviBacklogLine {
+  text: string;
+  emphasis?: boolean;
+}
+
 /** Console / backlog pager (classes_ui.js). */
 interface WasaviBacklog {
-  push(arg: unknown): unknown;
-  pushEmphasis(arg: unknown): unknown;
-  show(): unknown;
-  hide(): unknown;
-  clear(): unknown;
-  open(byLine?: boolean): unknown;
+  push(arg: unknown): void;
+  pushEmphasis(arg: unknown): void;
+  show(): void;
+  hide(): void;
+  clear(): void;
+  open(byLine?: boolean): void;
   dispose(): void;
-  readonly buffer: unknown;
-  readonly queued: unknown;
-  readonly rows: unknown;
-  readonly cols: unknown;
+  readonly buffer: readonly WasaviBacklogLine[];
+  readonly queued: boolean;
+  readonly rows: number;
+  readonly cols: number;
   readonly visible: boolean;
-  readonly text: unknown;
+  readonly text: string;
 }
+
+/** A notifier message: literal text or a callback rendering into the container. */
+type WasaviNotifierMessage = string | ((container: HTMLElement) => void);
 
 /** Transient notification UI (classes_ui.js). */
 interface WasaviNotifier {
-  register(message: string, intervalMsecs?: number, delayMsecs?: number): unknown;
-  show(message: string, intervalMsecs?: number): unknown;
-  hide(): unknown;
+  register(message: WasaviNotifierMessage, intervalMsecs?: number, delayMsecs?: number): void;
+  show(message: WasaviNotifierMessage, intervalMsecs?: number): void;
+  hide(): void;
   dispose(): void;
 }
 
