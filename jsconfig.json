@@ -17,6 +17,10 @@
     "src/core/scripts/options-core.js",
     "src/core/scripts/options-globals.d.ts",
     "src/core/backend/lib/SimilarityComputer.js",
-    "src/core/frontend/extension_wrapper.js"
+    "src/core/frontend/*.js"
+  ],
+  "exclude": [
+    "src/core/frontend/qeema.js",
+    "src/core/frontend/unistring.js"
   ]
 }
