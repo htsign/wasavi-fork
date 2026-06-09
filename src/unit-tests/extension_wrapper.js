@@ -25,8 +25,15 @@ before(() => {
 		documentElement: {setAttribute() {}},
 		get readyState() {return docReadyState;},
 		body: {},
-		addEventListener(type, handler) {
-			if (type === 'DOMContentLoaded') dclListener = handler;
+		addEventListener(type, handler, options) {
+			if (type !== 'DOMContentLoaded') return;
+			// model the real EventTarget {once: true}: auto-remove after firing
+			dclListener = options && options.once
+				? function (e) {
+					dclListener = null;
+					return handler.call(this, e);
+				}
+				: handler;
 		},
 		removeEventListener(type, handler) {
 			if (type === 'DOMContentLoaded' && dclListener === handler) dclListener = null;

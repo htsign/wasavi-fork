@@ -262,12 +262,10 @@ function (global) {
 			else {
 				doc.addEventListener(
 					'DOMContentLoaded',
-					/** @param {Event} e */
-					function handleDCL (e) {
-						doc.removeEventListener(e.type, handleDCL, false);
+					function () {
 						callback.apply(null, args);
 					},
-					false
+					{once: true}
 				);
 			}
 		}

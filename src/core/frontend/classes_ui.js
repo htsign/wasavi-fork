@@ -31,10 +31,13 @@ class Theme {
 	/** @type {Record<string, string>} */
 	colors;
 	/** @type {HTMLElement | null} */
-	#container = null;
-	#fontStyle = '';
-	#lineHeight = 0;
-	#useStripe = false;
+	container = null;
+	/** @type {string} */
+	fontStyle = '';
+	/** @type {number} */
+	lineHeight = 0;
+	/** @type {boolean} */
+	useStripe = false;
 	#currentColorSetName = '';
 	/** @type {Record<string, string | number | [string, string]>} */
 	#colors = {
@@ -168,7 +171,7 @@ class Theme {
 		for (var i in this.#colors) {
 			var color = this.#colors[i];
 			if (!(color instanceof Array)) continue;
-			if (i == 'rowBgOdd' && !this.#useStripe) continue;
+			if (i == 'rowBgOdd' && !this.useStripe) continue;
 			var selector = color[0];
 			var rule = color[1];
 			(pieces[selector] || (pieces[selector] = []))
@@ -189,7 +192,7 @@ class Theme {
 	 */
 	#getImageFromCanvas (callback) {
 		var result = '';
-		var canvas = /** @type {HTMLElement} */ (this.#container).appendChild(document.createElement('canvas'));
+		var canvas = /** @type {HTMLElement} */ (this.container).appendChild(document.createElement('canvas'));
 		try {
 			callback(canvas, canvas.getContext('2d'));
 			result = canvas.toDataURL('image/png');
@@ -207,18 +210,18 @@ class Theme {
 	#getOverTextMarker (forecolor, backcolor) {
 		return this.#getImageFromCanvas((canvas, ctxOrNull) => {
 			var ctx = /** @type {CanvasRenderingContext2D} */ (ctxOrNull);
-			ctx.font = this.#fontStyle;
+			ctx.font = this.fontStyle;
 			canvas.width = ctx.measureText('~').width;
 			canvas.height = window.screen.height;
 
-			ctx.font = this.#fontStyle;
+			ctx.font = this.fontStyle;
 			ctx.fillStyle = backcolor;
 			ctx.fillRect(0, 0, canvas.width, canvas.height);
 			ctx.fillStyle = forecolor;
 			ctx.textBaseline = 'top';
 			ctx.textAlign = 'left';
 
-			for (var i = 0, goal = canvas.height; i < goal; i += this.#lineHeight) {
+			for (var i = 0, goal = canvas.height; i < goal; i += this.lineHeight) {
 				ctx.fillText('~', 0, i);
 			}
 		});
@@ -285,7 +288,7 @@ class Theme {
 		return this.#doSelect(this.#colorSets[colorSetName]);
 	}
 	update () {
-		if (!this.#container || !this.#colors || this.#colors.background == '') return;
+		if (!this.container || !this.#colors || this.#colors.background == '') return;
 
 		var styles = this.#getCSSRules();
 
@@ -311,18 +314,6 @@ class Theme {
 	dispose () {
 	}
 
-	get container () {return this.#container}
-	/** @param {HTMLElement | null} v */
-	set container (v) {this.#container = v}
-	get fontStyle () {return this.#fontStyle}
-	/** @param {string} v */
-	set fontStyle (v) {this.#fontStyle = v}
-	get lineHeight () {return this.#lineHeight}
-	/** @param {number} v */
-	set lineHeight (v) {this.#lineHeight = v}
-	get useStripe () {return this.#useStripe}
-	/** @param {boolean} v */
-	set useStripe (v) {this.#useStripe = v}
 	get colorSets () {return Object.keys(this.#colorSets)}
 }
 Wasavi.Theme = Theme;
@@ -345,11 +336,9 @@ class Bell {
 		if (!forcePlay && app.config.vars.visualbell) {
 			let cover = /** @type {HTMLElement} */ ($('wasavi_cover'));
 			cover.classList.add('visualbell');
-			cover.addEventListener('animationend', /** @param {AnimationEvent} e */ function animationend (e) {
-				var target = /** @type {HTMLElement} */ (e.target);
-				target.removeEventListener(e.type, /** @type {EventListener} */ (animationend));
-				target.classList.remove('visualbell');
-			});
+			cover.addEventListener('animationend', /** @param {AnimationEvent} e */ function (e) {
+				/** @type {HTMLElement} */ (e.target).classList.remove('visualbell');
+			}, {once: true});
 		}
 		else {
 			app.extensionChannel.postMessage({
@@ -760,8 +749,10 @@ class Scroller {
 	/** @type {WasaviEditor} */
 	#buffer;
 	#running = false;
-	#consumeMsecs = 250;
-	#timerPrecision = 1;
+	/** @type {number} */
+	consumeMsecs = 250;
+	/** @type {number} */
+	timerPrecision = 1;
 	#lastRan = 0;
 	#distance = 0;
 	#scrollTopStart = 0;
@@ -810,7 +801,7 @@ class Scroller {
 			this.#lastRan = Date.now();
 			this.#scrollTimer = setInterval(() => {
 				let now = Date.now();
-				let y = this.#scrollTopStart + ((now - this.#lastRan) / this.#consumeMsecs) * this.#distance;
+				let y = this.#scrollTopStart + ((now - this.#lastRan) / this.consumeMsecs) * this.#distance;
 
 				if (this.#distance > 0 && y >= this.#scrollTopDest
 				||  this.#distance < 0 && y <= this.#scrollTopDest) {
@@ -823,7 +814,7 @@ class Scroller {
 				else {
 					buffer.scrollTop = Math.floor(y);
 				}
-			}, this.#timerPrecision);
+			}, this.timerPrecision);
 		});
 	}
 
@@ -831,12 +822,6 @@ class Scroller {
 	}
 
 	get running () {return this.#running}
-	get consumeMsecs () {return this.#consumeMsecs}
-	/** @param {number} v */
-	set consumeMsecs (v) {this.#consumeMsecs = v}
-	get timerPrecision () {return this.#timerPrecision}
-	/** @param {number} v */
-	set timerPrecision (v) {this.#timerPrecision = v}
 }
 Wasavi.Scroller = Scroller;
 
