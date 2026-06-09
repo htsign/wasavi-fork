@@ -615,7 +615,7 @@ interface WasaviCursorUI {
   setupEventHandlers(install: boolean): void;
   windup(): void;
   dispose(): void;
-  readonly type: string | null;
+  readonly type: string | null | undefined;
   readonly focused: boolean;
   readonly visible: boolean;
   readonly commandCursor: HTMLElement;
@@ -736,11 +736,11 @@ declare var Wasavi: {
   Bell: new (app: WasaviApp) => WasaviBell;
   CursorUI: new (
     app: WasaviApp,
-    comCursor: unknown,
-    comCursorLine: unknown,
-    comCursorColumn: unknown,
-    comFocusHolder: unknown,
-    input: unknown
+    comCursor: HTMLElement,
+    comCursorLine: HTMLElement,
+    comCursorColumn: HTMLElement,
+    comFocusHolder: HTMLElement,
+    input: HTMLElement
   ) => WasaviCursorUI;
   Scroller: new (app: WasaviApp, cursor: WasaviCursorUI, modeLine: unknown) => WasaviScroller;
   Backlog: new (app: WasaviApp, container: unknown, con: unknown) => WasaviBacklog;

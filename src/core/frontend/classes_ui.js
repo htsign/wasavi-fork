@@ -160,12 +160,12 @@ class Theme {
 	};
 
 	/** @param {WasaviApp} app */
-	constructor (app) {
+	constructor(app) {
 		this.colors = /** @type {Record<string, string>} */ (this.#getMirror());
 	}
 
 	/** @returns {string[]} */
-	#getCSSRules () {
+	#getCSSRules() {
 		/** @type {Record<string, string[]>} */
 		var pieces = {};
 		for (var i in this.#colors) {
@@ -190,7 +190,7 @@ class Theme {
 	 * @param {(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D | null) => void} callback
 	 * @returns {string}
 	 */
-	#getImageFromCanvas (callback) {
+	#getImageFromCanvas(callback) {
 		var result = '';
 		var canvas = /** @type {HTMLElement} */ (this.container).appendChild(document.createElement('canvas'));
 		try {
@@ -207,7 +207,7 @@ class Theme {
 	 * @param {string} backcolor
 	 * @returns {string}
 	 */
-	#getOverTextMarker (forecolor, backcolor) {
+	#getOverTextMarker(forecolor, backcolor) {
 		return this.#getImageFromCanvas((canvas, ctxOrNull) => {
 			var ctx = /** @type {CanvasRenderingContext2D} */ (ctxOrNull);
 			ctx.font = this.fontStyle;
@@ -227,7 +227,7 @@ class Theme {
 		});
 	}
 	/** @returns {Record<string, string | number>} */
-	#getMirror () {
+	#getMirror() {
 		/** @type {Record<string, string | number>} */
 		var result = {};
 		for (var i in this.#colors) {
@@ -236,14 +236,14 @@ class Theme {
 		}
 		return result;
 	}
-	#getStyleElement () {
+	#getStyleElement() {
 		return $('wasavi_theme_styles');
 	}
 	/**
 	 * @param {string | number} key
 	 * @returns {string}
 	 */
-	#getStatuslineBackground (key) {
+	#getStatuslineBackground(key) {
 		switch (typeof key) {
 		case 'number':
 			var n = new Date;
@@ -261,7 +261,7 @@ class Theme {
 	 * @param {Record<string, string>} colorSet
 	 * @returns {boolean}
 	 */
-	#doSelect (colorSet) {
+	#doSelect(colorSet) {
 		/** @type {Record<string, string | [string, string]>} */
 		var newColors = {};
 		for (var i in this.#colors) {
@@ -277,7 +277,7 @@ class Theme {
 	 * @param {string} colorSetName
 	 * @returns {boolean | undefined}
 	 */
-	select (colorSetName) {
+	select(colorSetName) {
 		if (!colorSetName || colorSetName == '' || !(colorSetName in this.#colorSets)) {
 			colorSetName = 'blight';
 		}
@@ -287,7 +287,7 @@ class Theme {
 		this.#currentColorSetName = colorSetName;
 		return this.#doSelect(this.#colorSets[colorSetName]);
 	}
-	update () {
+	update() {
 		if (!this.container || !this.#colors || this.#colors.background == '') return;
 
 		var styles = this.#getCSSRules();
@@ -311,10 +311,10 @@ class Theme {
 
 		this.colors = /** @type {Record<string, string>} */ (this.#getMirror());
 	}
-	dispose () {
+	dispose() {
 	}
 
-	get colorSets () {return Object.keys(this.#colorSets)}
+	get colorSets() {return Object.keys(this.#colorSets)}
 }
 Wasavi.Theme = Theme;
 
@@ -323,7 +323,7 @@ class Bell {
 	#app;
 
 	/** @param {WasaviApp} app */
-	constructor (app) {
+	constructor(app) {
 		this.#app = app;
 	}
 
@@ -331,7 +331,7 @@ class Bell {
 	 * @param {string} [key]
 	 * @param {boolean} [forcePlay]
 	 */
-	play (key, forcePlay) {
+	play(key, forcePlay) {
 		var app = this.#app;
 		if (!forcePlay && app.config.vars.visualbell) {
 			let cover = /** @type {HTMLElement} */ ($('wasavi_cover'));
@@ -351,9 +351,27 @@ class Bell {
 }
 Wasavi.Bell = Bell;
 
-// methods are attached via publish(this, ...), which tsc cannot model;
-// assert the constructor shape declared in wasavi-namespace.d.ts.
-Wasavi.CursorUI = /** @type {new (app: WasaviApp, comCursor: unknown, comCursorLine: unknown, comCursorColumn: unknown, comFocusHolder: unknown, input: unknown) => WasaviCursorUI} */ (/** @type {unknown} */ (
+/**
+ * @typedef {object} CursorWrapper
+ * @property {string | undefined} type
+ * @property {() => void} reset
+ * @property {() => void} hide
+ * @property {() => void} show
+ * @property {() => void} lostFocus
+ * @property {() => void} windup
+ * @property {(data?: string) => void} compositionUpdate
+ * @property {(data?: string) => void} compositionComplete
+ * @property {() => void} dispose
+ */
+class CursorUI {
+	locked = false;
+	#focused = false;
+	#visible = false;
+	/** @type {HTMLElement} */
+	#comCursor;
+	/** @type {CursorWrapper | null} */
+	#wrapper = null;
+
 	/**
 	 * @param {WasaviApp} app
 	 * @param {HTMLElement} comCursor
@@ -362,382 +380,374 @@ Wasavi.CursorUI = /** @type {new (app: WasaviApp, comCursor: unknown, comCursorL
 	 * @param {HTMLElement} comFocusHolder
 	 * @param {HTMLElement} input
 	 */
-	function (app, comCursor, comCursorLine, comCursorColumn, comFocusHolder, input) {
-	var buffer = app.buffer;
-	var locked = false;
-	var focused = false;
-	var visible = false;
-	/** @type {CursorBase | null} */
-	var wrapper = null;
-	/** @type {Record<string, CursorBase>} */
-	var wrappers = {};
+	constructor(app, comCursor, comCursorLine, comCursorColumn, comFocusHolder, input) {
+		this.#comCursor = comCursor;
+		var buffer = app.buffer;
+		/** @type {Record<string, CursorBase>} */
+		var wrappers = {};
 
-	class CursorBase {
-		/** @type {string | undefined} */
-		type;
+		class CursorBase {
+			/** @type {string | undefined} */
+			type;
 
-		reset () {}
-		hide () {}
-		show () {}
-		lostFocus () {}
-		windup () {}
-		/** @param {string} [data] */
-		compositionUpdate (data) {}
-		/** @param {string} [data] */
-		compositionComplete (data) {}
-		dispose () {}
-	}
-
-	class CommandCursor extends CursorBase {
-		/** @type {ReturnType<typeof setInterval> | null | undefined} */
-		#cursorBlinkTimer;
-
-		/** @returns {HTMLElement | null} */
-		#getCursorSpan () {
-			var spans = buffer.getSpans(Wasavi.CURSOR_SPAN_CLASS);
-			return spans.length ? /** @type {HTMLElement} */ (spans[0]) : null;
+			reset() {}
+			hide() {}
+			show() {}
+			lostFocus() {}
+			windup() {}
+			/** @param {string} [data] */
+			compositionUpdate(data) {}
+			/** @param {string} [data] */
+			compositionComplete(data) {}
+			dispose() {}
 		}
-		#startBlink () {
-			this.#stopBlink();
-			if (app.config.vars.cursorblink) {
-				this.#cursorBlinkTimer = setInterval(() => {
-					if (!comCursor) {
-						this.#stopBlink();
-						return;
-					}
 
-					var span = this.#getCursorSpan();
-					if (span) {
-						if (span.getAttribute('data-blink-active') == '1') {
-							span.style.color = span.style.backgroundColor = '';
-							span.setAttribute('data-blink-active', '0');
+		class CommandCursor extends CursorBase {
+			/** @type {ReturnType<typeof setInterval> | null | undefined} */
+			#cursorBlinkTimer;
+
+			/** @returns {HTMLElement | null} */
+			#getCursorSpan() {
+				var spans = buffer.getSpans(Wasavi.CURSOR_SPAN_CLASS);
+				return spans.length ? /** @type {HTMLElement} */ (spans[0]) : null;
+			}
+			#startBlink() {
+				this.#stopBlink();
+				if (app.config.vars.cursorblink) {
+					this.#cursorBlinkTimer = setInterval(() => {
+						if (!comCursor) {
+							this.#stopBlink();
+							return;
+						}
+
+						var span = this.#getCursorSpan();
+						if (span) {
+							if (span.getAttribute('data-blink-active') == '1') {
+								span.style.color = span.style.backgroundColor = '';
+								span.setAttribute('data-blink-active', '0');
+							}
+							else {
+								span.style.color = app.theme.colors.invertFg;
+								span.style.backgroundColor = app.theme.colors.invertBg;
+								span.setAttribute('data-blink-active', '1');
+							}
 						}
 						else {
-							span.style.color = app.theme.colors.invertFg;
-							span.style.backgroundColor = app.theme.colors.invertBg;
-							span.setAttribute('data-blink-active', '1');
+							var s = /** @type {WindowProxy} */ (document.defaultView).getComputedStyle(comCursor, '');
+							comCursor.style.visibility = s.visibility == 'visible' ? 'hidden' : 'visible';
 						}
-					}
-					else {
-						var s = /** @type {WindowProxy} */ (document.defaultView).getComputedStyle(comCursor, '');
-						comCursor.style.visibility = s.visibility == 'visible' ? 'hidden' : 'visible';
-					}
-				}, 500);
-			}
-		}
-		#stopBlink () {
-			this.#cursorBlinkTimer && clearInterval(this.#cursorBlinkTimer);
-			this.#cursorBlinkTimer = null;
-		}
-		#locate () {
-			var ch = buffer.charAt(buffer.selectionStart);
-			var cursorLine = 0;
-			var cursorColumn = 0;
-			if (ch != '' && /[^\u0000-\u001f\u007f]/.test(ch)) {
-				comCursor.style.display = 'none';
-
-				var span = this.#getCursorSpan();
-				if (!span) {
-					var clusters = /** @type {{ clusterAt(i: number): { length: number }, getClusterIndexFromUTF16Index(i: number): number }} */ (buffer.getGraphemeClusters());
-					span = buffer.emphasis(
-						undefined,
-						clusters.clusterAt(clusters.getClusterIndexFromUTF16Index(buffer.selectionStartCol)).length,
-						Wasavi.CURSOR_SPAN_CLASS)[0];
-				}
-
-				span.style.color = app.theme.colors.invertFg;
-				span.style.backgroundColor = app.theme.colors.invertBg;
-				span.setAttribute('data-blink-active', '1');
-
-				var coord = span.getBoundingClientRect();
-				cursorLine = coord.bottom;
-				cursorColumn = coord.left;
-			}
-			else {
-				buffer.unEmphasis(Wasavi.CURSOR_SPAN_CLASS);
-				comCursor.style.display = 'block';
-				comCursor.style.visibility = 'visible';
-				comCursor.childNodes[0].textContent = ' ';
-
-				var coord2 = getCommandCursorCoord();
-				comCursor.style.left = (coord2.left - buffer.elm.scrollLeft) + 'px';
-				comCursor.style.top = (coord2.top - buffer.elm.scrollTop) + 'px';
-				comCursor.style.height = app.lineHeight + 'px';
-				comCursor.style.color = app.theme.colors.invertFg;
-				comCursor.style.backgroundColor = app.theme.colors.invertBg;
-
-				cursorLine = coord2.bottom - buffer.elm.scrollTop;
-				cursorColumn = coord2.left - buffer.elm.scrollLeft;
-			}
-
-			if (app.config.vars.cursorline && app.inputMode == 'command') {
-				comCursorLine.style.display = '';
-				comCursorLine.style.top = cursorLine + 'px';
-			}
-			else {
-				comCursorLine.style.display = 'none';
-			}
-
-			if (app.config.vars.cursorcolumn && app.inputMode == 'command') {
-				comCursorColumn.style.display = '';
-				comCursorColumn.style.left = cursorColumn + 'px';
-			}
-			else {
-				comCursorColumn.style.display = 'none';
-			}
-
-			buffer.adjustBackgroundImage();
-			buffer.adjustLineNumber(app.config.vars.relativenumber);
-			buffer.adjustWrapGuide(/** @type {number} */ (app.config.vars.textwidth), app.charWidth);
-			buffer.updateActiveRow();
-		}
-
-		reset () {
-			this.#cursorBlinkTimer = undefined;
-		}
-		hide () {
-			this.#stopBlink();
-			buffer.unEmphasis(Wasavi.CURSOR_SPAN_CLASS);
-			comCursor.style.display =
-			comCursorLine.style.display =
-			comCursorColumn.style.display = 'none';
-		}
-		show () {
-			if (app.backlog.visible) return;
-
-			this.#locate();
-			comFocusHolder.focus();
-			this.#startBlink();
-		}
-		lostFocus () {
-			if (app.backlog.visible) return;
-
-			this.#locate();
-			this.#stopBlink();
-			var span = this.#getCursorSpan();
-			if (span) {
-				span.style.color = app.theme.colors.blurFg;
-				span.style.backgroundColor = app.theme.colors.blurBg;
-			}
-			else {
-				comCursor.style.color = app.theme.colors.blurFg;
-				comCursor.style.backgroundColor = app.theme.colors.blurBg;
-			}
-		}
-		dispose () {
-			this.#stopBlink();
-		}
-		windup () {
-			this.hide();
-		}
-	}
-
-	class InputCursor extends CursorBase {
-		hide () {
-			/** @type {Selection} */ (window.getSelection()).removeAllRanges();
-			var n = buffer.selectionStart;
-			var node = /** @type {HTMLElement} */ (buffer.rowNodes(n));
-			node.removeAttribute('contenteditable');
-			node.blur();
-		}
-		show () {
-			buffer.adjustBackgroundImage(app.lineHeight);
-			buffer.adjustLineNumber();
-			buffer.updateActiveRow();
-
-			var n = buffer.selectionStart;
-			var node = /** @type {HTMLElement} */ (buffer.rowNodes(n));
-			node.contentEditable = 'true';
-			node.focus();
-			app.keyManager.editable.setSelectionRange(node, n.col);
-		}
-	}
-
-	class LineInputCursor extends CursorBase {
-		show () {
-			input.focus();
-		}
-	}
-
-	/** @returns {{ left: number, top: number, right: number, bottom: number }} */
-	function getCommandCursorCoord () {
-		var r = /** @type {{ left: number, top: number, right: number, bottom: number }} */ (buffer.charRectAt(buffer.selectionStart));
-		var result = {
-			left:r.left + buffer.scrollLeft,
-			top:r.top + buffer.scrollTop,
-			right:(r.right == r.left ? r.left + app.charWidth : r.right) + buffer.scrollLeft,
-			bottom:(r.bottom == r.top ? r.top + app.lineHeight : r.bottom) + buffer.scrollTop
-		};
-		return result;
-	}
-	/** @param {boolean} [smooth] */
-	function ensureVisible (smooth) {
-		if (!buffer.selected) {
-			var low = app.low;
-			var requestedState = app.requestedState;
-			var needFix1 = !low.isEditing();
-			var needFix2 = !requestedState.inputMode || !low.isEditing(requestedState.inputMode.mode);
-			if (needFix1 && needFix2) {
-				var n = buffer.selectionStart;
-				if (n.col > 0) {
-					var clusters = /** @type {{ rawIndexAt(i: number): number, length: number }} */ (buffer.getGraphemeClusters(n));
-					if (n.col >= clusters.rawIndexAt(clusters.length)) {
-						n.col = clusters.rawIndexAt(clusters.length - 1);
-						buffer.setSelectionRange(n);
-					}
+					}, 500);
 				}
 			}
-		}
-
-		buffer.adjustLineNumberClass(
-			/** @type {boolean} */ (app.config.vars.number), /** @type {boolean} */ (app.config.vars.relativenumber));
-
-		var caret = getCommandCursorCoord();
-		var elm = buffer.elm;
-		var viewBottom = elm.scrollTop + elm.clientHeight;
-
-		if (caret.top < elm.scrollTop && caret.bottom <= viewBottom) {
-			if (smooth) {
-				app.scroller.run(caret.top);
+			#stopBlink() {
+				this.#cursorBlinkTimer && clearInterval(this.#cursorBlinkTimer);
+				this.#cursorBlinkTimer = null;
 			}
-			else {
-				buffer.scrollTop = caret.top;
-			}
-		}
-		else if (caret.bottom > viewBottom && caret.top >= elm.scrollTop) {
-			if (smooth) {
-				app.scroller.run(caret.bottom - elm.clientHeight);
-			}
-			else {
-				buffer.scrollTop = caret.bottom - elm.clientHeight;
-			}
-		}
-	}
-	/**
-	 * @param {string} mode
-	 * @returns {{ type: string, ctor: new () => CursorBase }}
-	 */
-	function getTypeInfo (mode) {
-		/** @type {string} */
-		var type;
-		/** @type {new () => CursorBase} */
-		var ctor;
+			#locate() {
+				var ch = buffer.charAt(buffer.selectionStart);
+				var cursorLine = 0;
+				var cursorColumn = 0;
+				if (ch != '' && /[^\u0000-\u001f\u007f]/.test(ch)) {
+					comCursor.style.display = 'none';
 
-		switch (mode) {
-		default:
-			type = 'command';
-			ctor = CommandCursor;
-			break;
+					var span = this.#getCursorSpan();
+					if (!span) {
+						var clusters = /** @type {{ clusterAt(i: number): { length: number }, getClusterIndexFromUTF16Index(i: number): number }} */ (buffer.getGraphemeClusters());
+						span = buffer.emphasis(
+							undefined,
+							clusters.clusterAt(clusters.getClusterIndexFromUTF16Index(buffer.selectionStartCol)).length,
+							Wasavi.CURSOR_SPAN_CLASS)[0];
+					}
 
-		case 'edit':
-		case 'overwrite':
-			type = 'input';
-			ctor = InputCursor;
-			break;
+					span.style.color = app.theme.colors.invertFg;
+					span.style.backgroundColor = app.theme.colors.invertBg;
+					span.setAttribute('data-blink-active', '1');
 
-		case 'line_input':
-			type = 'line_input';
-			ctor = LineInputCursor;
-			break;
-
-		case 'ex_s_prompt':
-			type = 'null';
-			ctor = CursorBase;
-			break;
-		}
-
-		return {
-			type: type,
-			ctor: ctor
-		};
-	}
-
-	/** @param {{ visible?: boolean, focused?: boolean, type?: string }} [opts] */
-	function update (opts) {
-		if (locked) return;
-
-		/** @type {{ type: string, ctor: new () => CursorBase } | undefined} */
-		var typeInfo;
-
-		if (opts) {
-			if ('visible' in opts) {
-				visible = /** @type {boolean} */ (opts.visible);
-			}
-			if ('focused' in opts) {
-				focused = /** @type {boolean} */ (opts.focused);
-			}
-			if ('type' in opts) {
-				typeInfo = getTypeInfo(/** @type {string} */ (opts.type));
-				if (!wrapper || typeInfo.type != wrapper.type) {
-					wrapper && wrapper.hide();
+					var coord = span.getBoundingClientRect();
+					cursorLine = coord.bottom;
+					cursorColumn = coord.left;
 				}
 				else {
-					typeInfo = undefined;
+					buffer.unEmphasis(Wasavi.CURSOR_SPAN_CLASS);
+					comCursor.style.display = 'block';
+					comCursor.style.visibility = 'visible';
+					comCursor.childNodes[0].textContent = ' ';
+
+					var coord2 = getCommandCursorCoord();
+					comCursor.style.left = (coord2.left - buffer.elm.scrollLeft) + 'px';
+					comCursor.style.top = (coord2.top - buffer.elm.scrollTop) + 'px';
+					comCursor.style.height = app.lineHeight + 'px';
+					comCursor.style.color = app.theme.colors.invertFg;
+					comCursor.style.backgroundColor = app.theme.colors.invertBg;
+
+					cursorLine = coord2.bottom - buffer.elm.scrollTop;
+					cursorColumn = coord2.left - buffer.elm.scrollLeft;
+				}
+
+				if (app.config.vars.cursorline && app.inputMode == 'command') {
+					comCursorLine.style.display = '';
+					comCursorLine.style.top = cursorLine + 'px';
+				}
+				else {
+					comCursorLine.style.display = 'none';
+				}
+
+				if (app.config.vars.cursorcolumn && app.inputMode == 'command') {
+					comCursorColumn.style.display = '';
+					comCursorColumn.style.left = cursorColumn + 'px';
+				}
+				else {
+					comCursorColumn.style.display = 'none';
+				}
+
+				buffer.adjustBackgroundImage();
+				buffer.adjustLineNumber(app.config.vars.relativenumber);
+				buffer.adjustWrapGuide(/** @type {number} */ (app.config.vars.textwidth), app.charWidth);
+				buffer.updateActiveRow();
+			}
+
+			reset() {
+				this.#cursorBlinkTimer = undefined;
+			}
+			hide() {
+				this.#stopBlink();
+				buffer.unEmphasis(Wasavi.CURSOR_SPAN_CLASS);
+				comCursor.style.display =
+				comCursorLine.style.display =
+				comCursorColumn.style.display = 'none';
+			}
+			show() {
+				if (app.backlog.visible) return;
+
+				this.#locate();
+				comFocusHolder.focus();
+				this.#startBlink();
+			}
+			lostFocus() {
+				if (app.backlog.visible) return;
+
+				this.#locate();
+				this.#stopBlink();
+				var span = this.#getCursorSpan();
+				if (span) {
+					span.style.color = app.theme.colors.blurFg;
+					span.style.backgroundColor = app.theme.colors.blurBg;
+				}
+				else {
+					comCursor.style.color = app.theme.colors.blurFg;
+					comCursor.style.backgroundColor = app.theme.colors.blurBg;
 				}
 			}
+			dispose() {
+				this.#stopBlink();
+			}
+			windup() {
+				this.hide();
+			}
 		}
 
-		if (typeInfo) {
-			wrapper = wrappers[typeInfo.type]
-				|| (wrappers[typeInfo.type] = new typeInfo.ctor());
-			wrapper.type = typeInfo.type
-			wrapper.reset();
+		class InputCursor extends CursorBase {
+			hide() {
+				/** @type {Selection} */ (window.getSelection()).removeAllRanges();
+				var n = buffer.selectionStart;
+				var node = /** @type {HTMLElement} */ (buffer.rowNodes(n));
+				node.removeAttribute('contenteditable');
+				node.blur();
+			}
+			show() {
+				buffer.adjustBackgroundImage(app.lineHeight);
+				buffer.adjustLineNumber();
+				buffer.updateActiveRow();
+
+				var n = buffer.selectionStart;
+				var node = /** @type {HTMLElement} */ (buffer.rowNodes(n));
+				node.contentEditable = 'true';
+				node.focus();
+				app.keyManager.editable.setSelectionRange(node, n.col);
+			}
 		}
 
-		var w = /** @type {CursorBase} */ (wrapper);
-		if (!visible) {
-			w.hide();
+		class LineInputCursor extends CursorBase {
+			show() {
+				input.focus();
+			}
 		}
-		else {
-			if (focused) {
-				w.show();
+
+		/** @returns {{ left: number, top: number, right: number, bottom: number }} */
+		function getCommandCursorCoord() {
+			var r = /** @type {{ left: number, top: number, right: number, bottom: number }} */ (buffer.charRectAt(buffer.selectionStart));
+			var result = {
+				left:r.left + buffer.scrollLeft,
+				top:r.top + buffer.scrollTop,
+				right:(r.right == r.left ? r.left + app.charWidth : r.right) + buffer.scrollLeft,
+				bottom:(r.bottom == r.top ? r.top + app.lineHeight : r.bottom) + buffer.scrollTop
+			};
+			return result;
+		}
+		/** @param {boolean} [smooth] */
+		this.ensureVisible = smooth => {
+			if (!buffer.selected) {
+				var low = app.low;
+				var requestedState = app.requestedState;
+				var needFix1 = !low.isEditing();
+				var needFix2 = !requestedState.inputMode || !low.isEditing(requestedState.inputMode.mode);
+				if (needFix1 && needFix2) {
+					var n = buffer.selectionStart;
+					if (n.col > 0) {
+						var clusters = /** @type {{ rawIndexAt(i: number): number, length: number }} */ (buffer.getGraphemeClusters(n));
+						if (n.col >= clusters.rawIndexAt(clusters.length)) {
+							n.col = clusters.rawIndexAt(clusters.length - 1);
+							buffer.setSelectionRange(n);
+						}
+					}
+				}
+			}
+
+			buffer.adjustLineNumberClass(
+				/** @type {boolean} */ (app.config.vars.number), /** @type {boolean} */ (app.config.vars.relativenumber));
+
+			var caret = getCommandCursorCoord();
+			var elm = buffer.elm;
+			var viewBottom = elm.scrollTop + elm.clientHeight;
+
+			if (caret.top < elm.scrollTop && caret.bottom <= viewBottom) {
+				if (smooth) {
+					app.scroller.run(caret.top);
+				}
+				else {
+					buffer.scrollTop = caret.top;
+				}
+			}
+			else if (caret.bottom > viewBottom && caret.top >= elm.scrollTop) {
+				if (smooth) {
+					app.scroller.run(caret.bottom - elm.clientHeight);
+				}
+				else {
+					buffer.scrollTop = caret.bottom - elm.clientHeight;
+				}
+			}
+		};
+		/**
+		 * @param {string} mode
+		 * @returns {{ type: string, ctor: new () => CursorBase }}
+		 */
+		function getTypeInfo(mode) {
+			/** @type {string} */
+			var type;
+			/** @type {new () => CursorBase} */
+			var ctor;
+
+			switch (mode) {
+			default:
+				type = 'command';
+				ctor = CommandCursor;
+				break;
+
+			case 'edit':
+			case 'overwrite':
+				type = 'input';
+				ctor = InputCursor;
+				break;
+
+			case 'line_input':
+				type = 'line_input';
+				ctor = LineInputCursor;
+				break;
+
+			case 'ex_s_prompt':
+				type = 'null';
+				ctor = CursorBase;
+				break;
+			}
+
+			return {
+				type: type,
+				ctor: ctor
+			};
+		}
+
+		/** @param {{ visible?: boolean, focused?: boolean, type?: string }} [opts] */
+		this.update = opts => {
+			if (this.locked) return;
+
+			/** @type {{ type: string, ctor: new () => CursorBase } | undefined} */
+			var typeInfo;
+
+			if (opts) {
+				if ('visible' in opts) {
+					this.#visible = /** @type {boolean} */ (opts.visible);
+				}
+				if ('focused' in opts) {
+					this.#focused = /** @type {boolean} */ (opts.focused);
+				}
+				if ('type' in opts) {
+					typeInfo = getTypeInfo(/** @type {string} */ (opts.type));
+					if (!this.#wrapper || typeInfo.type != this.#wrapper.type) {
+						this.#wrapper && this.#wrapper.hide();
+					}
+					else {
+						typeInfo = undefined;
+					}
+				}
+			}
+
+			if (typeInfo) {
+				this.#wrapper = wrappers[typeInfo.type]
+					|| (wrappers[typeInfo.type] = new typeInfo.ctor());
+				this.#wrapper.type = typeInfo.type
+				this.#wrapper.reset();
+			}
+
+			var w = /** @type {CursorWrapper} */ (this.#wrapper);
+			if (!this.#visible) {
+				w.hide();
 			}
 			else {
-				w.lostFocus();
+				if (this.#focused) {
+					w.show();
+				}
+				else {
+					w.lostFocus();
+				}
 			}
-		}
-	}
-	/** @param {CompositionEvent} e */
-	function handleCompositionStart (e) {
-		(/** @type {CursorBase} */ (wrapper)).compositionUpdate(e.data);
-	}
-	/** @param {CompositionEvent} e */
-	function handleCompositionUpdate (e) {
-		(/** @type {CursorBase} */ (wrapper)).compositionUpdate(e.data);
-	}
-	/** @param {CompositionEvent} e */
-	function handleCompositionEnd (e) {
-		setTimeout(function () {
-			buffer.ensureNewline(buffer.selectionStart);
-		}, 1);
-		return (/** @type {CursorBase} */ (wrapper)).compositionComplete(e.data);
-	}
-	/** @param {boolean} install */
-	function setupEventHandlers (install) {
-		/** @type {'addListener' | 'removeListener'} */
-		var method = install ? 'addListener' : 'removeListener';
-		app.keyManager[method]('compositionstart', handleCompositionStart);
-		app.keyManager[method]('compositionupdate', handleCompositionUpdate);
-		app.keyManager[method]('compositionend', handleCompositionEnd);
-	}
-	function windup () {
-		(/** @type {CursorBase} */ (wrapper)).windup();
-	}
-	function dispose () {
-		wrapper && wrapper.dispose();
+		};
+		/** @param {CompositionEvent} e */
+		var handleCompositionStart = e => {
+			(/** @type {CursorWrapper} */ (this.#wrapper)).compositionUpdate(e.data);
+		};
+		/** @param {CompositionEvent} e */
+		var handleCompositionUpdate = e => {
+			(/** @type {CursorWrapper} */ (this.#wrapper)).compositionUpdate(e.data);
+		};
+		/** @param {CompositionEvent} e */
+		var handleCompositionEnd = e => {
+			setTimeout(function () {
+				buffer.ensureNewline(buffer.selectionStart);
+			}, 1);
+			return (/** @type {CursorWrapper} */ (this.#wrapper)).compositionComplete(e.data);
+		};
+		/** @param {boolean} install */
+		this.setupEventHandlers = install => {
+			/** @type {'addListener' | 'removeListener'} */
+			var method = install ? 'addListener' : 'removeListener';
+			app.keyManager[method]('compositionstart', handleCompositionStart);
+			app.keyManager[method]('compositionupdate', handleCompositionUpdate);
+			app.keyManager[method]('compositionend', handleCompositionEnd);
+		};
+		this.windup = () => {
+			(/** @type {CursorWrapper} */ (this.#wrapper)).windup();
+		};
+		this.dispose = () => {
+			this.#wrapper && this.#wrapper.dispose();
+		};
 	}
 
-	publish(this,
-		ensureVisible, update, setupEventHandlers, windup, dispose,
-		{
-			type:function () {return wrapper ? wrapper.type : null},
-			focused:function () {return focused},
-			visible:function () {return visible},
-			commandCursor:function () {return comCursor},
-			locked:[function () {return locked}, /** @param {boolean} v */ function (v) {locked = v}]
-		}
-	);
-}));
+	get type() {return this.#wrapper ? this.#wrapper.type : null}
+	get focused() {return this.#focused}
+	get visible() {return this.#visible}
+	get commandCursor() {return this.#comCursor}
+}
+Wasavi.CursorUI = CursorUI;
 
 class Scroller {
 	/** @type {WasaviApp} */
@@ -765,7 +775,7 @@ class Scroller {
 	 * @param {WasaviCursorUI} cursor
 	 * @param {unknown} modeLine
 	 */
-	constructor (app, cursor, modeLine) {
+	constructor(app, cursor, modeLine) {
 		this.#app = app;
 		this.#cursor = cursor;
 		this.#modeLine = /** @type {HTMLElement} */ (modeLine);
@@ -776,7 +786,7 @@ class Scroller {
 	 * @param {number} dest
 	 * @returns {Promise<boolean>}
 	 */
-	run (dest) {
+	run(dest) {
 		var app = this.#app;
 		var cursor = this.#cursor;
 		var modeLine = this.#modeLine;
@@ -818,10 +828,10 @@ class Scroller {
 		});
 	}
 
-	dispose () {
+	dispose() {
 	}
 
-	get running () {return this.#running}
+	get running() {return this.#running}
 }
 Wasavi.Scroller = Scroller;
 
@@ -847,7 +857,7 @@ class Backlog {
 	 * @param {unknown} container
 	 * @param {unknown} con
 	 */
-	constructor (app, container, con) {
+	constructor(app, container, con) {
 		this.#app = app;
 		this.#container = /** @type {HTMLElement} */ (container);
 		this.#con = /** @type {HTMLElement} */ (con);
@@ -857,7 +867,7 @@ class Backlog {
 	 * @param {BacklogLine} line
 	 * @returns {HTMLDivElement}
 	 */
-	#append (line) {
+	#append(line) {
 		var app = this.#app;
 		let el = this.#con.appendChild(document.createElement('div'));
 		el.className = 'backlog-row';
@@ -892,7 +902,7 @@ class Backlog {
 
 		return el;
 	}
-	#ensureSetCharSize () {
+	#ensureSetCharSize() {
 		if (this.#charWidth && this.#charHeight) return;
 		var span = this.#con.appendChild(document.createElement('span'));
 		try {
@@ -906,7 +916,7 @@ class Backlog {
 	}
 
 	/** @param {unknown} arg */
-	push (arg) {
+	push(arg) {
 		if (isArray(arg)) {
 			arg.forEach(a => this.push(a));
 		}
@@ -919,7 +929,7 @@ class Backlog {
 		}
 	}
 	/** @param {unknown} arg */
-	pushEmphasis (arg) {
+	pushEmphasis(arg) {
 		if (isArray(arg)) {
 			arg.forEach(a => this.push(a));
 		}
@@ -932,17 +942,17 @@ class Backlog {
 			this.#buffer.push({text:'' + arg, emphasis:true});
 		}
 	}
-	show () {
+	show() {
 		this.#container.style.visibility = 'visible';
 	}
-	hide () {
+	hide() {
 		this.#container.style.visibility = 'hidden';
 	}
-	clear () {
+	clear() {
 		this.#buffer.length = 0;
 	}
 	/** @param {boolean} [byLine] */
-	open (byLine) {
+	open(byLine) {
 		var app = this.#app;
 		var con = this.#con;
 		var buffer = this.#buffer;
@@ -982,33 +992,33 @@ class Backlog {
 							_('Press any key to continue, or enter more ex command:'),
 			false, true, true);
 	}
-	dispose () {
+	dispose() {
 	}
 
 	/** @returns {BacklogLine[]} */
-	get buffer () {
+	get buffer() {
 		return this.#buffer;
 	}
 	/** @returns {boolean} */
-	get queued () {
+	get queued() {
 		return this.#buffer.length > 0;
 	}
 	/** @returns {number} */
-	get rows () {
+	get rows() {
 		this.#ensureSetCharSize();
 		return Math.floor(this.#con.offsetHeight / this.#charHeight);
 	}
 	/** @returns {number} */
-	get cols () {
+	get cols() {
 		this.#ensureSetCharSize();
 		return Math.floor(this.#con.offsetWidth / this.#charWidth);
 	}
 	/** @returns {boolean} */
-	get visible () {
+	get visible() {
 		return /** @type {WindowProxy} */ (document.defaultView).getComputedStyle(this.#container, '').visibility != 'hidden';
 	}
 	/** @returns {string} */
-	get text () {
+	get text() {
 		return Array.prototype.map.call(
 			this.#con.getElementsByClassName('backlog-row'),
 			/** @param {Element} o */ function (o) {return o.textContent}
@@ -1037,7 +1047,7 @@ class Notifier {
 	 * @param {WasaviApp} app
 	 * @param {unknown} container
 	 */
-	constructor (app, container) {
+	constructor(app, container) {
 		this.#container = /** @type {HTMLElement} */ (container);
 	}
 
@@ -1046,7 +1056,7 @@ class Notifier {
 	 * @param {number} [intervalMsecs]
 	 * @param {number} [delayMsecs]
 	 */
-	register (message, intervalMsecs, delayMsecs) {
+	register(message, intervalMsecs, delayMsecs) {
 		this.#registeredMessage = message;
 		if (this.#showTimer) return;
 		this.#showTimer = setTimeout(() => {
@@ -1059,7 +1069,7 @@ class Notifier {
 	 * @param {NotifierMessage} message
 	 * @param {number} [intervalMsecs]
 	 */
-	show (message, intervalMsecs) {
+	show(message, intervalMsecs) {
 		this.#hideTimer && clearTimeout(this.#hideTimer);
 		if (typeof message == 'function') {
 			message(this.#container);
@@ -1073,13 +1083,13 @@ class Notifier {
 			this.hide();
 		}, intervalMsecs || this.#hideIntervalMsecs);
 	}
-	hide () {
+	hide() {
 		this.#container.style.visibility = 'hidden';
 		this.#showTimer && clearTimeout(this.#showTimer);
 		this.#hideTimer && clearTimeout(this.#hideTimer);
 		this.#showTimer = this.#hideTimer = null;
 	}
-	dispose () {
+	dispose() {
 	}
 }
 Wasavi.Notifier = Notifier;
