@@ -4,9 +4,4 @@
 // settings-io.js exposes its helpers on the global `SettingsIO`.
 declare const SettingsIO: typeof import('./settings-io.js');
 
-// only `chrome.runtime.getManifest().version` is used here
-declare const chrome: {
-  runtime?: {
-    getManifest?(): { version: string };
-  };
-};
+// `chrome` is declared in ../globals.d.ts (shared web-extension globals).
