@@ -27,26 +27,73 @@
 
 const Wasavi = g.Wasavi;
 
-Wasavi.SubstituteWorker = function (app) {
-	this.app = app;
-	this.patternString = '';
-	this.pattern = null;
-	this.replOpcodes = null;
-	this.range = null;
-	this.isGlobal = false;
-	this.isConfirm = false;
-	this.substCount = 0;
-	this.buffer = null;
-	this.kontinueWorker = null;
-};
-Wasavi.SubstituteWorker.prototype = {
-	run: function (range, pattern, repl, options) {
+/**
+ * A single opcode produced by compileReplacer.
+ *
+ *   0: literal (v: the literal string)
+ *   1: backref (v: the capture group index, as number or single-char string)
+ *   2: upper first
+ *   3: lower first
+ *   4: upper
+ *   5: lower
+ *
+ * @typedef {{x: 0, v: string}
+ *   | {x: 1, v: number | string}
+ *   | {x: 2}
+ *   | {x: 3}
+ *   | {x: 4}
+ *   | {x: 5}} SubstituteOpcode
+ */
+
+/**
+ * Confirm-mode iteration state.
+ *
+ * @typedef {{
+ *   index: number,
+ *   pos: WasaviPosition,
+ *   replacer: string
+ * }} SubstituteContinuation
+ */
+
+class SubstituteWorker {
+	/** @param {WasaviApp} app */
+	constructor(app) {
+		this.app = app;
+		this.patternString = '';
+		/** @type {RegExp | null} */
+		this.pattern = null;
+		/** @type {readonly SubstituteOpcode[] | null} */
+		this.replOpcodes = null;
+		/** @type {[number, number] | null} */
+		this.range = null;
+		this.isGlobal = false;
+		this.isConfirm = false;
+		this.substCount = 0;
+		/** @type {RegExpExecArray[] | null} */
+		this.buffer = null;
+		/** @type {SubstituteContinuation | null} */
+		this.kontinueWorker = null;
+	}
+
+	/**
+	 * @param {[number, number]} range
+	 * @param {string} pattern
+	 * @param {string} repl
+	 * @param {string} [options]
+	 * @returns {string | Promise<void> | undefined}
+	 */
+	run(range, pattern, repl, options) {
 		var app = this.app;
 		var t = this.app.buffer;
-		pattern || (pattern = '');
-		repl || (repl = '');
-		options || (options = '');
-		var count, re, tildeUsed;
+		pattern ??= '';
+		repl ??= '';
+		options ??= '';
+		/** @type {number} */
+		var count;
+		/** @type {RegExpExecArray | null} */
+		var re;
+		/** @type {boolean | undefined} */
+		var tildeUsed;
 
 		// pattern and replacemnt
 		if (pattern == '' && repl == '') {
@@ -70,6 +117,7 @@ Wasavi.SubstituteWorker.prototype = {
 			if (a == '~') {
 				tildeUsed = true;
 			}
+			return a;
 		});
 		if (tildeUsed) {
 			if (app.lastSubstituteInfo.replacement == undefined) {
@@ -110,7 +158,8 @@ Wasavi.SubstituteWorker.prototype = {
 		// initialize regex instance
 		this.patternString = pattern;
 		this.pattern = app.low.getFindRegex(pattern);
-		this.pattern.lastIndex = 0;
+		var compiledPattern = /** @type {RegExp} */ (this.pattern);
+		compiledPattern.lastIndex = 0;
 
 		// compile the replace pattern into opcodes
 		this.replOpcodes = this.compileReplacer(repl);
@@ -125,6 +174,7 @@ Wasavi.SubstituteWorker.prototype = {
 		this.buffer = this.createBuffer(trimTerm(rg.toString()));
 
 		//
+		/** @type {Promise<void> | undefined} */
 		var result;
 		if (this.buffer.length) {
 			// found something
@@ -133,7 +183,11 @@ Wasavi.SubstituteWorker.prototype = {
 
 			if (this.isConfirm) {
 				result = new Promise(resolve => {
-					function handleKeypress (e) {
+					/**
+					 * @this {SubstituteWorker}
+					 * @param {{char: string, preventDefault(): void}} e
+					 */
+					function handleKeypress(e) {
 						e.preventDefault();
 						// when continueConfirmModeSubst() completes, it returns true
 						if (this.continueConfirmModeSubst(e.char)) {
@@ -158,12 +212,19 @@ Wasavi.SubstituteWorker.prototype = {
 			this.showNotFound();
 		}
 		return result;
-	},
-	createBuffer: function (text) {
+	}
+
+	/**
+	 * @param {string} text
+	 * @returns {RegExpExecArray[]}
+	 */
+	createBuffer(text) {
+		/** @type {RegExpExecArray | null} */
 		var re;
+		/** @type {RegExpExecArray[]} */
 		var buffer = [];
 		var lastIndex = -1;
-		var pattern = this.pattern;
+		var pattern = /** @type {RegExp} */ (this.pattern);
 
 		while ((re = pattern.exec(text))) {
 			if (pattern.lastIndex <= lastIndex) {
@@ -175,14 +236,22 @@ Wasavi.SubstituteWorker.prototype = {
 		}
 
 		return buffer;
-	},
-	burst: function (startIndex, startPos, startReplacer) {
+	}
+
+	/**
+	 * @param {number} [startIndex]
+	 * @param {WasaviPosition} [startPos]
+	 * @param {string} [startReplacer]
+	 * @returns {void}
+	 */
+	burst(startIndex, startPos, startReplacer) {
 		var t = this.app.buffer;
-		var buffer = this.buffer;
+		var buffer = /** @type {RegExpExecArray[]} */ (this.buffer);
+		var range = /** @type {[number, number]} */ (this.range);
 
 		var i = startIndex || 0;
 		var pos = startPos || t.offsetBy(
-			new Wasavi.Position(this.range[0], 0),
+			new Wasavi.Position(range[0], 0),
 			buffer[i].index);
 		var replacer = startReplacer || this.executeReplacer(buffer[i]);
 
@@ -211,10 +280,13 @@ Wasavi.SubstituteWorker.prototype = {
 				replacer = buffer[i][0];
 			}
 		}
-	},
-	setupConfirmModeSubst: function () {
+	}
+
+	/** @returns {void} */
+	setupConfirmModeSubst() {
 		var t = this.app.buffer;
-		var buffer = this.buffer;
+		var buffer = /** @type {RegExpExecArray[]} */ (this.buffer);
+		var range = /** @type {[number, number]} */ (this.range);
 
 		/*
 		 * initializing
@@ -223,7 +295,7 @@ Wasavi.SubstituteWorker.prototype = {
 		var k = this.kontinueWorker = {
 			index: 0,
 			pos: t.offsetBy(
-				new Wasavi.Position(this.range[0], 0),
+				new Wasavi.Position(range[0], 0),
 				buffer[0].index),
 			replacer: this.executeReplacer(buffer[0])
 		};
@@ -236,11 +308,16 @@ Wasavi.SubstituteWorker.prototype = {
 		this.app.low.showMessage(
 			_('Substitute? [y]es, [n]o, [a]ll, [l]ast, [q]uit'),
 			false, true, true);
-	},
-	continueConfirmModeSubst: function (action) {
+	}
+
+	/**
+	 * @param {string} action
+	 * @returns {boolean}
+	 */
+	continueConfirmModeSubst(action) {
 		var t = this.app.buffer;
-		var buffer = this.buffer;
-		var k = this.kontinueWorker;
+		var buffer = /** @type {RegExpExecArray[]} */ (this.buffer);
+		var k = /** @type {SubstituteContinuation} */ (this.kontinueWorker);
 
 		/*
 		 * main job
@@ -332,66 +409,96 @@ Wasavi.SubstituteWorker.prototype = {
 
 		// finished
 		return true;
-	},
-	doSubstitute: function (pos, length, replacer) {
+	}
+
+	/**
+	 * @param {WasaviPosition} pos
+	 * @param {number} length
+	 * @param {string} replacer
+	 * @returns {void}
+	 */
+	doSubstitute(pos, length, replacer) {
 		var t = this.app.buffer;
 		t.selectionStart = pos;
 		t.selectionEnd = t.offsetBy(t.selectionStart, length);
 		this.app.edit.insert(replacer);
 		this.substCount++;
-	},
-	showResult: function (immediate) {
+	}
+
+	/**
+	 * @param {boolean} [immediate]
+	 * @returns {void}
+	 */
+	showResult(immediate) {
 		if (this.substCount) {
-			var line = _('{0} {substitution:0} on {1} {line:1}.', this.substCount, this.range[1] - this.range[0] + 1);
+			var range = /** @type {[number, number]} */ (this.range);
+			var line = _('{0} {substitution:0} on {1} {line:1}.', this.substCount, range[1] - range[0] + 1);
 			immediate ? this.app.low.showMessage(line) : this.app.low.requestShowMessage(line);
 			this.app.isEditCompleted = true;
 		}
-	},
-	showNotFound: function () {
-		this.app.low.requestShowMessage(_('Pattern not found: {0}', this.patternString));
-	},
-	executeReplacer: function (re, opcodes) {
-		opcodes || (opcodes = this.replOpcodes);
-		if (!opcodes) return '';
+	}
 
+	/** @returns {void} */
+	showNotFound() {
+		this.app.low.requestShowMessage(_('Pattern not found: {0}', this.patternString));
+	}
+
+	/**
+	 * @param {RegExpExecArray} re
+	 * @param {readonly SubstituteOpcode[]} [opcodes]
+	 * @returns {string}
+	 */
+	executeReplacer(re, opcodes) {
+		/** @type {readonly SubstituteOpcode[] | null | undefined} */
+		var ops = opcodes;
+		ops ??= this.replOpcodes;
+		if (!ops) return '';
+
+		/** @type {string[]} */
 		var result = [];
-		for (var i = 0, goal = opcodes.length; i < goal; i++) {
-			switch (opcodes[i].x) {
+		for (var i = 0, goal = ops.length; i < goal; i++) {
+			var op = ops[i];
+			switch (op.x) {
 			case 0:
-				result.push(opcodes[i].v);
+				result.push(op.v);
 				break;
 			case 1:
-				result.push(re[opcodes[i].v] || '');
+				result.push(re[Number(op.v)] || '');
 				break;
 			case 2:
 				if (result.length) {
-					var tmp = result.lastItem;
+					var tmp = result.lastItem ?? '';
 					tmp = tmp.charAt(0).toUpperCase() + tmp.substring(1);
 					result.lastItem = tmp;
 				}
 				break;
 			case 3:
 				if (result.length) {
-					var tmp = result.lastItem;
+					var tmp = result.lastItem ?? '';
 					tmp = tmp.charAt(0).toLowerCase() + tmp.substring(1);
 					result.lastItem = tmp;
 				}
 				break;
 			case 4:
 				if (result.length) {
-					result.lastItem = result.lastItem.toUpperCase();
+					result.lastItem = (result.lastItem ?? '').toUpperCase();
 				}
 				break;
 			case 5:
 				if (result.length) {
-					result.lastItem = result.lastItem.toLowerCase();
+					result.lastItem = (result.lastItem ?? '').toLowerCase();
 				}
 				break;
 			}
 		}
 		return result.join('');
-	},
-	compileReplacer: function (repl) {
+	}
+
+	/**
+	 * @param {string} repl
+	 * @returns {SubstituteOpcode[]}
+	 */
+	compileReplacer(repl) {
 		/*
 		 * Meta characters in replacement string are:
 		 *
@@ -414,10 +521,19 @@ Wasavi.SubstituteWorker.prototype = {
 
 		if (repl == '') return [];
 
+		/** @type {SubstituteOpcode[]} */
 		var stack = [];
+		/** @type {Record<string, string>} */
 		var specialEscapes = {'\\':'\\', 'n':'\n', 't':'\t'};
+		/** @type {Record<string, string>} */
 		var specialLetters = {'\r':'\n'};
-		function loop (callDepth, interruptMode, start) {
+		/**
+		 * @param {number} callDepth
+		 * @param {number} interruptMode
+		 * @param {number} start
+		 * @returns {number}
+		 */
+		function loop(callDepth, interruptMode, start) {
 			/*
 			 * opcodes:
 			 *   0: literal
@@ -487,12 +603,13 @@ Wasavi.SubstituteWorker.prototype = {
 					|| code == 0x7f) {
 						ch = toVisibleControl(code);
 					}
+					var last = /** @type {SubstituteOpcode} */ (stack.lastItem);
 					if (newOperand || stack.length == 0) {
 						stack.push({x:0, v:ch});
 						newOperand = false;
 					}
-					else if (stack.length && stack.lastItem.x == 0) {
-						stack.lastItem.v += ch;
+					else if (stack.length && last.x == 0) {
+						last.v += ch;
 					}
 				}
 				if (callDepth && interruptMode == 1) {
@@ -504,8 +621,9 @@ Wasavi.SubstituteWorker.prototype = {
 		loop(0, 0, 0);
 		return stack;
 	}
-};
+}
+Wasavi.SubstituteWorker = SubstituteWorker;
 
-})(typeof global == 'object' ? global : window);
+})(typeof globalThis == 'object' ? globalThis : window);
 
 // vim:set ts=4 sw=4 fenc=UTF-8 ff=unix ft=javascript fdm=marker :

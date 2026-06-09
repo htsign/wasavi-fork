@@ -53,15 +53,15 @@ interface WasaviApp {
   searchUtils: WasaviSearchUtils;
   low: WasaviAppLow;
   config: WasaviConfigurator;
-  edit: unknown;
-  exvm: unknown;
+  edit: WasaviEditOps;
+  exvm: WasaviExViewModel;
   extensionChannel: WasaviExtensionWrapperInstance;
   lastRegexFindCommand: WasaviRegexFinderInfo;
   keyManager: WasaviAppKeyManager;
   fileName: unknown;
   motion: WasaviMotion;
   targetElement: unknown;
-  lastSubstituteInfo: unknown;
+  lastSubstituteInfo: WasaviSubstituteInfo;
   fstab: unknown;
   abbrevs: unknown;
   isTextDirty: unknown;
@@ -350,7 +350,7 @@ interface WasaviEditor {
   binaryPositionToLinearPosition(a: WasaviPositionLike): number;
   emphasis(pos: WasaviPositionLike | undefined, length: number, className?: string): readonly HTMLSpanElement[];
   unEmphasis(className?: string, start?: unknown, end?: unknown): unknown;
-  offsetBy(s: unknown, offset: number, treatLastLineAsNormal?: boolean): unknown;
+  offsetBy(s: WasaviPositionLike, offset: number, treatLastLineAsNormal?: boolean): WasaviPosition;
   regalizeSelectionRelation(): unknown;
   clipPosition(...args: readonly unknown[]): unknown;
 
@@ -536,27 +536,93 @@ interface WasaviSearchUtils {
   dispose(): void;
 }
 
-/** `:substitute` worker (classes_subst.js). */
+/**
+ * Buffer-mutating operations exposed on `app.edit` (frozen object built in
+ * wasavi.js). Signatures are typed from the wasavi.js implementations; trailing
+ * option bags the implementation genuinely leaves open are `Record<string, unknown>`.
+ */
+interface WasaviEditOps {
+  deleteSelection(isSubseq?: boolean): unknown;
+  deleteCharsForward(count: number, opts?: Record<string, unknown>): unknown;
+  deleteCharsBackward(count: number, opts?: Record<string, unknown>): unknown;
+  insert(s: string, opts?: Record<string, unknown>): unknown;
+  overwrite(s: string, opts?: Record<string, unknown>): unknown;
+  shift(rowCount: number, shiftCount: number): unknown;
+  unshift(rowCount: number, shiftCount: number): unknown;
+  joinLines(count: number, asis?: unknown): unknown;
+  yank(count: number, isLineOrient?: boolean, register?: string): unknown;
+  paste(count: number, opts?: Record<string, unknown>): unknown;
+}
+
+/**
+ * The ex-command instruction list exposed on `app.exvm.inst` (frozen object
+ * built in wasavi.js ExCommandExecutor). Members the implementation leaves
+ * structurally open are `unknown`.
+ */
+interface WasaviExViewModelInst {
+  clear(): void;
+  createOpcode(command: unknown, args: unknown, rangeSource: unknown): unknown;
+  add(...args: readonly unknown[]): unknown;
+  insert(...args: readonly unknown[]): unknown;
+  compile(source: unknown, parents?: unknown): unknown;
+  index: number;
+  readonly opcodes: readonly unknown[];
+  readonly currentOpcode: unknown;
+  readonly errorVectors: unknown[];
+}
+
+/**
+ * The ex-command executor exposed on `app.exvm` (wasavi.js ExCommandExecutor).
+ * Only the surface reached cross-file is declared.
+ */
+interface WasaviExViewModel {
+  clone(): WasaviExViewModel;
+  run(source: unknown): unknown;
+  showOverlay(): void;
+  hideOverlay(): void;
+  toString(): string;
+  readonly running: boolean;
+  readonly executedRegisterFlags: Record<string, boolean>;
+  lastError: unknown;
+  readonly inst: WasaviExViewModelInst;
+}
+
+/**
+ * Last `:substitute` pattern/replacement bag (wasavi.js `lastSubstituteInfo`,
+ * a `Collection` whose members are stamped on dynamically). Both members are
+ * absent until the first substitution runs.
+ */
+interface WasaviSubstituteInfo {
+  pattern?: string;
+  replacement?: string;
+}
+
+/** `:substitute` worker (classes_subst.js, ES class). */
 interface WasaviSubstituteWorker {
-  app: unknown;
+  app: WasaviApp;
   patternString: string;
   pattern: RegExp | null;
   replOpcodes: unknown;
-  range: unknown;
+  range: readonly [number, number] | null;
   isGlobal: boolean;
   isConfirm: boolean;
   substCount: number;
-  buffer: unknown;
-  kontinueWorker: unknown;
-  run(range: unknown, pattern: string, repl: string, options?: string): unknown;
-  createBuffer(text: string): unknown;
-  burst(startIndex: number, startPos: WasaviPositionLike, startReplacer: unknown): unknown;
-  setupConfirmModeSubst(): unknown;
-  continueConfirmModeSubst(action: unknown): unknown;
-  doSubstitute(pos: WasaviPositionLike, length: number, replacer: unknown): unknown;
-  showResult(immediate?: boolean): unknown;
-  showNotFound(): unknown;
-  executeReplacer(re: RegExpExecArray, opcodes: unknown): unknown;
+  buffer: RegExpExecArray[] | null;
+  kontinueWorker: { index: number; pos: WasaviPosition; replacer: string } | null;
+  run(
+    range: [number, number],
+    pattern: string,
+    repl: string,
+    options?: string
+  ): string | Promise<void> | undefined;
+  createBuffer(text: string): RegExpExecArray[];
+  burst(startIndex?: number, startPos?: WasaviPosition, startReplacer?: string): void;
+  setupConfirmModeSubst(): void;
+  continueConfirmModeSubst(action: string): boolean;
+  doSubstitute(pos: WasaviPosition, length: number, replacer: string): void;
+  showResult(immediate?: boolean): void;
+  showNotFound(): void;
+  executeReplacer(re: RegExpExecArray, opcodes?: unknown): string;
   compileReplacer(repl: string): unknown;
 }
 
@@ -668,8 +734,8 @@ interface WasaviNotifier {
 /** Undo/redo logger (classes_undo.js). */
 interface WasaviEditLogger {
   clear(): WasaviEditLogger;
-  open(tag: unknown, func?: unknown): unknown;
-  close(): unknown;
+  open(tag: unknown, func?: unknown): WasaviEditLogger;
+  close(): WasaviEditLogger;
   write(type: unknown): unknown;
   undo(): unknown;
   redo(): unknown;
