@@ -52,14 +52,14 @@ interface WasaviApp {
   scroller: WasaviScroller;
   searchUtils: WasaviSearchUtils;
   low: unknown;
-  config: unknown;
+  config: WasaviConfigurator;
   edit: unknown;
   exvm: unknown;
   extensionChannel: unknown;
-  lastRegexFindCommand: unknown;
+  lastRegexFindCommand: WasaviRegexFinderInfo;
   keyManager: unknown;
   fileName: unknown;
-  motion: unknown;
+  motion: WasaviMotion;
   targetElement: unknown;
   lastSubstituteInfo: unknown;
   fstab: unknown;
@@ -67,7 +67,7 @@ interface WasaviApp {
   isTextDirty: unknown;
   fileSystemIndex: unknown;
   isEditCompleted: unknown;
-  ffttDictionary: unknown;
+  ffttDictionary: WasaviFfttDictionary;
   isJumpBaseUpdateRequested: unknown;
   version: unknown;
   preferredNewline: unknown;
@@ -156,7 +156,7 @@ interface WasaviRegexFinderInfo {
   readonly scrollLeft: number;
   readonly pattern: string;
   readonly verticalOffset: number | undefined;
-  text: unknown;
+  text: string | undefined;
   readonly updateBound: boolean;
   internalRegex: RegExp | undefined;
 }
@@ -281,8 +281,8 @@ interface WasaviEditor {
   extendSelectionTo(n: unknown): unknown;
   linearPositionToBinaryPosition(n: number): WasaviPosition | null;
   binaryPositionToLinearPosition(a: WasaviPositionLike): number;
-  emphasis(pos: WasaviPositionLike, length: number, className?: string): unknown;
-  unEmphasis(className: string, start?: unknown, end?: unknown): unknown;
+  emphasis(pos: WasaviPositionLike, length: number, className?: string): readonly HTMLSpanElement[];
+  unEmphasis(className?: string, start?: unknown, end?: unknown): unknown;
   offsetBy(s: unknown, offset: number, treatLastLineAsNormal?: boolean): unknown;
   regalizeSelectionRelation(): unknown;
   clipPosition(...args: readonly unknown[]): unknown;
@@ -290,10 +290,12 @@ interface WasaviEditor {
   readonly rowLength: number;
   value: string;
   readonly selected: boolean;
-  selectionStart: WasaviPosition | number;
+  get selectionStart(): WasaviPosition;
+  set selectionStart(v: WasaviPosition | number);
   readonly selectionStartRow: number;
   readonly selectionStartCol: number;
-  selectionEnd: WasaviPosition | number;
+  get selectionEnd(): WasaviPosition;
+  set selectionEnd(v: WasaviPosition | number);
   readonly selectionEndRow: number;
   readonly selectionEndCol: number;
   scrollTop: number;
@@ -405,27 +407,65 @@ interface WasaviSortWorker {
   getContent(): unknown;
 }
 
+/** Result of a regex-based motion search (wasavi.js motionFindByRegex*). */
+interface WasaviRegexFindResult {
+  offset: number;
+  matchLength: number;
+}
+
+/**
+ * Cursor-motion commands (wasavi.js `motion` object). Only the members invoked
+ * cross-file via `app.motion` are declared; the full set lives in wasavi.js.
+ */
+interface WasaviMotion {
+  right(c: string, count?: number): boolean;
+  lineStart(c: string, realTop?: boolean): boolean;
+  lineEnd(c: string): boolean;
+  nextWord(c: string, count?: number, bigWord?: boolean, wordEnd?: boolean): boolean;
+  findByRegexForward(c: string | RegExp, count?: number, opts?: Record<string, unknown>): WasaviRegexFindResult | null;
+  findByRegexBackward(c: string | RegExp, count?: number, opts?: Record<string, unknown>): WasaviRegexFindResult | null;
+}
+
+/** Full/half-width-to-thin transliteration dictionary (unicode_utils.js FfttDictionary). */
+interface WasaviFfttDictionary {
+  addGeneralData(d: string): void;
+  addHanJaData(d: string): void;
+  addData(name: string, d: unknown, handler?: unknown): void;
+  /** Map of equivalent characters for `ch`, or `false` when none. */
+  get(ch: string): Record<string, true> | false;
+  match(ch: string, target: string): boolean;
+}
+
+/** Blinking match-bracket indicator (classes_search.js). */
+interface WasaviPairBracketsIndicator {
+  clear(): void;
+  dispose(): void;
+}
+
 /** Text-object / motion search helpers (classes_search.js). */
 interface WasaviSearchUtils {
-  findQuoteRange(line: string, firstCol: number, quoteChar: string): unknown;
-  findSentenceBoundary(count: number, isForward: boolean, isFindOnly?: boolean): unknown;
+  findQuoteRange(line: string, firstCol: number, quoteChar: string): { start: number; end: number } | false;
+  findSentenceBoundary(count: number, isForward: boolean, isFindOnly?: boolean): WasaviPosition | false;
   findParagraphBoundary(
     count: number,
     isForward: boolean,
     isFindOnly: boolean,
-    what: unknown,
-    both?: boolean
-  ): unknown;
-  findMatchedBracket(count: number, bracketSpecified: unknown, initialPos?: WasaviPositionLike): unknown;
-  quote(count: number, quoteChar: string, includeAnchor?: boolean): unknown;
-  word(count: number, bigword: boolean, includeAnchor?: boolean): unknown;
-  block(count: number, what: unknown, over: unknown, includeAnchor?: boolean): unknown;
-  sentence(count: number, includeAnchor?: boolean): unknown;
-  paragraph(count: number, includeAnchor?: boolean): unknown;
-  dispatchRangeSymbol(count: number, targetChar: string, includeAnchor?: boolean): unknown;
-  setParagraphMacros(m: unknown): unknown;
-  setSectionMacros(m: unknown): unknown;
-  getPairBracketsIndicator(targetChar: string, initialPos?: WasaviPositionLike): unknown;
+    what: string | null,
+    both?: unknown
+  ): WasaviPosition | false;
+  findMatchedBracket(count: number, bracketSpecified?: string, initialPos?: WasaviPositionLike): WasaviPosition | null;
+  quote(count: number, quoteChar: string, includeAnchor?: boolean): boolean;
+  word(count: number, bigwordChar: string, includeAnchor?: boolean): boolean;
+  block(count: number, what: string, over: string, includeAnchor?: boolean): boolean;
+  sentence(count: number, includeAnchor?: boolean): boolean;
+  paragraph(count: number, includeAnchor?: boolean): boolean;
+  dispatchRangeSymbol(count: number, targetChar: string, includeAnchor?: boolean): boolean;
+  setParagraphMacros(m: string): void;
+  setSectionMacros(m: string): void;
+  getPairBracketsIndicator(
+    targetChar: string,
+    initialPos?: WasaviPositionLike
+  ): WasaviPairBracketsIndicator | null;
   dispose(): void;
 }
 
@@ -479,7 +519,7 @@ interface WasaviExParseRangeResult {
 /** Color theme manager (classes_ui.js). */
 interface WasaviTheme {
   /** Snapshot of the active color set (set on the instance in the ctor/select). */
-  colors: Record<string, unknown>;
+  colors: Record<string, string>;
   select(colorSetName: string): unknown;
   update(): unknown;
   dispose(): void;
