@@ -205,7 +205,7 @@
 		opts || (opts = {});
 		'extensionName' in opts && (extensionName = opts.extensionName);
 		'externalFrameURL' in opts && (externalFrameURL = opts.externalFrameURL);
-		'externalSecureUrl' in opts && (externalSecureUrl = opts.externalSecureUrl);
+		'externalSecureUrl' in opts && (externalSecureFrameURL = opts.externalSecureUrl);
 		
 		if (window.chrome) return new ChromeExtensionWrapper;
 		if (global.chrome) return new ChromeExtensionWrapper;
