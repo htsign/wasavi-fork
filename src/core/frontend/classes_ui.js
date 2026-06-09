@@ -27,23 +27,17 @@
 
 const Wasavi = g.Wasavi;
 
-// methods are attached via publish(this, ...), which tsc cannot model;
-// assert the constructor shape declared in wasavi-namespace.d.ts.
-Wasavi.Theme = /** @type {new (app: WasaviApp) => WasaviTheme} */ (/** @type {unknown} */ (
-	/** @param {WasaviApp} app */
-	function (app) {
+class Theme {
+	/** @type {Record<string, string>} */
+	colors;
 	/** @type {HTMLElement | null} */
-	var container;
-	/** @type {string} */
-	var fontStyle;
-	/** @type {number} */
-	var lineHeight;
-	/** @type {boolean} */
-	var useStripe;
-	/** @type {string} */
-	var currentColorSetName;
+	#container = null;
+	#fontStyle = '';
+	#lineHeight = 0;
+	#useStripe = false;
+	#currentColorSetName = '';
 	/** @type {Record<string, string | number | [string, string]>} */
-	var colors = {
+	#colors = {
 		statusHue:-1,
 		background:'',
 		overTextMarkerFg:'',
@@ -68,7 +62,7 @@ Wasavi.Theme = /** @type {new (app: WasaviApp) => WasaviTheme} */ (/** @type {un
 		boundBg:['#wasavi_editor>div span.' + Wasavi.BOUND_CLASS, '']
 	};
 	/** @type {Record<string, Record<string, string>>} */
-	var colorSets = {
+	#colorSets = {
 		solarized: {
 			statusHue:'#eee8d5',
 			background:'#fdf6e3',
@@ -162,14 +156,19 @@ Wasavi.Theme = /** @type {new (app: WasaviApp) => WasaviTheme} */ (/** @type {un
 		}
 	};
 
+	/** @param {WasaviApp} app */
+	constructor (app) {
+		this.colors = /** @type {Record<string, string>} */ (this.#getMirror());
+	}
+
 	/** @returns {string[]} */
-	function getCSSRules () {
+	#getCSSRules () {
 		/** @type {Record<string, string[]>} */
 		var pieces = {};
-		for (var i in colors) {
-			var color = colors[i];
+		for (var i in this.#colors) {
+			var color = this.#colors[i];
 			if (!(color instanceof Array)) continue;
-			if (i == 'rowBgOdd' && !useStripe) continue;
+			if (i == 'rowBgOdd' && !this.#useStripe) continue;
 			var selector = color[0];
 			var rule = color[1];
 			(pieces[selector] || (pieces[selector] = []))
@@ -188,9 +187,9 @@ Wasavi.Theme = /** @type {new (app: WasaviApp) => WasaviTheme} */ (/** @type {un
 	 * @param {(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D | null) => void} callback
 	 * @returns {string}
 	 */
-	function getImageFromCanvas (callback) {
+	#getImageFromCanvas (callback) {
 		var result = '';
-		var canvas = /** @type {HTMLElement} */ (container).appendChild(document.createElement('canvas'));
+		var canvas = /** @type {HTMLElement} */ (this.#container).appendChild(document.createElement('canvas'));
 		try {
 			callback(canvas, canvas.getContext('2d'));
 			result = canvas.toDataURL('image/png');
@@ -205,43 +204,43 @@ Wasavi.Theme = /** @type {new (app: WasaviApp) => WasaviTheme} */ (/** @type {un
 	 * @param {string} backcolor
 	 * @returns {string}
 	 */
-	function getOverTextMarker (forecolor, backcolor) {
-		return getImageFromCanvas(function (canvas, ctxOrNull) {
+	#getOverTextMarker (forecolor, backcolor) {
+		return this.#getImageFromCanvas((canvas, ctxOrNull) => {
 			var ctx = /** @type {CanvasRenderingContext2D} */ (ctxOrNull);
-			ctx.font = fontStyle;
+			ctx.font = this.#fontStyle;
 			canvas.width = ctx.measureText('~').width;
 			canvas.height = window.screen.height;
 
-			ctx.font = fontStyle;
+			ctx.font = this.#fontStyle;
 			ctx.fillStyle = backcolor;
 			ctx.fillRect(0, 0, canvas.width, canvas.height);
 			ctx.fillStyle = forecolor;
 			ctx.textBaseline = 'top';
 			ctx.textAlign = 'left';
 
-			for (var i = 0, goal = canvas.height; i < goal; i += lineHeight) {
+			for (var i = 0, goal = canvas.height; i < goal; i += this.#lineHeight) {
 				ctx.fillText('~', 0, i);
 			}
 		});
 	}
 	/** @returns {Record<string, string | number>} */
-	function getMirror () {
+	#getMirror () {
 		/** @type {Record<string, string | number>} */
 		var result = {};
-		for (var i in colors) {
-			var color = colors[i];
+		for (var i in this.#colors) {
+			var color = this.#colors[i];
 			result[i] = color instanceof Array ? color[1] : color;
 		}
 		return result;
 	}
-	function getStyleElement () {
+	#getStyleElement () {
 		return $('wasavi_theme_styles');
 	}
 	/**
 	 * @param {string | number} key
 	 * @returns {string}
 	 */
-	function getStatuslineBackground (key) {
+	#getStatuslineBackground (key) {
 		switch (typeof key) {
 		case 'number':
 			var n = new Date;
@@ -259,84 +258,90 @@ Wasavi.Theme = /** @type {new (app: WasaviApp) => WasaviTheme} */ (/** @type {un
 	 * @param {Record<string, string>} colorSet
 	 * @returns {boolean}
 	 */
-	function doSelect (colorSet) {
+	#doSelect (colorSet) {
 		/** @type {Record<string, string | [string, string]>} */
 		var newColors = {};
-		for (var i in colors) {
+		for (var i in this.#colors) {
 			if (!(i in colorSet)) return false;
-			var color = colors[i];
+			var color = this.#colors[i];
 			newColors[i] = color instanceof Array ?
 				[color[0], colorSet[i]] : colorSet[i];
 		}
-		colors = newColors;
+		this.#colors = newColors;
 		return true;
 	}
 	/**
 	 * @param {string} colorSetName
 	 * @returns {boolean | undefined}
 	 */
-	function select (colorSetName) {
-		if (!colorSetName || colorSetName == '' || !(colorSetName in colorSets)) {
+	select (colorSetName) {
+		if (!colorSetName || colorSetName == '' || !(colorSetName in this.#colorSets)) {
 			colorSetName = 'blight';
 		}
-		if (colorSetName == currentColorSetName) {
+		if (colorSetName == this.#currentColorSetName) {
 			return;
 		}
-		currentColorSetName = colorSetName;
-		return doSelect(colorSets[colorSetName]);
+		this.#currentColorSetName = colorSetName;
+		return this.#doSelect(this.#colorSets[colorSetName]);
 	}
-	/** @this {WasaviTheme} */
-	function update () {
-		if (!container || !colors || colors.background == '') return;
+	update () {
+		if (!this.#container || !this.#colors || this.#colors.background == '') return;
 
-		var styles = getCSSRules();
+		var styles = this.#getCSSRules();
 
-		var otm = getOverTextMarker(/** @type {string} */ (colors.overTextMarkerFg), /** @type {string} */ (colors.background));
+		var otm = this.#getOverTextMarker(/** @type {string} */ (this.#colors.overTextMarkerFg), /** @type {string} */ (this.#colors.background));
 		styles.push(
 			'#wasavi_editor{',
-			'background:' + colors.background + ' url(' + otm + ') left top no-repeat;',
+			'background:' + this.#colors.background + ' url(' + otm + ') left top no-repeat;',
 			'}');
 
-		var statuslineBackground = getStatuslineBackground(/** @type {string | number} */ (colors.statusHue));
+		var statuslineBackground = this.#getStatuslineBackground(/** @type {string | number} */ (this.#colors.statusHue));
 		styles.push(
 			'#wasavi_footer_status_container,',
 			'#wasavi_footer_input_container{',
 			'background:' + statuslineBackground + ';',
 			'}');
 
-		var node = /** @type {HTMLElement} */ (getStyleElement());
+		var node = /** @type {HTMLElement} */ (this.#getStyleElement());
 		emptyNodeContents(node);
 		node.appendChild(document.createTextNode(styles.join('\n')));
 
-		this.colors = /** @type {Record<string, string>} */ (getMirror());
+		this.colors = /** @type {Record<string, string>} */ (this.#getMirror());
 	}
-	function dispose () {
+	dispose () {
 	}
 
-	/** @type {WasaviTheme} */ (/** @type {unknown} */ (this)).colors = /** @type {Record<string, string>} */ (getMirror());
+	get container () {return this.#container}
+	/** @param {HTMLElement | null} v */
+	set container (v) {this.#container = v}
+	get fontStyle () {return this.#fontStyle}
+	/** @param {string} v */
+	set fontStyle (v) {this.#fontStyle = v}
+	get lineHeight () {return this.#lineHeight}
+	/** @param {number} v */
+	set lineHeight (v) {this.#lineHeight = v}
+	get useStripe () {return this.#useStripe}
+	/** @param {boolean} v */
+	set useStripe (v) {this.#useStripe = v}
+	get colorSets () {return Object.keys(this.#colorSets)}
+}
+Wasavi.Theme = Theme;
 
-	publish(this,
-		select, update, dispose,
-		{
-			container:[function () {}, /** @param {HTMLElement | null} v */ function (v) {container = v}],
-			fontStyle:[function () {}, /** @param {string} v */ function (v) {fontStyle = v}],
-			lineHeight:[function () {}, /** @param {number} v */ function (v) {lineHeight = v}],
-			useStripe:[function () {}, /** @param {boolean} v */ function (v) {useStripe = v}],
-			colorSets:function () {return Object.keys(colorSets)}
-		}
-	);
-}));
+class Bell {
+	/** @type {WasaviApp} */
+	#app;
 
-// methods are attached via publish(this, ...), which tsc cannot model;
-// assert the constructor shape declared in wasavi-namespace.d.ts.
-Wasavi.Bell = /** @type {new (app: WasaviApp) => WasaviBell} */ (/** @type {unknown} */ (
 	/** @param {WasaviApp} app */
-	function (app) {
+	constructor (app) {
+		this.#app = app;
+	}
+
 	/**
 	 * @param {string} [key]
 	 * @param {boolean} [forcePlay]
 	 */
-	function play (key, forcePlay) {
+	play (key, forcePlay) {
+		var app = this.#app;
 		if (!forcePlay && app.config.vars.visualbell) {
 			let cover = /** @type {HTMLElement} */ ($('wasavi_cover'));
 			cover.classList.add('visualbell');
@@ -354,9 +359,8 @@ Wasavi.Bell = /** @type {new (app: WasaviApp) => WasaviBell} */ (/** @type {unkn
 			});
 		}
 	}
-
-	publish(this, play);
-}));
+}
+Wasavi.Bell = Bell;
 
 // methods are attached via publish(this, ...), which tsc cannot model;
 // assert the constructor shape declared in wasavi-namespace.d.ts.
@@ -746,117 +750,131 @@ Wasavi.CursorUI = /** @type {new (app: WasaviApp, comCursor: unknown, comCursorL
 	);
 }));
 
-// methods are attached via publish(this, ...), which tsc cannot model;
-// assert the constructor shape declared in wasavi-namespace.d.ts.
-Wasavi.Scroller = /** @type {new (app: WasaviApp, cursor: WasaviCursorUI, modeLine: unknown) => WasaviScroller} */ (/** @type {unknown} */ (
+class Scroller {
+	/** @type {WasaviApp} */
+	#app;
+	/** @type {WasaviCursorUI} */
+	#cursor;
+	/** @type {HTMLElement} */
+	#modeLine;
+	/** @type {WasaviEditor} */
+	#buffer;
+	#running = false;
+	#consumeMsecs = 250;
+	#timerPrecision = 1;
+	#lastRan = 0;
+	#distance = 0;
+	#scrollTopStart = 0;
+	#scrollTopDest = 0;
+	/** @type {ReturnType<typeof setInterval> | undefined} */
+	#scrollTimer;
+
 	/**
 	 * @param {WasaviApp} app
 	 * @param {WasaviCursorUI} cursor
-	 * @param {HTMLElement} modeLine
+	 * @param {unknown} modeLine
 	 */
-	function (app, cursor, modeLine) {
-	let buffer = app.buffer;
-	let running = false;
-	let consumeMsecs = 250;
-	let timerPrecision = 1;
-	let lastRan = 0;
-	/** @type {number} */
-	let distance;
-	/** @type {number} */
-	let scrollTopStart;
-	/** @type {number} */
-	let scrollTopDest;
-	/** @type {ReturnType<typeof setInterval> | undefined} */
-	let scrollTimer;
+	constructor (app, cursor, modeLine) {
+		this.#app = app;
+		this.#cursor = cursor;
+		this.#modeLine = /** @type {HTMLElement} */ (modeLine);
+		this.#buffer = app.buffer;
+	}
 
 	/**
 	 * @param {number} dest
 	 * @returns {Promise<boolean>}
 	 */
-	function run (dest) {
+	run (dest) {
+		var app = this.#app;
+		var cursor = this.#cursor;
+		var modeLine = this.#modeLine;
+		var buffer = this.#buffer;
 		return new Promise(resolve => {
 			if (!app.targetElement || !cursor || !modeLine) {
 				resolve(true);
 				return;
 			}
 
-			scrollTopStart = buffer.scrollTop;
-			scrollTopDest = Math.max(0, dest);
+			this.#scrollTopStart = buffer.scrollTop;
+			this.#scrollTopDest = Math.max(0, dest);
 
-			if (scrollTopStart == scrollTopDest || !app.config.vars.smooth || cursor.locked) {
-				buffer.scrollTop = scrollTopDest;
+			if (this.#scrollTopStart == this.#scrollTopDest || !app.config.vars.smooth || cursor.locked) {
+				buffer.scrollTop = this.#scrollTopDest;
 				resolve(true);
 				return;
 			}
 
-			distance = scrollTopDest - scrollTopStart;
-			running = true;
-			lastRan = Date.now();
-			scrollTimer = setInterval(() => {
+			this.#distance = this.#scrollTopDest - this.#scrollTopStart;
+			this.#running = true;
+			this.#lastRan = Date.now();
+			this.#scrollTimer = setInterval(() => {
 				let now = Date.now();
-				let y = scrollTopStart + ((now - lastRan) / consumeMsecs) * distance;
+				let y = this.#scrollTopStart + ((now - this.#lastRan) / this.#consumeMsecs) * this.#distance;
 
-				if (distance > 0 && y >= scrollTopDest
-				||  distance < 0 && y <= scrollTopDest) {
-					clearInterval(scrollTimer);
-					scrollTimer = undefined;
-					buffer.scrollTop = scrollTopDest;
-					running = false;
+				if (this.#distance > 0 && y >= this.#scrollTopDest
+				||  this.#distance < 0 && y <= this.#scrollTopDest) {
+					clearInterval(this.#scrollTimer);
+					this.#scrollTimer = undefined;
+					buffer.scrollTop = this.#scrollTopDest;
+					this.#running = false;
 					resolve(true);
 				}
 				else {
 					buffer.scrollTop = Math.floor(y);
 				}
-			}, timerPrecision);
+			}, this.#timerPrecision);
 		});
 	}
 
-	function dispose () {
+	dispose () {
 	}
 
-	publish(this,
-		run, dispose,
-		{
-			running:function () {return running},
-			consumeMsecs:[
-				function () {return consumeMsecs},
-				/** @param {number} v */ function (v) {consumeMsecs = v}
-			],
-			timerPrecision:[
-				function () {return timerPrecision},
-				/** @param {number} v */ function (v) {timerPrecision = v}
-			]
-		}
-	);
-}));
+	get running () {return this.#running}
+	get consumeMsecs () {return this.#consumeMsecs}
+	/** @param {number} v */
+	set consumeMsecs (v) {this.#consumeMsecs = v}
+	get timerPrecision () {return this.#timerPrecision}
+	/** @param {number} v */
+	set timerPrecision (v) {this.#timerPrecision = v}
+}
+Wasavi.Scroller = Scroller;
 
 /**
  * @typedef {object} BacklogLine
  * @property {string} text
  * @property {boolean} [emphasis]
  */
-// methods are attached via publish(this, ...), which tsc cannot model;
-// assert the constructor shape declared in wasavi-namespace.d.ts.
-Wasavi.Backlog = /** @type {new (app: WasaviApp, container: unknown, con: unknown) => WasaviBacklog} */ (/** @type {unknown} */ (
+class Backlog {
+	/** @type {WasaviApp} */
+	#app;
+	/** @type {HTMLElement} */
+	#container;
+	/** @type {HTMLElement} */
+	#con;
+	/** @type {BacklogLine[]} */
+	#buffer = [];
+	#charWidth = 0;
+	#charHeight = 0;
+
 	/**
 	 * @param {WasaviApp} app
-	 * @param {HTMLElement} container
-	 * @param {HTMLElement} con
+	 * @param {unknown} container
+	 * @param {unknown} con
 	 */
-	function (app, container, con) {
-	/** @type {BacklogLine[]} */
-	var buffer = [];
-	/** @type {number} */
-	var charWidth;
-	/** @type {number} */
-	var charHeight;
+	constructor (app, container, con) {
+		this.#app = app;
+		this.#container = /** @type {HTMLElement} */ (container);
+		this.#con = /** @type {HTMLElement} */ (con);
+	}
 
 	/**
 	 * @param {BacklogLine} line
 	 * @returns {HTMLDivElement}
 	 */
-	function append (line) {
-		let el = con.appendChild(document.createElement('div'));
+	#append (line) {
+		var app = this.#app;
+		let el = this.#con.appendChild(document.createElement('div'));
 		el.className = 'backlog-row';
 
 		if (line.emphasis) {
@@ -889,13 +907,13 @@ Wasavi.Backlog = /** @type {new (app: WasaviApp, container: unknown, con: unknow
 
 		return el;
 	}
-	function ensureSetCharSize () {
-		if (charWidth && charHeight) return;
-		var span = con.appendChild(document.createElement('span'));
+	#ensureSetCharSize () {
+		if (this.#charWidth && this.#charHeight) return;
+		var span = this.#con.appendChild(document.createElement('span'));
 		try {
 			span.textContent = '0';
-			charWidth = span.offsetWidth;
-			charHeight = span.offsetHeight;
+			this.#charWidth = span.offsetWidth;
+			this.#charHeight = span.offsetHeight;
 		}
 		finally {
 			removeChild(span);
@@ -903,48 +921,51 @@ Wasavi.Backlog = /** @type {new (app: WasaviApp, container: unknown, con: unknow
 	}
 
 	/** @param {unknown} arg */
-	function push (arg) {
+	push (arg) {
 		if (isArray(arg)) {
-			arg.forEach(push);
+			arg.forEach(a => this.push(a));
 		}
 		else if (isObject(arg)) {
 			if (!('text' in arg)) arg.text = '';
-			buffer.push(/** @type {BacklogLine} */ (arg));
+			this.#buffer.push(/** @type {BacklogLine} */ (arg));
 		}
 		else {
-			buffer.push({text:'' + arg});
+			this.#buffer.push({text:'' + arg});
 		}
 	}
 	/** @param {unknown} arg */
-	function pushEmphasis (arg) {
+	pushEmphasis (arg) {
 		if (isArray(arg)) {
-			arg.forEach(push);
+			arg.forEach(a => this.push(a));
 		}
 		else if (isObject(arg)) {
 			if (!('text' in arg)) arg.text = '';
 			arg.emphasis = true;
-			buffer.push(/** @type {BacklogLine} */ (arg));
+			this.#buffer.push(/** @type {BacklogLine} */ (arg));
 		}
 		else {
-			buffer.push({text:'' + arg, emphasis:true});
+			this.#buffer.push({text:'' + arg, emphasis:true});
 		}
 	}
-	function show () {
-		container.style.visibility = 'visible';
+	show () {
+		this.#container.style.visibility = 'visible';
 	}
-	function hide () {
-		container.style.visibility = 'hidden';
+	hide () {
+		this.#container.style.visibility = 'hidden';
 	}
-	function clear () {
-		buffer.length = 0;
+	clear () {
+		this.#buffer.length = 0;
 	}
 	/** @param {boolean} [byLine] */
-	function open (byLine) {
+	open (byLine) {
+		var app = this.#app;
+		var con = this.#con;
+		var buffer = this.#buffer;
 		var totalHeight = 0;
-		var goalHeight = getRows() * charHeight;
+		var goalHeight = this.rows * this.#charHeight;
 
-		if (!getVisible()) {
-			show();
+		if (!this.visible) {
+			this.show();
 			emptyNodeContents(con);
 			var el = con.appendChild(document.createElement('div'));
 			el.style.height = goalHeight + 'px';
@@ -952,7 +973,7 @@ Wasavi.Backlog = /** @type {new (app: WasaviApp, container: unknown, con: unknow
 
 		while (buffer.length) {
 			var line = /** @type {BacklogLine} */ (buffer.shift());
-			var el = append(line);
+			var el = this.#append(line);
 
 			if (totalHeight > 0
 			&& (totalHeight + el.offsetHeight > goalHeight || byLine)) {
@@ -976,116 +997,107 @@ Wasavi.Backlog = /** @type {new (app: WasaviApp, container: unknown, con: unknow
 							_('Press any key to continue, or enter more ex command:'),
 			false, true, true);
 	}
-	function dispose () {
+	dispose () {
 	}
 
 	/** @returns {BacklogLine[]} */
-	function getBuffer () {
-		return buffer;
+	get buffer () {
+		return this.#buffer;
 	}
 	/** @returns {boolean} */
-	function getQueued () {
-		return buffer.length > 0;
+	get queued () {
+		return this.#buffer.length > 0;
 	}
 	/** @returns {number} */
-	function getRows () {
-		ensureSetCharSize();
-		return Math.floor(con.offsetHeight / charHeight);
+	get rows () {
+		this.#ensureSetCharSize();
+		return Math.floor(this.#con.offsetHeight / this.#charHeight);
 	}
 	/** @returns {number} */
-	function getCols () {
-		ensureSetCharSize();
-		return Math.floor(con.offsetWidth / charWidth);
+	get cols () {
+		this.#ensureSetCharSize();
+		return Math.floor(this.#con.offsetWidth / this.#charWidth);
 	}
 	/** @returns {boolean} */
-	function getVisible () {
-		return /** @type {WindowProxy} */ (document.defaultView).getComputedStyle(container, '').visibility != 'hidden';
+	get visible () {
+		return /** @type {WindowProxy} */ (document.defaultView).getComputedStyle(this.#container, '').visibility != 'hidden';
 	}
 	/** @returns {string} */
-	function getText () {
+	get text () {
 		return Array.prototype.map.call(
-			con.getElementsByClassName('backlog-row'),
+			this.#con.getElementsByClassName('backlog-row'),
 			/** @param {Element} o */ function (o) {return o.textContent}
 		)
 		.join('\n');
 	}
-
-	publish(this,
-		push, pushEmphasis, show, hide, clear, open, dispose,
-		{
-			buffer:getBuffer,
-			queued:getQueued,
-			rows:getRows,
-			cols:getCols,
-			visible:getVisible,
-			text:getText
-		}
-	);
-}));
+}
+Wasavi.Backlog = Backlog;
 
 /**
  * @typedef {string | ((container: HTMLElement) => void)} NotifierMessage
  */
-// methods are attached via publish(this, ...), which tsc cannot model;
-// assert the constructor shape declared in wasavi-namespace.d.ts.
-Wasavi.Notifier = /** @type {new (app: WasaviApp, container: unknown) => WasaviNotifier} */ (/** @type {unknown} */ (
+class Notifier {
+	#delayIntervalMsecs = 500;
+	#hideIntervalMsecs = 2000;
+	/** @type {HTMLElement} */
+	#container;
+	/** @type {ReturnType<typeof setTimeout> | null} */
+	#showTimer = null;
+	/** @type {ReturnType<typeof setTimeout> | null} */
+	#hideTimer = null;
+	/** @type {NotifierMessage | null} */
+	#registeredMessage = null;
+
 	/**
 	 * @param {WasaviApp} app
-	 * @param {HTMLElement} container
+	 * @param {unknown} container
 	 */
-	function (app, container) {
-	const delayIntervalMsecs = 500;
-	const hideIntervalMsecs = 2000;
-	/** @type {ReturnType<typeof setTimeout> | null} */
-	var showTimer;
-	/** @type {ReturnType<typeof setTimeout> | null} */
-	var hideTimer;
-	/** @type {NotifierMessage | null} */
-	var registeredMessage;
+	constructor (app, container) {
+		this.#container = /** @type {HTMLElement} */ (container);
+	}
 
 	/**
 	 * @param {NotifierMessage} message
 	 * @param {number} [intervalMsecs]
 	 * @param {number} [delayMsecs]
 	 */
-	function register (message, intervalMsecs, delayMsecs) {
-		registeredMessage = message;
-		if (showTimer) return;
-		showTimer = setTimeout(function () {
-			showTimer = null;
-			show(/** @type {NotifierMessage} */ (registeredMessage), intervalMsecs);
-			registeredMessage = null;
-		}, delayMsecs || delayIntervalMsecs);
+	register (message, intervalMsecs, delayMsecs) {
+		this.#registeredMessage = message;
+		if (this.#showTimer) return;
+		this.#showTimer = setTimeout(() => {
+			this.#showTimer = null;
+			this.show(/** @type {NotifierMessage} */ (this.#registeredMessage), intervalMsecs);
+			this.#registeredMessage = null;
+		}, delayMsecs || this.#delayIntervalMsecs);
 	}
 	/**
 	 * @param {NotifierMessage} message
 	 * @param {number} [intervalMsecs]
 	 */
-	function show (message, intervalMsecs) {
-		hideTimer && clearTimeout(hideTimer);
+	show (message, intervalMsecs) {
+		this.#hideTimer && clearTimeout(this.#hideTimer);
 		if (typeof message == 'function') {
-			message(container);
+			message(this.#container);
 		}
 		else {
-			container.textContent = message;
+			this.#container.textContent = message;
 		}
-		container.style.visibility = 'visible';
-		hideTimer = setTimeout(function () {
-			hideTimer = null;
-			hide();
-		}, intervalMsecs || hideIntervalMsecs);
+		this.#container.style.visibility = 'visible';
+		this.#hideTimer = setTimeout(() => {
+			this.#hideTimer = null;
+			this.hide();
+		}, intervalMsecs || this.#hideIntervalMsecs);
 	}
-	function hide () {
-		container.style.visibility = 'hidden';
-		showTimer && clearTimeout(showTimer);
-		hideTimer && clearTimeout(hideTimer);
-		showTimer = hideTimer = null;
+	hide () {
+		this.#container.style.visibility = 'hidden';
+		this.#showTimer && clearTimeout(this.#showTimer);
+		this.#hideTimer && clearTimeout(this.#hideTimer);
+		this.#showTimer = this.#hideTimer = null;
 	}
-	function dispose () {
+	dispose () {
 	}
-
-	publish(this, register, show, hide, dispose);
-}));
+}
+Wasavi.Notifier = Notifier;
 
 })(typeof globalThis == 'object' ? globalThis : window);
 

@@ -591,13 +591,13 @@ interface WasaviTheme {
   select(colorSetName: string): boolean | undefined;
   update(): void;
   dispose(): void;
-  /** write-only; the getter is a no-op stub. */
+  /** Set externally; consumed internally by Theme. */
   container: HTMLElement | null;
-  /** write-only; the getter is a no-op stub. */
+  /** Set externally; consumed internally by Theme. */
   fontStyle: string;
-  /** write-only; the getter is a no-op stub. */
+  /** Set externally; consumed internally by Theme. */
   lineHeight: number;
-  /** write-only; the getter is a no-op stub. */
+  /** Set externally; consumed internally by Theme. */
   useStripe: boolean;
   /** Names of available color sets (a fresh array; callers may sort it). */
   readonly colorSets: string[];
