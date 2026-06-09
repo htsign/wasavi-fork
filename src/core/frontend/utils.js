@@ -101,7 +101,7 @@ g.removeChild = function () {
 	}
 };
 /**
- * @param {Node} target
+ * @param {{nodeName: string}} target
  * @returns {boolean}
  */
 g.isMultilineTextInput = function (target) {

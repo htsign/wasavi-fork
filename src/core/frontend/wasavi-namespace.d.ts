@@ -306,8 +306,8 @@ interface WasaviEditor {
   charRectAt(position: unknown, length?: number): unknown;
   ensureNewline(...args: readonly unknown[]): unknown;
   getSelectionRange(): unknown;
-  getSelection(): unknown;
-  getSelectionLinewise(): unknown;
+  getSelection(from?: WasaviPositionLike, to?: WasaviPositionLike): string;
+  getSelectionLinewise(from?: WasaviPositionLike, to?: WasaviPositionLike): string;
   leftPos(...args: readonly unknown[]): WasaviPosition;
   leftClusterPos(...args: readonly unknown[]): WasaviPosition;
   rightPos(...args: readonly unknown[]): WasaviPosition;
@@ -344,7 +344,7 @@ interface WasaviEditor {
   ): unknown;
   deleteRange(...args: readonly unknown[]): unknown;
   selectRowsLinewise(count: number): unknown;
-  divideLine(n: unknown): unknown;
+  divideLine(n?: unknown): unknown;
   extendSelectionTo(n: unknown): unknown;
   linearPositionToBinaryPosition(n: number): WasaviPosition | null;
   binaryPositionToLinearPosition(a: WasaviPositionLike): number;

@@ -31,7 +31,8 @@ declare function emptyNodeContents(node: string | HTMLElement): void;
 /** Detach each given node (id string or element) from its parent. */
 declare function removeChild(...nodes: readonly (string | HTMLElement)[]): void;
 
-declare function isMultilineTextInput(target: Node): boolean;
+/** Tests the target's nodeName; accepts a DOM node or wasavi's target descriptor. */
+declare function isMultilineTextInput(target: { nodeName: string }): boolean;
 
 /** Copy each property of `styles` onto `src.style`. */
 declare function style(src: HTMLElement, styles: Record<string, string>): void;
