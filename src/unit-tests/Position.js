@@ -42,9 +42,21 @@ describe('class Position', () => {
 
 		it('should reject null and incomplete objects', () => {
 			assert.ok(!p.isp(null));
+			assert.ok(!p.isp(undefined));
 			assert.ok(!p.isp({}));
 			assert.ok(!p.isp({row: 1}));
 			assert.ok(!p.isp({col: 1}));
+		});
+
+		it('should reject objects whose row or col is not a number', () => {
+			assert.ok(!p.isp({row: '1', col: 2}));
+			assert.ok(!p.isp({row: 1, col: '2'}));
+		});
+
+		it('should reject primitives without throwing', () => {
+			assert.ok(!p.isp(5));
+			assert.ok(!p.isp('x'));
+			assert.ok(!p.isp(true));
 		});
 	});
 

@@ -14,6 +14,7 @@
   "include": [
     "src/core/globals.d.ts",
     "src/core/frontend/frontend-globals.d.ts",
+    "src/core/frontend/wasavi-namespace.d.ts",
     "src/core/scripts/settings-io.js",
     "src/core/scripts/options-core.js",
     "src/core/scripts/options-globals.d.ts",

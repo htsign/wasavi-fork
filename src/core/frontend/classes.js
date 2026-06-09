@@ -28,39 +28,80 @@
 const Wasavi = g.Wasavi;
 
 Wasavi.Position = class {
+	/**
+	 * @param {number} row
+	 * @param {number} col
+	 */
 	constructor(row, col) {
 		this.row = row;
 		this.col = col;
 	}
+	/** @returns {string} */
 	toString() {
 		return '[object Position(' + this.row + ',' + this.col + ')]';
 	}
+	/** @returns {WasaviPosition} */
 	clone() {
 		return new Wasavi.Position(this.row, this.col);
 	}
+	/**
+	 * @param {WasaviEditor} t
+	 * @returns {this}
+	 */
 	round(t) {
 		this.row = minmax(0, this.row, t.rowLength - 1);
 		this.col = minmax(0, this.col, t.rows(this.row).length - (this.row == t.rowLength - 1 ? 0 : 1));
 		return this;
 	}
+	/**
+	 * @param {unknown} o
+	 * @returns {o is WasaviPositionLike}
+	 */
 	isp(o) {
-		return o && (o instanceof Wasavi.Position || 'row' in o && 'col' in o);
+		return o instanceof Wasavi.Position ||
+			typeof o == 'object' && o != null &&
+			'row' in o && 'col' in o &&
+			typeof o.row == 'number' && typeof o.col == 'number';
 	}
+	/**
+	 * @param {WasaviPositionLike} o
+	 * @returns {boolean}
+	 */
 	eq(o) {
 		return this.isp(o) && this.row == o.row && this.col == o.col;
 	}
+	/**
+	 * @param {WasaviPositionLike} o
+	 * @returns {boolean}
+	 */
 	ne(o) {
 		return this.isp(o) && (this.row != o.row || this.col != o.col);
 	}
+	/**
+	 * @param {WasaviPositionLike} o
+	 * @returns {boolean}
+	 */
 	gt(o) {
 		return this.isp(o) && (this.row > o.row || this.row == o.row && this.col > o.col);
 	}
+	/**
+	 * @param {WasaviPositionLike} o
+	 * @returns {boolean}
+	 */
 	lt(o) {
 		return this.isp(o) && (this.row < o.row || this.row == o.row && this.col < o.col);
 	}
+	/**
+	 * @param {WasaviPositionLike} o
+	 * @returns {boolean}
+	 */
 	ge(o) {
 		return this.isp(o) && (this.row > o.row || this.row == o.row && this.col >= o.col);
 	}
+	/**
+	 * @param {WasaviPositionLike} o
+	 * @returns {boolean}
+	 */
 	le(o) {
 		return this.isp(o) && (this.row < o.row || this.row == o.row && this.col <= o.col);
 	}
