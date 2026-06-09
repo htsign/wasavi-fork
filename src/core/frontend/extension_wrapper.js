@@ -23,7 +23,10 @@
 
 'use strict';
 
-!this.WasaviExtensionWrapper && (function (global) {
+!(/** @type {typeof globalThis} */ (/** @type {unknown} */ (this))).WasaviExtensionWrapper && (/**
+ * @param {typeof globalThis} global
+ */
+function (global) {
 	/* <<<1 consts */
 	const IS_GECKO = typeof global.browser !== 'undefined'
 		&& typeof global.browser.runtime !== 'undefined'
@@ -44,18 +47,31 @@
 	 * ----------------
 	 */
 
+	/**
+	 * @constructor
+	 * @param {string} [optionsUrl]
+	 * @param {string} [internalUrl]
+	 */
 	function UrlInfo (optionsUrl, internalUrl) {
+		/** @type {string | undefined} */
 		this.optionsUrl = optionsUrl;
+		/** @type {string | undefined} */
 		this.internalUrl = internalUrl;
 	}
 
 	UrlInfo.prototype = {
+		/**
+		 * @param {string | undefined} u1
+		 * @param {string | undefined} u2
+		 * @returns {boolean}
+		 */
 		eq: function (u1, u2) {
 			return (u1 || '').replace(/\?.*/, '')
 				== (u2 || '').replace(/\?.*/, '');
 		},
 		get externalUrl () {return externalFrameURL},
 		get externalSecureUrl () {return externalSecureFrameURL},
+		/** @this {WasaviUrlInfo} */
 		get isInternal () {
 			return this.eq(window.location.href, this.internalUrl);
 		},
@@ -66,6 +82,10 @@
 		get isAny () {
 			return this.isInternal || this.isExternal;
 		},
+		/**
+		 * @this {WasaviUrlInfo}
+		 * @returns {string}
+		 */
 		get frameSource () {
 			if (this.internalUrl) {
 				return this.internalUrl;
@@ -83,13 +103,22 @@
 	 * ----------------
 	 */
 
+	/**
+	 * @constructor
+	 */
 	function ExtensionWrapper () {
+		/** @type {string | null} */
 		this.tabId = null;
 		this.requestNumber = 0;
 	}
 	ExtensionWrapper.prototype = {
 		get name () {return extensionName},
 		isTopFrame: function () {return global.window == window.top},
+		/**
+		 * @param {Record<string, unknown>} [data]
+		 * @param {(response: unknown) => void} [callback]
+		 * @returns {number}
+		 */
 		postMessage: function (data, callback) {
 			var type;
 			var requestNumber = this.getNewRequestNumber();
@@ -110,7 +139,17 @@
 
 			return requestNumber;
 		},
+		/**
+		 * @param {Record<string, unknown>} data
+		 * @param {(response: unknown) => void} [callback]
+		 * @returns {void}
+		 */
 		doPostMessage: function (data, callback) {},
+		/**
+		 * @param {string} [type]
+		 * @param {(response: unknown) => void} [callback]
+		 * @returns {void}
+		 */
 		connect: function (type, callback) {
 			this.doConnect();
 			this.doPostMessage({
@@ -125,9 +164,25 @@
 			this.doDisconnect();
 		},
 		doDisconnect: function () {},
+		/**
+		 * @param {Function} handler
+		 * @returns {void}
+		 */
 		setMessageListener: function (handler) {},
+		/**
+		 * @param {Function} handler
+		 * @returns {void}
+		 */
 		addMessageListener: function (handler) {},
+		/**
+		 * @param {Function} handler
+		 * @returns {void}
+		 */
 		removeMessageListener: function (handler) {},
+		/**
+		 * @param {...unknown} args
+		 * @returns {unknown}
+		 */
 		runCallback: function () {
 			var args = Array.prototype.slice.call(arguments);
 			var callback = args.shift();
@@ -145,10 +200,18 @@
 			this.requestNumber = (this.requestNumber + 1) & 0xffff;
 			return this.requestNumber;
 		},
+		/**
+		 * @param {string} messageId
+		 * @returns {undefined}
+		 */
 		getMessage: function (messageId) {},
+		/**
+		 * @param {string} data
+		 * @returns {void}
+		 */
 		setClipboard: function (data) {
 			if (IS_GECKO) {
-				let buffer = document.getElementById('wasavi_fx_clip');
+				let buffer = /** @type {HTMLTextAreaElement} */ (document.getElementById('wasavi_fx_clip'));
 				buffer.value = data;
 				buffer.focus();
 				buffer.select();
@@ -158,22 +221,32 @@
 				this.postMessage({type:'set-clipboard', data:data});
 			}
 		},
+		/**
+		 * @param {...unknown} args
+		 * @returns {void}
+		 */
 		getClipboard: function () {
 			var self = this;
 			var args = Array.prototype.slice.call(arguments);
 			var callback = args.shift();
-			this.postMessage({type:'get-clipboard'}, function (req) {
-				let clipboardData = (req && req.data || '').replace(/\r\n/g, '\n');
+			this.postMessage({type:'get-clipboard'}, /** @param {unknown} req */ function (req) {
+				let clipboardData = /** @type {string} */ (req && /** @type {{data?: string}} */ (req).data || '').replace(/\r\n/g, '\n');
 				args.unshift(clipboardData);
 				callback.apply(null, args);
 			});
 		},
+		/**
+		 * @param {string} [path]
+		 * @returns {string}
+		 */
 		getPageContextScriptSrc: function (path) {
 			return '';
 		},
 		ensureRun: function () {
+			/** @type {unknown[]} */
 			var args = Array.prototype.slice.call(arguments);
-			var callback = args.shift();
+			var callback = /** @type {Function} */ (args.shift());
+			/** @type {Document} */
 			var doc;
 			try {
 				doc = document;
@@ -185,15 +258,14 @@
 			if (doc.readyState == 'interactive'
 			||  doc.readyState == 'complete') {
 				callback.apply(null, args);
-				callback = args = null;
 			}
 			else {
 				doc.addEventListener(
 					'DOMContentLoaded',
+					/** @param {Event} e */
 					function handleDCL (e) {
 						doc.removeEventListener(e.type, handleDCL, false);
 						callback.apply(null, args);
-						e = callback = args = null;
 					},
 					false
 				);
@@ -201,14 +273,23 @@
 		}
 	};
 
+	/**
+	 * @param {{extensionName?: string, externalFrameURL?: string, externalSecureUrl?: string}} [opts]
+	 * @returns {WasaviExtensionWrapperInstance}
+	 */
 	ExtensionWrapper.create = function (opts) {
 		opts || (opts = {});
-		'extensionName' in opts && (extensionName = opts.extensionName);
-		'externalFrameURL' in opts && (externalFrameURL = opts.externalFrameURL);
-		'externalSecureUrl' in opts && (externalSecureFrameURL = opts.externalSecureUrl);
+		'extensionName' in opts && (extensionName = /** @type {string} */ (opts.extensionName));
+		'externalFrameURL' in opts && (externalFrameURL = /** @type {string} */ (opts.externalFrameURL));
+		'externalSecureUrl' in opts && (externalSecureFrameURL = /** @type {string} */ (opts.externalSecureUrl));
 		
-		if (window.chrome) return new ChromeExtensionWrapper;
-		if (global.chrome) return new ChromeExtensionWrapper;
+		// ChromeExtensionWrapper inherits ExtensionWrapper.prototype at runtime
+		// (assigned below); tsc cannot model a wholesale prototype alias (and
+		// JSDoc @extends only attaches to a `class`), so its instance type lacks
+		// the inherited members. The chrome-specific overrides are still validated
+		// against the interface at their `this.x =` sites via @this above.
+		if (window.chrome) return /** @type {WasaviExtensionWrapperInstance} */ (/** @type {unknown} */ (new ChromeExtensionWrapper));
+		if (global.chrome) return /** @type {WasaviExtensionWrapperInstance} */ (/** @type {unknown} */ (new ChromeExtensionWrapper));
 		return new ExtensionWrapper;
 	};
 	ExtensionWrapper.IS_GECKO = IS_GECKO;
@@ -221,12 +302,22 @@
 	 * ----------------
 	 */
 
+	/**
+	 * @constructor
+	 * @this {WasaviExtensionWrapperInstance}
+	 */
 	function ChromeExtensionWrapper () {
-		ExtensionWrapper.apply(this, arguments);
+		ExtensionWrapper.apply(this, /** @type {[]} */ (/** @type {unknown} */ (arguments)));
 
 		var that = this;
+		/** @type {Function[]} */
 		var onMessageHandlers = [];
 
+		/**
+		 * @param {unknown} req
+		 * @param {unknown} sender
+		 * @param {(response?: unknown) => void} response
+		 */
 		function handleMessage (req, sender, response) {
 			for (const handler of onMessageHandlers) {
 				handler(req, sender, response);
@@ -235,6 +326,10 @@
 
 		this.constructor = ExtensionWrapper;
 		this.runType = 'chrome-extension';
+		/**
+		 * @param {Record<string, unknown>} data
+		 * @param {(response: unknown) => void} [callback]
+		 */
 		this.doPostMessage = function (data, callback) {
 			try {
 				chrome.runtime.sendMessage(data, callback);
@@ -248,43 +343,50 @@
 			onMessageHandlers.length = 0;
 			chrome.runtime.onMessage.removeListener(handleMessage);
 		};
+		/** @param {Function} handler */
 		this.setMessageListener = function (handler) {
 			onMessageHandlers = [handler];
 		};
+		/** @param {Function} handler */
 		this.addMessageListener = function (handler) {
 			var index = onMessageHandlers.indexOf(handler);
 			if (index < 0) {
 				onMessageHandlers.push(handler);
 			}
 		};
+		/** @param {Function} handler */
 		this.removeMessageListener = function (handler) {
 			var index = onMessageHandlers.indexOf(handler);
 			if (index >= 0) {
 				onMessageHandlers.splice(index, 1);
 			}
 		};
+		/**
+		 * @param {string} messageId
+		 * @returns {string}
+		 */
 		this.getMessage = function (messageId) {
 			return chrome.i18n.getMessage(messageId);
 		};
 		this.getPageContextScriptSrc = function () {
 			return chrome.runtime.getURL('scripts/page_context.js');
 		};
-		this.urlInfo = new function () {
+		this.urlInfo = new (/** @type {new () => WasaviUrlInfo} */ (/** @type {unknown} */ (function () {
 			return new UrlInfo(
 				chrome.runtime.getURL('options.html'),
 				chrome.runtime.getURL('wasavi.html')
 			);
-		};
+		})));
 	}
 	ChromeExtensionWrapper.prototype = ExtensionWrapper.prototype;
 	/* >>> */
 
 	/* <<<1 bootstrap */
 	ExtensionWrapper.urlInfo.isExternal &&
-		document.documentElement.setAttribute('data-wasavi-present', 1);
+		document.documentElement.setAttribute('data-wasavi-present', '1');
 	global.WasaviExtensionWrapper = ExtensionWrapper;
 	/* >>> */
 
-})(this);
+})(/** @type {typeof globalThis} */ (/** @type {unknown} */ (this)));
 
 // vim:set ts=4 sw=4 fenc=UTF-8 ff=unix ft=javascript fdm=marker fmr=<<<,>>> :

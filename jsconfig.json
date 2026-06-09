@@ -16,6 +16,7 @@
     "src/core/scripts/settings-io.js",
     "src/core/scripts/options-core.js",
     "src/core/scripts/options-globals.d.ts",
-    "src/core/backend/lib/SimilarityComputer.js"
+    "src/core/backend/lib/SimilarityComputer.js",
+    "src/core/frontend/extension_wrapper.js"
   ]
 }

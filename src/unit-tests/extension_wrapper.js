@@ -12,12 +12,25 @@ let WasaviExtensionWrapper;
 const savedWindow = global.window;
 const savedDocument = global.document;
 
+// ensureRun reads bare `document` (readyState / body / add-removeEventListener).
+// A mutable stub lets each test drive the readyState branch it needs.
+let docReadyState = 'complete';
+let dclListener = null;
+
 before(() => {
 	global.window = {
 		location: {href: 'https://wasavi.appsweets.net/', protocol: 'https:'}
 	};
 	global.document = {
-		documentElement: {setAttribute() {}}
+		documentElement: {setAttribute() {}},
+		get readyState() {return docReadyState;},
+		body: {},
+		addEventListener(type, handler) {
+			if (type === 'DOMContentLoaded') dclListener = handler;
+		},
+		removeEventListener(type, handler) {
+			if (type === 'DOMContentLoaded' && dclListener === handler) dclListener = null;
+		}
 	};
 	WasaviExtensionWrapper =
 		require('../core/frontend/extension_wrapper.js').WasaviExtensionWrapper;
@@ -53,6 +66,37 @@ describe('ExtensionWrapper.create override', () => {
 		});
 		assert.equal(urlInfo().externalUrl, 'http://plain.test/');
 		assert.equal(new WasaviExtensionWrapper().name, 'wasavi-test');
+	});
+});
+
+describe('ExtensionWrapper#ensureRun', () => {
+	after(() => {
+		docReadyState = 'complete';
+		dclListener = null;
+	});
+
+	it('runs the callback immediately when the document is already ready', () => {
+		docReadyState = 'complete';
+		let calledWith = null;
+		new WasaviExtensionWrapper().ensureRun(function () {
+			calledWith = Array.prototype.slice.call(arguments);
+		}, 'a', 'b');
+		assert.deepEqual(calledWith, ['a', 'b']);
+	});
+
+	it('defers the callback until DOMContentLoaded when still loading', () => {
+		docReadyState = 'loading';
+		let calledWith = null;
+		new WasaviExtensionWrapper().ensureRun(function () {
+			calledWith = Array.prototype.slice.call(arguments);
+		}, 'x', 'y');
+		// not invoked yet: a listener was registered instead
+		assert.equal(calledWith, null);
+		assert.equal(typeof dclListener, 'function');
+		// fire DOMContentLoaded; the listener should de-register itself and run
+		dclListener({type: 'DOMContentLoaded'});
+		assert.deepEqual(calledWith, ['x', 'y']);
+		assert.equal(dclListener, null);
 	});
 });
 
