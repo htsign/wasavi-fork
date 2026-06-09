@@ -23,8 +23,13 @@
 
 var SAVED_MESSAGE_VISIBLE_SECS = 2;
 
+/** @type {{getMessage(id: string): string | undefined, postMessage(message: object, callback?: (response: any) => void): void}} */
 var extension;
 
+/**
+ * @param {string | HTMLElement} arg
+ * @returns {HTMLElement | null}
+ */
 function $ (arg) {
 	return typeof arg == 'string' ? document.getElementById(arg) : arg;
 }
@@ -34,6 +39,10 @@ function $ (arg) {
  * ----------------
  */
 
+/**
+ * @param {Node} node
+ * @param {string} text
+ */
 function markup (node, text) {
 	var debug = /\* /.test(text);
 
@@ -47,6 +56,7 @@ function markup (node, text) {
 	text = text.replace(/\[br\](\[\/\w+\])/g, '$1');
 
 	var pattern = /((?:\\.|[^\[])+)|(\[\/?(\w+)[^\]]*\])/g;
+	/** @type {{name: string, node: Node}[]} */
 	var stack = [{name:'#root', node: node}];
 
 	for (var re; (re = pattern.exec(text)); ) {
@@ -103,19 +113,23 @@ function markup (node, text) {
 	}
 }
 
+/**
+ * @param {Record<string, any>} src
+ */
 function applySettings (src) {
 	/*
 	 * apply settings to form elements. each key is applied only when it is
 	 * present in src, so partial application is possible.
 	 */
 
+	/** @type {HTMLElement | null} */
 	var el;
 
 	// exrc
 	if ('exrc' in src) {
 		el = $('exrc');
 		if (el && el.nodeName == 'TEXTAREA') {
-			el.value = src.exrc;
+			(/** @type {HTMLTextAreaElement} */ (el)).value = src.exrc;
 		}
 	}
 
@@ -123,21 +137,21 @@ function applySettings (src) {
 	if (src.targets) {
 		for (var i in src.targets) {
 			el = $(i);
-			if (el && el.nodeName == 'INPUT' && el.type == 'checkbox') {
-				el.checked = src.targets[i];
+			if (el && el.nodeName == 'INPUT' && (/** @type {HTMLInputElement} */ (el)).type == 'checkbox') {
+				(/** @type {HTMLInputElement} */ (el)).checked = src.targets[i];
 			}
 		}
 	}
 
 	// quick activation
 	if ('quickActivation' in src) {
-		el = document.querySelector([
+		el = /** @type {HTMLElement | null} */ (document.querySelector([
 			'input',
 			'[name="quick-activation"]',
 			'[value="' + (src.quickActivation ? '1' : '0') + '"]'
-		].join(''));
+		].join('')));
 		if (el) {
-			el.checked = true;
+			(/** @type {HTMLInputElement} */ (el)).checked = true;
 		}
 	}
 
@@ -145,7 +159,7 @@ function applySettings (src) {
 	if ('siteOverrides' in src) {
 		el = $('site-overrides');
 		if (el && el.nodeName == 'TEXTAREA') {
-			el.value = src.siteOverrides;
+			(/** @type {HTMLTextAreaElement} */ (el)).value = src.siteOverrides;
 		}
 	}
 
@@ -153,7 +167,7 @@ function applySettings (src) {
 	if ('shortcut' in src) {
 		el = $('shortcut');
 		if (el && el.nodeName == 'INPUT') {
-			el.value = src.shortcut;
+			(/** @type {HTMLInputElement} */ (el)).value = src.shortcut;
 		}
 	}
 
@@ -161,32 +175,36 @@ function applySettings (src) {
 	if ('fontFamily' in src) {
 		el = $('font-family');
 		if (el && el.nodeName == 'INPUT') {
-			el.value = src.fontFamily;
+			(/** @type {HTMLInputElement} */ (el)).value = src.fontFamily;
 		}
 	}
 
 	// log mode
 	if ('logMode' in src) {
 		el = $('log-mode');
-		if (el && el.nodeName == 'INPUT' && el.type == 'checkbox') {
-			el.checked = src.logMode;
+		if (el && el.nodeName == 'INPUT' && (/** @type {HTMLInputElement} */ (el)).type == 'checkbox') {
+			(/** @type {HTMLInputElement} */ (el)).checked = src.logMode;
 		}
 	}
 
 	// upgrade action
 	if ('upgradeNotify' in src) {
 		el = $('upgrade-notify');
-		if (el && el.nodeName == 'INPUT' && el.type == 'checkbox') {
-			el.checked = src.upgradeNotify;
+		if (el && el.nodeName == 'INPUT' && (/** @type {HTMLInputElement} */ (el)).type == 'checkbox') {
+			(/** @type {HTMLInputElement} */ (el)).checked = src.upgradeNotify;
 		}
 	}
 }
 
+/**
+ * @param {{messageCatalog?: Record<string, {message: string}>} & Record<string, any>} req
+ */
 function initPage (req) {
 	/*
 	 * initialize form elements
 	 */
 
+	/** @type {HTMLElement | null} */
 	var el;
 
 	applySettings(req);
@@ -195,12 +213,13 @@ function initPage (req) {
 	 * replace all message ids to translated one
 	 */
 
-	var iter = document.createNodeIterator(
+	var iter = (/** @type {(root: Node, whatToShow?: number, filter?: NodeFilter | null, entityReferenceExpansion?: boolean) => NodeIterator} */ (document.createNodeIterator))(
 		document, window.NodeFilter.SHOW_TEXT, null, false);
 
+	/** @type {[Node, string][]} */
 	var texts = [];
 	for (var node = iter.nextNode(); node; node = iter.nextNode()) {
-		var re = /^\s*__MSG_(.+)__\s*$/.exec(node.textContent);
+		var re = /^\s*__MSG_(.+)__\s*$/.exec(/** @type {string} */ (node.textContent));
 		re && texts.push([node, re[1]]);
 	}
 
@@ -222,7 +241,7 @@ function initPage (req) {
 		}
 
 		node.nodeValue = '';
-		markup(node.parentNode, message);
+		markup(/** @type {Node} */ (node.parentNode), message);
 	});
 
 	/*
@@ -263,9 +282,10 @@ function initPage (req) {
 	 * transition
 	 */
 
-	var overlay = $('overlay');
+	var overlay = /** @type {HTMLElement} */ ($('overlay'));
+	/** @type {(e: Event) => void} */
 	var tend = function (e) {
-		e.target.parentNode && e.target.parentNode.removeChild(e.target);
+		(/** @type {Node} */ (e.target)).parentNode && (/** @type {Node} */ (e.target)).parentNode.removeChild(/** @type {Node} */ (e.target));
 	};
 
 	'transitionend webkitTransitionEnd oTransitionEnd msTransitionEnd'
@@ -280,19 +300,22 @@ function initPage (req) {
  * ----------------
  */
 
+/**
+ * @param {KeyboardEvent} e
+ */
 function handleKeydown (e) {
 	if (e.shiftKey && e.keyCode == 16 || e.ctrlKey && e.keyCode == 17) {
 		var codes = [];
 		e.shiftKey && codes.push('s');
 		e.ctrlKey && codes.push('c');
-		$('capture-wait').textContent =
-			$('capture-wait-buffer').textContent +
+		(/** @type {HTMLElement} */ ($('capture-wait'))).textContent =
+			(/** @type {HTMLElement} */ ($('capture-wait-buffer'))).textContent +
 			' <' + codes.join('-') + '- >';
 		return;
 	}
 
 	e.preventDefault();
-	$('capture').disabled = true;
+	(/** @type {HTMLButtonElement} */ ($('capture'))).disabled = true;
 	extension.postMessage(
 		{
 			type: 'query-shortcut',
@@ -304,36 +327,43 @@ function handleKeydown (e) {
 		},
 		function (res) {
 			if (res.result) {
-				var shortcut = $('shortcut');
+				var shortcut = /** @type {HTMLInputElement} */ ($('shortcut'));
 				shortcut.value +=
 					(shortcut.value.length ? ', ' : '') +
 					res.result;
 			}
 
-			$('capture').disabled = false;
-			$('capture').click();
+			(/** @type {HTMLButtonElement} */ ($('capture'))).disabled = false;
+			(/** @type {HTMLElement} */ ($('capture'))).click();
 		}
 	);
 }
 
+/**
+ * @param {KeyboardEvent} e
+ */
 function handleKeyup (e) {
-	$('capture-wait').textContent = $('capture-wait-buffer').textContent;
+	(/** @type {HTMLElement} */ ($('capture-wait'))).textContent = (/** @type {HTMLElement} */ ($('capture-wait-buffer'))).textContent;
 }
 
+/**
+ * @param {Event} e
+ */
 function handleCapture (e) {
-	var t = e.target;
+	/** @type {Node | null} */
+	var t = /** @type {Node} */ (e.target);
 	while (t && t.nodeName.toLowerCase() != 'button') {
 		t = t.parentNode;
 	}
-	if (t.classList.contains('wait')) {
-		t.classList.remove('wait');
+	if ((/** @type {HTMLElement} */ (t)).classList.contains('wait')) {
+		(/** @type {HTMLElement} */ (t)).classList.remove('wait');
 		document.body.removeEventListener('keydown', handleKeydown, true);
 		document.body.removeEventListener('keyup', handleKeyup, true);
 
 	}
 	else {
-		t.classList.add('wait');
-		$('capture-wait').textContent = $('capture-wait-buffer').textContent;
+		(/** @type {HTMLElement} */ (t)).classList.add('wait');
+		(/** @type {HTMLElement} */ ($('capture-wait'))).textContent = (/** @type {HTMLElement} */ ($('capture-wait-buffer'))).textContent;
 		document.body.addEventListener('keydown', handleKeydown, true);
 		document.body.addEventListener('keyup', handleKeyup, true);
 	}
@@ -344,23 +374,29 @@ function handleCapture (e) {
  * ----------------
  */
 
+/**
+ * @returns {{key: string, value: any}[]}
+ */
 function collectSettingItems () {
+	/** @type {{key: string, value: any}[]} */
 	var items = [];
+	/** @type {HTMLElement | null} */
 	var el;
 
 	// exrc
 	el = $('exrc');
 	if (el && el.nodeName == 'TEXTAREA') {
-		items.push({key:'exrc', value:el.value});
+		items.push({key:'exrc', value:(/** @type {HTMLTextAreaElement} */ (el)).value});
 	}
 
 	// targets
 	(function () {
+		/** @type {Record<string, boolean>} */
 		var targets = {};
 		Array.prototype.forEach.call(
 			document.querySelectorAll(
 				'#targets-container input[type="checkbox"]'),
-			function (node) {
+			function (/** @type {HTMLInputElement} */ node) {
 				var re = /^enable\w+/.exec(node.id);
 				if (!re) return;
 
@@ -372,39 +408,39 @@ function collectSettingItems () {
 	})();
 
 	// quick activation
-	el = document.querySelector('input[name="quick-activation"]:checked');
+	el = /** @type {HTMLElement | null} */ (document.querySelector('input[name="quick-activation"]:checked'));
 	if (el) {
-		items.push({key:'quickActivation', value:el.value == '1'});
+		items.push({key:'quickActivation', value:(/** @type {HTMLInputElement} */ (el)).value == '1'});
 	}
 
 	// site overrides
 	el = $('site-overrides');
 	if (el && el.nodeName == 'TEXTAREA') {
-		items.push({key:'siteOverrides', value:el.value});
+		items.push({key:'siteOverrides', value:(/** @type {HTMLTextAreaElement} */ (el)).value});
 	}
 
 	// shortcut
 	el = $('shortcut');
 	if (el) {
-		items.push({key:'shortcut', value:el.value});
+		items.push({key:'shortcut', value:(/** @type {HTMLInputElement} */ (el)).value});
 	}
 
 	// font family
 	el = $('font-family');
 	if (el && el.nodeName == 'INPUT') {
-		items.push({key:'fontFamily', value:el.value});
+		items.push({key:'fontFamily', value:(/** @type {HTMLInputElement} */ (el)).value});
 	}
 
 	// log mode
 	el = $('log-mode');
-	if (el && el.nodeName == 'INPUT' && el.type == 'checkbox') {
-		items.push({key:'logMode', value:el.checked});
+	if (el && el.nodeName == 'INPUT' && (/** @type {HTMLInputElement} */ (el)).type == 'checkbox') {
+		items.push({key:'logMode', value:(/** @type {HTMLInputElement} */ (el)).checked});
 	}
 
 	// upgrade action
 	el = $('upgrade-notify');
-	if (el && el.nodeName == 'INPUT' && el.type == 'checkbox') {
-		items.push({key:'upgradeNotify', value:el.checked});
+	if (el && el.nodeName == 'INPUT' && (/** @type {HTMLInputElement} */ (el)).type == 'checkbox') {
+		items.push({key:'upgradeNotify', value:(/** @type {HTMLInputElement} */ (el)).checked});
 	}
 
 	return items;
@@ -424,7 +460,7 @@ function handleOptionsSave () {
 			if (saveResult) {
 				saveResult.style.display = 'inline';
 				setTimeout(function () {
-					saveResult.style.display = '';
+					(/** @type {HTMLElement} */ (saveResult)).style.display = '';
 				}, 1000 * SAVED_MESSAGE_VISIBLE_SECS);
 			}
 		}
@@ -436,12 +472,19 @@ function handleOptionsSave () {
  * ----------------
  */
 
+/**
+ * @returns {string[]}
+ */
 function getKnownTargetIds () {
-	return Array.prototype.map.call(
+	return /** @type {string[]} */ (Array.prototype.map.call(
 		document.querySelectorAll('#targets-container input[type="checkbox"]'),
-		function (node) {return node.id});
+		function (/** @type {HTMLInputElement} */ node) {return node.id}));
 }
 
+/**
+ * @param {string} msg
+ * @param {boolean} isError
+ */
 function showIoResult (msg, isError) {
 	var el = $('io-result');
 	if (!el) return;
@@ -454,6 +497,7 @@ function handleOptionsExport () {
 	showIoResult('', false);
 
 	var items = collectSettingItems();
+	/** @type {Record<string, unknown>} */
 	var settings = {};
 	items.forEach(function (item) {
 		settings[item.key] = item.value;
@@ -483,8 +527,11 @@ function handleOptionsImport () {
 	input && input.click();
 }
 
+/**
+ * @param {Event} e
+ */
 function handleImportFileChange (e) {
-	var input = e.target;
+	var input = /** @type {HTMLInputElement} */ (e.target);
 	var file = input.files && input.files[0];
 	if (!file) {
 		input.value = '';
@@ -493,7 +540,7 @@ function handleImportFileChange (e) {
 
 	var reader = new FileReader();
 	reader.onload = function () {
-		var result = SettingsIO.parseImportData(reader.result, getKnownTargetIds());
+		var result = SettingsIO.parseImportData(/** @type {string} */ (reader.result), getKnownTargetIds());
 		if (!result.ok) {
 			showIoResult(getMessage('option_import_error'), true);
 			input.value = '';
@@ -504,6 +551,7 @@ function handleImportFileChange (e) {
 
 		// reflect only the validated values that were actually persisted,
 		// so the form never shows settings that import rejected
+		/** @type {Record<string, unknown>} */
 		var applied = {};
 		items.forEach(function (item) {
 			applied[item.key] = item.value;
@@ -526,6 +574,10 @@ function handleImportFileChange (e) {
 	reader.readAsText(file);
 }
 
+/**
+ * @param {string} id
+ * @returns {string}
+ */
 function getMessage (id) {
 	return extension.getMessage(id) || id;
 }
@@ -536,8 +588,8 @@ function getMessage (id) {
  */
 
 function handleOptionsInit () {
-	var message = $('opt-init-confirm').textContent;
-	window.confirm(message) && extension.postMessage(
+	var message = (/** @type {HTMLElement} */ ($('opt-init-confirm'))).textContent;
+	window.confirm(/** @type {string} */ (message)) && extension.postMessage(
 		{type:'reset-options'},
 		function () {
 			window.location.reload();
@@ -545,9 +597,11 @@ function handleOptionsInit () {
 	);
 }
 
-global.WasaviOptions = {
+// `global` is the IIFE-injected global object; TS infers `this` as `undefined`
+// for this script, so route through `unknown` to attach the public export.
+(/** @type {Record<string, unknown>} */ (/** @type {unknown} */ (global))).WasaviOptions = {
 	get extension () {return extension},
-	set extension (v) {extension = v},
+	set extension (/** @type {typeof extension} */ v) {extension = v},
 	initPage: initPage
 };
 

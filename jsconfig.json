@@ -5,7 +5,7 @@
     "noEmit": true,
     "strict": true,
     "target": "ES2022",
-    "lib": ["ES2022"],
+    "lib": ["ES2022", "DOM"],
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "types": [],
@@ -13,6 +13,8 @@
   },
   "include": [
     "src/core/scripts/settings-io.js",
+    "src/core/scripts/options-core.js",
+    "src/core/scripts/options-globals.d.ts",
     "src/core/backend/lib/SimilarityComputer.js"
   ]
 }
