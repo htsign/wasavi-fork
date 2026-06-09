@@ -55,32 +55,43 @@ Object.defineProperties(Array.prototype, {
  */
 
 // DOM manipulators
+/**
+ * @param {string | HTMLElement} arg
+ * @returns {HTMLElement | null}
+ */
 g.$ = function (arg) {
 	return typeof arg == 'string' ? document.getElementById(arg) : arg;
 };
+/** @returns {number} */
 g.docScrollLeft = function () {
 	return Math.max(document.documentElement.scrollLeft, document.body.scrollLeft);
 };
+/** @returns {number} */
 g.docScrollTop = function () {
 	return Math.max(document.documentElement.scrollTop, document.body.scrollTop);
 };
+/** @returns {number} */
 g.docScrollWidth = function () {
 	return Math.max(document.documentElement.scrollWidth, document.body.scrollWidth);
 };
+/** @returns {number} */
 g.docScrollHeight = function () {
 	return Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
 };
+/** @returns {number} */
 g.docClientWidth = function () {
 	return Math.min(document.documentElement.clientWidth, document.body.clientWidth)
 };
+/** @returns {number} */
 g.docClientHeight = function () {
 	return Math.min(document.documentElement.clientHeight, document.body.clientHeight)
 };
+/** @param {string | HTMLElement} node */
 g.emptyNodeContents = function (node) {
-	node = $(node);
-	if (!node) return;
+	var elm = $(node);
+	if (!elm) return;
 	var r = document.createRange();
-	r.selectNodeContents(node);
+	r.selectNodeContents(elm);
 	r.deleteContents();
 };
 g.removeChild = function () {
@@ -89,12 +100,21 @@ g.removeChild = function () {
 		elm && elm.parentNode && elm.parentNode.removeChild(elm);
 	}
 };
+/**
+ * @param {Node} target
+ * @returns {boolean}
+ */
 g.isMultilineTextInput = function (target) {
 	return target.nodeName != 'INPUT';
 };
+/**
+ * @param {HTMLElement} src
+ * @param {Record<string, string>} styles
+ */
 g.style = function (src, styles) {
+	var dest = /** @type {Record<string, string>} */ (/** @type {unknown} */ (src.style));
 	for (var i in styles) {
-		src.style[i] = styles[i];
+		dest[i] = styles[i];
 	}
 };
 
@@ -104,26 +124,52 @@ g.$call = function () {
 		typeof arguments[i] == 'function' && arguments[i]();
 	}
 };
+/**
+ * @template {object} T
+ * @template {object} U
+ * @param {T} dest
+ * @param {U} src
+ * @returns {T & U}
+ */
 g.extend = function (dest, src) {
-	for (var p in src) {
-		dest[p] = src[p];
+	// shallow merge: cannot be statically proven to yield T & U
+	var d = /** @type {Record<string, unknown>} */ (dest);
+	var s = /** @type {Record<string, unknown>} */ (src);
+	for (var p in s) {
+		d[p] = s[p];
 	}
-	return dest;
+	return /** @type {T & U} */ (dest);
 };
+/**
+ * @param {string} src
+ * @returns {unknown}
+ */
 g.parseJson = function (src) {
+	/** @type {unknown} */
+	var result;
 	try {
-		src = JSON.parse(src);
+		result = JSON.parse(src);
 	}
 	catch (e) {
-		src = null;
+		result = null;
 	}
-	return src;
+	return result;
 };
+/**
+ * @param {Record<string, string>} o
+ * @returns {Record<string, string>}
+ */
 g.reverseObject = function (o) {
+	/** @type {Record<string, string>} */
 	var result = {};
 	for (var i in o) {result[o[i]] = i;}
 	return result;
 };
+/**
+ * @param {string} letter
+ * @param {number} times
+ * @returns {string}
+ */
 g.multiply = function (letter, times) {
 	if (letter == '' || times <= 0) return '';
 	var result = letter;
@@ -132,6 +178,10 @@ g.multiply = function (letter, times) {
 	}
 	return result.length == times ? result : result.substring(0, letter.length * times);
 };
+/**
+ * @param {unknown} s
+ * @returns {string}
+ */
 g.toVisibleString = function (s) {
 	// treat falsy values as empty string
 	if (s === false
@@ -156,17 +206,21 @@ g.toVisibleString = function (s) {
 		if ('toString' in s && typeof s.toString == 'function') {
 			s = s.toString();
 		}
-		if (/^\[object\s+[^\]]+\]$/.test(s)) {
+		if (/^\[object\s+[^\]]+\]$/.test(String(s))) {
 			return '';
 		}
 	}
 
-	s = '' + s;
-	return s
+	var str = '' + s;
+	return str
 		.replace(/[\u0000-\u001f]/g, a => '^' + String.fromCharCode(a.charCodeAt(0) + 64))
 		.replace(/\u007f/g, '^_')
 		.replace(/\ue000/g, '');
 };
+/**
+ * @param {string | number} s
+ * @returns {string}
+ */
 g.toVisibleControl = function (s) {
 	return typeof s == 'number' ?
 		_toVisibleControl(s) :
@@ -174,6 +228,10 @@ g.toVisibleControl = function (s) {
 			return _toVisibleControl(a.charCodeAt(0));
 		});
 };
+/**
+ * @param {string | number} s
+ * @returns {string}
+ */
 g.toNativeControl = function (s) {
 	return typeof s == 'number' ?
 		_toNativeControl(s) :
@@ -181,6 +239,10 @@ g.toNativeControl = function (s) {
 			return _toNativeControl(a.charCodeAt(0));
 		});
 };
+/**
+ * @param {number} code
+ * @returns {string}
+ */
 g._toVisibleControl = function (code) {
 	// U+2400 - U+243F: Unicode Control Pictures
 	if (code == 0x7f) {
@@ -191,6 +253,10 @@ g._toVisibleControl = function (code) {
 	}
 	return String.fromCharCode(code);
 };
+/**
+ * @param {number} code
+ * @returns {string}
+ */
 g._toNativeControl = function (code) {
 	if (code == 0x2421) {
 		return '\u007f';
@@ -200,6 +266,11 @@ g._toNativeControl = function (code) {
 	}
 	return String.fromCharCode(code);
 };
+/**
+ * @param {string} s
+ * @param {string} [ch]
+ * @returns {string}
+ */
 g.trimTerm = function (s, ch) {
 	ch || (ch = '\n');
 	if (s.length && s.substr(-1) == ch) {
@@ -207,45 +278,96 @@ g.trimTerm = function (s, ch) {
 	}
 	return s;
 };
+/**
+ * @param {unknown} a
+ * @returns {string}
+ */
 g.getObjectType = function (a) {
     return Object.prototype.toString.call(a).replace(/^\[object\s+|\]$/g, '');
 };
-g.isObject = function (a) {
-	return getObjectType(a) == 'Object';
+/**
+ * @param {unknown} value
+ * @returns {value is Record<string, unknown>}
+ */
+g.isObject = function (value) {
+	return getObjectType(value) == 'Object';
 };
-g.isString = function (a) {
-	return getObjectType(a) == 'String';
+/**
+ * @param {unknown} value
+ * @returns {value is string}
+ */
+g.isString = function (value) {
+	return getObjectType(value) == 'String';
 };
-g.isNumber = function (a) {
-	return getObjectType(a) == 'Number';
+/**
+ * @param {unknown} value
+ * @returns {value is number}
+ */
+g.isNumber = function (value) {
+	return getObjectType(value) == 'Number';
 };
-g.isBoolean = function (a) {
-	return getObjectType(a) == 'Boolean';
+/**
+ * @param {unknown} value
+ * @returns {value is boolean}
+ */
+g.isBoolean = function (value) {
+	return getObjectType(value) == 'Boolean';
 };
-g.isArray = function (a) {
+/**
+ * @param {unknown} value
+ * @returns {value is unknown[]}
+ */
+g.isArray = function (value) {
 	// TODO: accept ducktyping?
-	return getObjectType(a) == 'Array';
+	return getObjectType(value) == 'Array';
 };
-g.isFunction = function (a) {
-	return getObjectType(a) == 'Function';
+/**
+ * @param {unknown} value
+ * @returns {value is Function}
+ */
+g.isFunction = function (value) {
+	return getObjectType(value) == 'Function';
 };
-g.isGenerator = function (a) {
-	return getObjectType(a) == 'GeneratorFunction';
+/**
+ * @param {unknown} value
+ * @returns {value is GeneratorFunction}
+ */
+g.isGenerator = function (value) {
+	return getObjectType(value) == 'GeneratorFunction';
 };
+/**
+ * @template T
+ * @param {ArrayLike<T>} arg
+ * @param {number} [index]
+ * @returns {T[]}
+ */
 g.toArray = function (arg, index) {
 	return Array.prototype.slice.call(arg, index || 0);
 };
+/**
+ * @param {number} min
+ * @param {number} value
+ * @param {number} max
+ * @returns {number}
+ */
 g.minmax = function (min, value, max) {
 	return Math.max(min, Math.min(value, max));
 };
+/**
+ * @param {string} s
+ * @returns {string}
+ */
 g.getLiteralRegexp = function (s) {
 	return s.replace(/[.+*?(){}]/g, '\\$&');
 };
 
 // a bit complicated functions
+/** @returns {string} */
 g._ = function () {
+	/** @type {unknown[]} */
 	var args = toArray(arguments);
-	var format = args.shift();
+	// declared signature guarantees the first argument is the format string
+	var format = /** @type {string} */ (args.shift());
 	return format.replace(/\{(?:([a-z]+):)?(\d+)\}/ig, function ($0, baseWord, index) {
 		if (baseWord == undefined || baseWord == '') {
 			return toVisibleString(args[index]);
@@ -309,10 +431,16 @@ g.publish = function () {
 		}
 	}
 };
+/**
+ * @param {string} source
+ * @returns {{ result: number } | { error: string } | {}}
+ */
 g.expr = function (source) {
+	/** @type {string[]} */
 	var tokens = [];
 	var i = 0;
 
+	/** @returns {number} */
 	function add () {
 		var r = mul();
 loop:	while (true) {
@@ -324,6 +452,7 @@ loop:	while (true) {
 		}
 		return r;
 	}
+	/** @returns {number} */
 	function mul () {
 		var r = fact();
 loop:	while (true) {
@@ -336,9 +465,12 @@ loop:	while (true) {
 		}
 		return r;
 	}
+	/** @returns {number} */
 	function fact () {
-		var r = tokens[i++];
-		if (r == '(') {
+		var token = tokens[i++];
+		/** @type {number} */
+		var r;
+		if (token == '(') {
 			r = add();
 			if (tokens[i++] != ')') {
 				throw new SyntaxError(_('Missing ")".'));
@@ -346,21 +478,21 @@ loop:	while (true) {
 		}
 		else {
 			var sign = '';
-			if (/^0x/.test(r)) {
-				r = parseInt(r.substring(2), 16);
+			if (/^0x/.test(token)) {
+				r = parseInt(token.substring(2), 16);
 			}
-			else if (/^0[0-7]+/.test(r)) {
-				r = parseInt(r, 8);
+			else if (/^0[0-7]+/.test(token)) {
+				r = parseInt(token, 8);
 			}
-			else if (/^0b/.test(r)) {
-				r = parseInt(r.substring(2).replace(/_/g, ''), 2);
+			else if (/^0b/.test(token)) {
+				r = parseInt(token.substring(2).replace(/_/g, ''), 2);
 			}
 			else {
-				if (r == '+' || r == '-') {
-					sign = r;
-					r = tokens[i++];
+				if (token == '+' || token == '-') {
+					sign = token;
+					token = tokens[i++];
 				}
-				r = parseFloat(sign + r, 10);
+				r = parseFloat(sign + token);
 			}
 			if (isNaN(r)) {
 				throw new SyntaxError(_('Missing a number.'));
@@ -398,10 +530,15 @@ loop:	while (true) {
 		return {result: result};
 	}
 	catch (e) {
-		return {error: e.message};
+		return {error: e instanceof Error ? e.message : String(e)};
 	}
 };
 g.strftime = (function () {
+	/** @typedef {string | string[] | undefined} Locale */
+	/** @typedef {(s: string, w: number, key?: string) => string} NumFormatter */
+	/** @typedef {(s: string, format: string, key: string) => string} StrFormatter */
+	/** @typedef {(d: Date, l: Locale, f: string, w?: number) => string} Translator */
+
 	const weekdays = {
 		long:'Sunday Monday Tuesday Wednesday Thursday Friday Saturday'.split(' '),
 		short:'Sun Mon Tue Wed Thu Fri Sat'.split(' ')
@@ -410,11 +547,13 @@ g.strftime = (function () {
 		long:'January February March April May June July August September October November December'.split(' '),
 		short:'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' ')
 	};
+	/** @type {Record<string, NumFormatter>} */
 	const nummap = {
 		'_':function (s,w) {return s.length < w ? (multiply(' ', w) + s).substr(-w) : s},
 		'-':function (s,w) {return s.replace(/^[ 0]+/, '') || '0'},
 		'0':function (s,w) {return s.length < w ? (multiply('0', w) + s).substr(-w) : s}
 	};
+	/** @type {Record<string, StrFormatter>} */
 	const strmap = {
 		'^':function (s, format, key) {
 			// make the behavior the same as mysterious glibc strftime: P is not capitalized
@@ -433,6 +572,7 @@ g.strftime = (function () {
 			return s;
 		}
 	};
+	/** @type {Record<string, Translator>} */
 	const translators = {
 		'%':function () {return '%'},
 		a:function (d,l,f,w) {return ff(Intl.DateTimeFormat(l, {weekday:'short'}).format(d), f)},
@@ -444,13 +584,13 @@ g.strftime = (function () {
 		d:function (d,l,f,w) {return ff(d.getDate(), fixformat(f, '0'), w || 2)},
 		D:function (d,l,f,w) {
 			return 'mdy'.split('')
-				.map(function(a){return this[a](d, l, a + f.substring(1))}, this)
+				.map(/** @this {Record<string, Translator>} */ function(a){return this[a](d, l, a + f.substring(1))}, this)
 				.join('/');
 		},
 		e:function (d,l,f,w) {return ff(d.getDate(), fixformat(f, '_'), w || 2)},
 		F:function (d,l,f,w) {
 			return 'Ymd'.split('')
-				.map(function(a){return this[a](d, l, a + f.substring(1))}, this)
+				.map(/** @this {Record<string, Translator>} */ function(a){return this[a](d, l, a + f.substring(1))}, this)
 				.join('-');
 		},
 		g:function (d,l,f,w) {
@@ -478,7 +618,7 @@ g.strftime = (function () {
 		r:function (d,l,f,w) {return [this.I(d, l, 'I', 0), ':', this.M(d, l, 'M', 0), ':', this.S(d, l, 'S', 0), ' ', this.p(d, l, 'p', 0)].join('')},
 		R:function (d,l,f,w) {
 			return 'HM'.split('')
-				.map(function(a){return this[a](d, l, a + f.substring(1))}, this)
+				.map(/** @this {Record<string, Translator>} */ function(a){return this[a](d, l, a + f.substring(1))}, this)
 				.join(':');
 		},
 		s:function (d,l,f,w) {return ff(Math.floor(d.getTime() / 1000), fixformat(f, '-'), 0)},
@@ -486,7 +626,7 @@ g.strftime = (function () {
 		t:function (d,l,f,w) {return '\t'},
 		T:function (d,l,f,w) {
 			return 'HMS'.split('')
-				.map(function(a){return this[a](d, l, a + f.substring(1))}, this)
+				.map(/** @this {Record<string, Translator>} */ function(a){return this[a](d, l, a + f.substring(1))}, this)
 				.join(':');
 		},
 		u:function (d,l,f,w) {return ff(d.getDay() == 0 ? 7 : d.getDay(), fixformat(f, '0'), w || 0)},
@@ -494,6 +634,7 @@ g.strftime = (function () {
 		V:function (d,l,f,w) {
 			var woy = parseInt(this.W(d, l, 'W-', 0), 10);
 			var dow1_1 = (new Date('' + d.getFullYear() + '/1/1')).getDay();
+			/** @type {number | string} */
 			var idow = woy + (dow1_1 > 4 || dow1_1 <= 1 ? 0 : 1);
 			if (idow == 53 && (new Date('' + d.getFullYear() + '/12/31')).getDay() < 4) {
 				idow = 1;
@@ -504,7 +645,7 @@ g.strftime = (function () {
 			return ff(idow, fixformat(f, '0'), w || 2);
 		},
 		w:function (d,l,f,w) {return ff(d.getDay(), fixformat(f, '0'), w || 1)},
-		W:function (d,l,f,w) {return ff(parseInt(((parseInt(this.j(d, l, 'j-', 0), 10)) + (7 - this.u(d, l, 'u-', 0))) / 7, 10), fixformat(f, '0'), w || 2)},
+		W:function (d,l,f,w) {return ff(parseInt('' + (((parseInt(this.j(d, l, 'j-', 0), 10)) + (7 - Number(this.u(d, l, 'u-', 0)))) / 7), 10), fixformat(f, '0'), w || 2)},
 		x:function (d,l,f,w) {return ff(d.toLocaleDateString(l, {year:'2-digit', month:'2-digit', day:'2-digit'}), f)},
 		X:function (d,l,f,w) {return ff(d.toLocaleTimeString(l, {hour:'2-digit', minute:'2-digit', second:'2-digit'}), f)},
 		y:function (d,l,f,w) {return ff(d.getFullYear() % 100, fixformat(f, '0'), w || 2)},
@@ -516,34 +657,47 @@ g.strftime = (function () {
 			return sign + ('00' + Math.floor(t / 60)).substr(-2) + ('00' + (t % 60)).substr(-2);
 		},
 		Z:function (d,l,f,w) {
-			var result = Intl.DateTimeFormat(l, {year:'numeric', timeZoneName:'long'}).format(d);
-			result = result.split(/,\s*/);
-			if (result.length == 1) return ff(result[0], f);
+			var formatted = Intl.DateTimeFormat(l, {year:'numeric', timeZoneName:'long'}).format(d);
+			var parts = formatted.split(/,\s*/);
+			if (parts.length == 1) return ff(parts[0], f);
 
-			result = result[1].split(/\s+/).map(unit => unit.charAt(0)).join('');
+			var result = parts[1].split(/\s+/).map(unit => unit.charAt(0)).join('');
 
 			return ff(result, f);
 		}
 	}
+	/**
+	 * @param {string} format
+	 * @param {string} def
+	 * @returns {string}
+	 */
 	function fixformat (format, def) {
 		var f = format.substring(1).replace(/[^_\-0^#]/g, '');
 		return f == '' ? format.charAt(0) + def : format;
 	}
+	/**
+	 * @param {string | number} s
+	 * @param {string} format
+	 * @param {number} [width]
+	 * @returns {string}
+	 */
 	function ff (s, format, width) {
 		var key = format.charAt(0);
-		s = '' + s;
+		var str = '' + s;
 		format = format.substring(1);
-		if (isNumber(width) && width > 1 && /^\d+$/.test(s) && format in nummap) {
-			s = nummap[format](s, width, key);
+		if (isNumber(width) && width > 1 && /^\d+$/.test(str) && format in nummap) {
+			str = nummap[format](str, width, key);
 		}
 		else if (format in strmap) {
-			s = strmap[format](s, format, key);
+			str = strmap[format](str, format, key);
 		}
-		return s;
+		return str;
 	}
+	/** @returns {string | false} */
 	function strftime () {
 		var format = arguments[0];
 		var datetime = arguments[1] || new Date;
+		/** @type {Locale} */
 		var locale;
 		if (!isString(format)) return false;
 		if (!(datetime instanceof Date)) return false;
@@ -574,33 +728,47 @@ g.strftime = (function () {
 	}
 	return strftime;
 })();
+/**
+ * @template {unknown[]} Args
+ * @template T
+ * @param {(...args: Args) => Generator<unknown, T, unknown>} generatorFn
+ * @param {unknown} thisObj
+ * @param {Args} args
+ * @returns {Promise<T>}
+ */
 g.execGenerator = function (generatorFn, thisObj, ...args) {
 	if (!isGenerator(generatorFn)) {
 		throw new TypeError('execGenerator: first argument is not a generator');
 	}
 
 	return new Promise((resolve, reject) => {
+		/** @param {unknown} [value] */
 		function next (value) {
 			run(generator.next, value);
 		}
 
+		/** @param {unknown} error */
 		function raise (error) {
 			run(generator.throw, error);
 		}
 
+		/**
+		 * @param {(this: Generator<unknown, T, unknown>, arg: unknown) => IteratorResult<unknown, T>} f
+		 * @param {unknown} a
+		 */
 		function run (f, a) {
+			/** @type {IteratorResult<unknown, T>} */
+			var result;
 			try {
-				var result = f.call(generator, a);
+				result = f.call(generator, a);
 			}
 			catch (ex) {
 				reject(ex);
-				generator = generatorFn = thisObj = args = null;
 				return;
 			}
 
 			if (result.done) {
 				resolve(result.value);
-				generator = generatorFn = thisObj = args = null;
 				return;
 			}
 
@@ -612,10 +780,17 @@ g.execGenerator = function (generatorFn, thisObj, ...args) {
 			}
 		}
 
+		/** @type {Generator<unknown, T, unknown>} */
 		var generator = generatorFn.apply(thisObj, args);
 		next();
 	});
 };
+/**
+ * @param {string} s
+ * @param {string | RegExp} d
+ * @param {number} num
+ * @returns {string[]}
+ */
 g.splitex = function (s, d, num) {
 	s = '' + s;
 	num = num - 0;
@@ -632,9 +807,11 @@ g.splitex = function (s, d, num) {
 	if (num == 1) return [s];
 
 	let regex = new RegExp(isString(d) ? getLiteralRegexp(d) : d, 'g');
+	/** @type {string[]} */
 	let result = [];
 	let from = 0;
-	let re;
+	/** @type {RegExpExecArray | null} */
+	let re = null;
 
 	while (result.length < num && (re = regex.exec(s))) {
 		result.push(s.substring(from, re.index));
@@ -655,6 +832,6 @@ g.splitex = function (s, d, num) {
 	return result;
 };
 
-})(typeof global == 'object' ? global : window);
+})(typeof globalThis == 'object' ? globalThis : window);
 
 // vim:set ts=4 sw=4 fenc=UTF-8 ff=unix ft=javascript fdm=marker :

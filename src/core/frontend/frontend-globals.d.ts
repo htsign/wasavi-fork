@@ -4,6 +4,15 @@
 // Type-only; emits no runtime code. The `Wasavi` namespace is intentionally
 // out of scope here (handled separately).
 
+// === prototype extensions (utils.js) =====================================
+
+interface Array<T> {
+  /** First element, or undefined when empty (utils.js Array.prototype getter/setter). */
+  firstItem: T | undefined;
+  /** Last element, or undefined when empty (utils.js Array.prototype getter/setter). */
+  lastItem: T | undefined;
+}
+
 // === DOM manipulators (utils.js) =========================================
 
 /** Resolve an id string to its element, or pass an element through. */
