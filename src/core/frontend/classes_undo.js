@@ -858,6 +858,7 @@ class EditLogger {
 		this.logMax = max;
 		this.clusterNestLevel = -1;
 		this.logLength = 0;
+		this.currentPosition = 0;
 		this.isClean = false;
 
 		publish(this,
@@ -882,6 +883,9 @@ class EditLogger {
 				},
 				logLength:function () {
 					return logs.length;
+				},
+				currentPosition:function () {
+					return currentPosition;
 				},
 				isClean:function () {
 					return currentPosition < 0 || currentPosition >= logs.length ?
