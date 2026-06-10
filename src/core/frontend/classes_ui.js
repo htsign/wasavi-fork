@@ -502,7 +502,7 @@ class CursorUI {
 
 				buffer.adjustBackgroundImage();
 				buffer.adjustLineNumber(app.config.vars.relativenumber);
-				buffer.adjustWrapGuide(/** @type {number} */ (app.config.vars.textwidth), app.charWidth);
+				buffer.adjustWrapGuide(app.config.vars.textwidth, app.charWidth);
 				buffer.updateActiveRow();
 			}
 
@@ -604,7 +604,7 @@ class CursorUI {
 			}
 
 			buffer.adjustLineNumberClass(
-				/** @type {boolean} */ (app.config.vars.number), /** @type {boolean} */ (app.config.vars.relativenumber));
+				app.config.vars.number, app.config.vars.relativenumber);
 
 			var caret = getCommandCursorCoord();
 			var elm = buffer.elm;

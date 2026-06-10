@@ -77,7 +77,7 @@ const Wasavi = g.Wasavi;
 		bracketNode = buffer.emphasis(initialPos, 1)[0];
 
 		let ss = buffer.selectionStart;
-		let count = minmax(1, /** @type {number} */ (app.config.vars.matchtime), BLINK_COUNT_MAX);
+		let count = minmax(1, app.config.vars.matchtime, BLINK_COUNT_MAX);
 		let visible = true;
 
 		/** @type {{editable: {setSelectionRange(node: Node, col: number): void}}} */
@@ -210,7 +210,7 @@ class SearchUtils {
 		 * @returns {number}
 		 */
 		function findNextQuote(line, col, quoteChar) {
-			var escapeChar = /** @type {string} */ (app.config.vars.quoteescape);
+			var escapeChar = app.config.vars.quoteescape;
 			for (var goal = line.length; col < goal; col++) {
 				var c = line.charAt(col);
 				if (c == escapeChar) {
@@ -229,7 +229,7 @@ class SearchUtils {
 		 * @returns {number}
 		 */
 		function findPrevQuote(line, col, quoteChar) {
-			var escapeChar = /** @type {string} */ (app.config.vars.quoteescape);
+			var escapeChar = app.config.vars.quoteescape;
 			while (col-- > 0) {
 				var n = 0;
 				while (col - n > 0 && line.charAt(col - n - 1) == escapeChar) {
@@ -254,7 +254,7 @@ class SearchUtils {
 			var c = buffer.charAt(n);
 			if (spaces.test(c)) return 0;
 			if (bigword) return 1;
-			return buffer.charClassAt(n, false, /** @type {RegExp} */ (app.config.vars.iskeyword)) | 0x10000;
+			return buffer.charClassAt(n, false, app.config.vars.iskeyword) | 0x10000;
 		}
 		/** @param {boolean} bigword */
 		function backToBoundary(bigword) {
@@ -349,7 +349,7 @@ class SearchUtils {
 		function getSections() {
 			if (!sections) {
 				try {
-					setSectionMacros(/** @type {string} */ (app.config.vars.sections));
+					setSectionMacros(app.config.vars.sections);
 				}
 				catch (e) {
 					sections = [];
@@ -361,7 +361,7 @@ class SearchUtils {
 		function getParagraphs() {
 			if (!paragraphs) {
 				try {
-					setParagraphMacros(/** @type {string} */ (app.config.vars.paragraphs));
+					setParagraphMacros(app.config.vars.paragraphs);
 				}
 				catch (e) {
 					paragraphs = [];

@@ -1477,7 +1477,7 @@ var cache = {};
 
 		// two args: define new abbreviation
 		else if (lhs != undefined && rhs != undefined) {
-			if (!(/** @type {RegExp} */ (app.config.vars.iskeyword)).test(lhs.substr(-1))) {
+			if (!app.config.vars.iskeyword.test(lhs.substr(-1))) {
 				return _('The keyword of abbreviation must end with a word character.');
 			}
 
@@ -1527,7 +1527,7 @@ var cache = {};
 			content:content
 		});
 		var copied = a.range[1] - a.range[0] + 1;
-		if (copied >= /** @type {number} */ (app.config.vars.report)) {
+		if (copied >= app.config.vars.report) {
 			app.low.requestShowMessage(_('Copied {0} {line:0}.', copied));
 		}
 		var finalRow = minmax(0, lineNumber + 1 + copied - 1, t.rowLength - 1);
@@ -1541,7 +1541,7 @@ var cache = {};
 		app.edit.yank(deleted, true, a.flags.register ? /** @type {string} */ (a.register) : '');
 		app.edit.deleteSelection();
 		t.isLineOrientSelection = false;
-		if (deleted >= /** @type {number} */ (app.config.vars.report)) {
+		if (deleted >= app.config.vars.report) {
 			app.low.requestShowMessage(_('Deleted {0} {line:0}.', deleted));
 		}
 		var n = new Wasavi.Position(Math.min(a.range[0], t.rowLength - 1), 0);
@@ -2061,7 +2061,7 @@ var cache = {};
 				});
 			}
 
-			if (rows >= /** @type {number} */ (app.config.vars.report)) {
+			if (rows >= app.config.vars.report) {
 				app.low.requestShowMessage(_('Moved {0} {line:0}.', rows));
 			}
 
@@ -2423,7 +2423,7 @@ var cache = {};
 				}
 			}
 
-			if (worker.rows >= /** @type {number} */ (app.config.vars.report)) {
+			if (worker.rows >= app.config.vars.report) {
 				app.low.requestShowMessage(_('Sorted {0} {line:0}.', worker.rows));
 			}
 

@@ -235,6 +235,81 @@ interface WasaviConfigInfo {
   readonly defaultValue: unknown;
 }
 
+/** Runtime values of every active vi/wasavi option (wasavi.js Configurator definition). */
+interface WasaviConfigVars {
+  autoindent: boolean;
+  autoprint: boolean;
+  autowrite: boolean;
+  beautify: boolean;
+  edcompatible: boolean;
+  errorbells: boolean;
+  exrc: boolean;
+  ignorecase: boolean;
+  list: boolean;
+  magic: boolean;
+  mesg: boolean;
+  number: boolean;
+  prompt: boolean;
+  readonly: boolean;
+  redraw: boolean;
+  remap: boolean;
+  showmatch: boolean;
+  showmode: boolean;
+  slowopen: boolean;
+  terse: boolean;
+  warn: boolean;
+  wrapscan: boolean;
+  writeany: boolean;
+  smooth: boolean;
+  fullscreen: boolean;
+  jkdenotative: boolean;
+  stripe: boolean;
+  syncsize: boolean;
+  override: boolean;
+  cursorblink: boolean;
+  esctoblur: boolean;
+  launchbell: boolean;
+  expandtab: boolean;
+  searchincr: boolean;
+  smartcase: boolean;
+  relativenumber: boolean;
+  modified: boolean;
+  cursorline: boolean;
+  cursorcolumn: boolean;
+  visualbell: boolean;
+
+  report: number;
+  scroll: number;
+  shiftwidth: number;
+  tabstop: number;
+  taglength: number;
+  window: number;
+  wrapmargin: number;
+  bellvolume: number;
+  history: number;
+  monospace: number;
+  undoboundlen: number;
+  undolevels: number;
+  textwidth: number;
+  columns: number;
+  lines: number;
+  matchtime: number;
+
+  directory: string;
+  paragraphs: string;
+  sections: string;
+  shell: string;
+  tags: string;
+  term: string;
+  theme: string;
+  datetime: string;
+  writeas: string;
+  quoteescape: string;
+  nrformats: string;
+
+  iskeyword: RegExp;
+}
+
 /** Option / variable configurator (classes.js). */
 interface WasaviConfigurator {
   getInfo(name: string): WasaviConfigInfo | null;
@@ -250,7 +325,7 @@ interface WasaviConfigurator {
   saveSnapshot(name: string): unknown;
   loadSnapshot(name: string, optionName?: string): unknown;
   dispose(): void;
-  readonly vars: Record<string, unknown>;
+  readonly vars: WasaviConfigVars;
   readonly abbrevs: unknown;
 }
 
