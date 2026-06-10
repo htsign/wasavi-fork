@@ -946,7 +946,6 @@ Wasavi.RegexFinderInfo = function () {
 	let scrollTop;
 	let scrollLeft;
 	let pattern;
-	let verticalOffset;
 	let text;
 	let updateBound;
 	let internalRegex;
@@ -986,14 +985,16 @@ Wasavi.RegexFinderInfo = function () {
 	}
 	function setPattern (p, withOffset) {
 		pattern = p;
-		verticalOffset = undefined;
+		this.verticalOffset = undefined;
 
 		if (withOffset) {
 			let parsed = parseFindString(p, head);
 			pattern = parsed.pattern;
-			verticalOffset = parsed.offset;
+			this.verticalOffset = parsed.offset;
 		}
 	}
+
+	this.verticalOffset = undefined;
 
 	publish(this,
 		push, setPattern,
@@ -1004,7 +1005,6 @@ Wasavi.RegexFinderInfo = function () {
 			scrollTop: () => scrollTop,
 			scrollLeft: () => scrollLeft,
 			pattern: () => pattern,
-			verticalOffset: () => verticalOffset,
 			text: [() => text, (v) => text = v],
 			updateBound: () => updateBound,
 			internalRegex: [() => internalRegex, (v) => internalRegex = v]
