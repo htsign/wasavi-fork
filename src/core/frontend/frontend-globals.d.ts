@@ -97,7 +97,7 @@ declare function _(format: string, ...args: readonly unknown[]): string;
 declare function publish(target: object, ...sources: readonly unknown[]): void;
 
 /** Evaluate an arithmetic expression string. */
-declare function expr(source: string): { result: number } | { error: string } | {};
+declare function expr(source: string): { result?: number; error?: string };
 
 /** strftime-compatible formatter; returns `false` on invalid arguments. */
 declare function strftime(format: string, datetime?: Date): string | false;

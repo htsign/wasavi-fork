@@ -115,8 +115,9 @@ function (global) {
 		get name () {return extensionName},
 		isTopFrame: function () {return global.window == window.top},
 		/**
+		 * @template [R=unknown]
 		 * @param {Record<string, unknown>} [data]
-		 * @param {(response: unknown) => void} [callback]
+		 * @param {(response: R) => void} [callback]
 		 * @returns {number}
 		 */
 		postMessage: function (data, callback) {
@@ -140,8 +141,9 @@ function (global) {
 			return requestNumber;
 		},
 		/**
+		 * @template [R=unknown]
 		 * @param {Record<string, unknown>} data
-		 * @param {(response: unknown) => void} [callback]
+		 * @param {(response: R) => void} [callback]
 		 * @returns {void}
 		 */
 		doPostMessage: function (data, callback) {},
@@ -325,8 +327,9 @@ function (global) {
 		this.constructor = ExtensionWrapper;
 		this.runType = 'chrome-extension';
 		/**
+		 * @template [R=unknown]
 		 * @param {Record<string, unknown>} data
-		 * @param {(response: unknown) => void} [callback]
+		 * @param {(response: R) => void} [callback]
 		 */
 		this.doPostMessage = function (data, callback) {
 			try {

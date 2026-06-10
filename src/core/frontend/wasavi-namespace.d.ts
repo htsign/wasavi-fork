@@ -15,6 +15,68 @@
 type WasaviPositionLike = WasaviPosition | { row: number; col: number };
 
 /**
+ * A mounted file system entry stored in `app.fstab` (one per drive/backend).
+ * `name` is the drive label and `cwd` the current working directory; the
+ * latter is rewritten by `:cd`.
+ */
+interface WasaviFsEntry {
+  name: string;
+  cwd: string;
+}
+
+/**
+ * A single abbreviation entry stored in `app.abbrevs` (keyed by the lhs
+ * keyword). `final` marks a non-recursive abbreviation, `value` the expansion.
+ */
+interface WasaviAbbrevEntry {
+  final: boolean;
+  value: string;
+}
+
+/**
+ * The abbreviation table on `app.abbrevs`: a map from lhs keyword to its entry,
+ * plus a `clear()` to drop every abbreviation at once.
+ */
+type WasaviAbbrevs = Record<string, WasaviAbbrevEntry> & { clear(): void };
+
+/**
+ * The edit target on `app.targetElement` (the wasavi.js local `targetElement`,
+ * exposed read-only via the `app` getter). It is the serialized descriptor of
+ * the page element wasavi is editing (or a synthesized one in app mode), not a
+ * live DOM node; its members are stamped on across wasavi.js / agent.js as the
+ * editing session progresses. `null` while no element is bound.
+ */
+interface WasaviTargetElement {
+  nodeName: string;
+  id: string;
+  elementType: string;
+  value: string;
+  /** Page URL of the element's document. */
+  url: string;
+  /** Title of the element's document. */
+  title: string;
+  /** Output format selected via the `writeas` option / agent detection. */
+  writeAs: string;
+  /** Set true to ask the page to submit the owning form on terminate. */
+  isSubmitRequested: boolean;
+  setargs: string;
+  selectionStart: number;
+  selectionEnd: number;
+  scrollTop: number;
+  scrollLeft: number;
+  readOnly: boolean;
+  fontStyle: string;
+  rect: { width: number; height: number };
+  frameId: unknown;
+  parentTabId: unknown;
+  tabId: unknown;
+  isTopFrame: boolean;
+  isImplicit: boolean;
+  ros: string;
+  marks: unknown;
+}
+
+/**
  * Buffer position. Instances are produced by `new Wasavi.Position(row, col)`.
  * Fully typed (heavily used across the editor).
  */
@@ -58,19 +120,19 @@ interface WasaviApp {
   extensionChannel: WasaviExtensionWrapperInstance;
   lastRegexFindCommand: WasaviRegexFinderInfo;
   keyManager: WasaviAppKeyManager;
-  fileName: unknown;
+  fileName: string;
   motion: WasaviMotion;
-  targetElement: unknown;
+  targetElement: WasaviTargetElement | null;
   lastSubstituteInfo: WasaviSubstituteInfo;
-  fstab: unknown;
-  abbrevs: unknown;
+  fstab: readonly WasaviFsEntry[];
+  abbrevs: WasaviAbbrevs;
   isTextDirty: unknown;
-  fileSystemIndex: unknown;
+  fileSystemIndex: number;
   isEditCompleted: unknown;
   ffttDictionary: WasaviFfttDictionary;
   isJumpBaseUpdateRequested: unknown;
   version: unknown;
-  preferredNewline: unknown;
+  preferredNewline: string;
   lineHeight: number;
   lastMessage: string;
   inputMode: unknown;
@@ -110,7 +172,7 @@ interface WasaviAppLow {
   getFindRegex(src: string | RegExp | Record<string, unknown>): RegExp | null;
   getFileIoResultInfo(aFileName: string, charLength: number, isNew?: boolean): string;
   getFileInfo(fullPath?: boolean): string;
-  notifyToParent(eventName: string, payload?: Record<string, unknown>, callback?: (response: unknown) => void): boolean;
+  notifyToParent<R = unknown>(eventName: string, payload?: Record<string, unknown>, callback?: (response: R) => void): boolean;
   notifyActivity(code: string, key: string, note: string): void;
   notifyCommandComplete(eventName?: string | null, modeOverridden?: unknown): void;
   extractDriveName(path: string, callback: (whole: string, drive: string) => void): string;
@@ -142,7 +204,7 @@ interface WasaviRequestedState {
 interface WasaviAppKeyManager {
   lock(): void;
   unlock(): void;
-  createSequences(s: string): unknown;
+  createSequences(s: string): readonly { code: number }[];
   insertFnKeyHeader(s: string): string;
   isInputEvent(e: unknown): boolean;
   addListener<E>(type: string, handler: (e: E) => unknown): void;
@@ -159,17 +221,34 @@ interface WasaviL10n {
   dispose(): void;
 }
 
+/**
+ * The read-only descriptor returned by `WasaviConfigurator.getInfo` (the
+ * getter bag built by `VariableItem.getInfo`). `defaultValue` is whatever the
+ * option's default is, so it stays `unknown`.
+ */
+interface WasaviConfigInfo {
+  readonly name: string;
+  readonly type: string;
+  readonly isLateBind: boolean;
+  readonly isDynamic: boolean;
+  readonly isAsync: boolean;
+  readonly defaultValue: unknown;
+}
+
 /** Option / variable configurator (classes.js). */
 interface WasaviConfigurator {
-  getInfo(name: string): unknown;
+  getInfo(name: string): WasaviConfigInfo | null;
+  // `reformat` truthy returns `item.visibleString` (always a string); otherwise
+  // the raw `item.value` (option-dependent) or null when the option is unknown.
+  getData(name: string, reformat: true): string;
   getData(name: string, reformat?: boolean): unknown;
   setData(name: string, value?: unknown, skipSubSetter?: boolean): unknown;
-  dump(cols: number, all?: boolean): unknown;
-  dumpData(): unknown;
+  dump(cols: number, all?: boolean): string[];
+  dumpData(): string;
   dumpScript(modifiedOnly?: boolean): unknown;
   reset(name?: string): unknown;
   saveSnapshot(name: string): unknown;
-  loadSnapshot(name: string): unknown;
+  loadSnapshot(name: string, optionName?: string): unknown;
   dispose(): void;
   readonly vars: Record<string, unknown>;
   readonly abbrevs: unknown;
@@ -222,7 +301,7 @@ interface WasaviRegexFinderInfo {
   readonly scrollTop: number;
   readonly scrollLeft: number;
   readonly pattern: string;
-  readonly verticalOffset: number | undefined;
+  verticalOffset: number | undefined;
   text: string | undefined;
   readonly updateBound: boolean;
   internalRegex: RegExp | undefined;
@@ -251,10 +330,24 @@ interface WasaviMapManager {
   readonly isWaiting: boolean;
 }
 
+/**
+ * A single register slot returned by `WasaviRegisters.get` (the internal
+ * `RegisterItem`). `data` is always coerced to a string by `set`/`setData`/
+ * `appendData`, so it is genuinely `string`.
+ */
+interface WasaviRegisterItem {
+  data: string;
+  isLineOrient: boolean;
+  locked: boolean;
+  set(data: unknown, isLineOrient?: boolean): void;
+  setData(data: unknown): void;
+  appendData(data: unknown): void;
+}
+
 /** Register store (classes.js). */
 interface WasaviRegisters {
   set(name: string, data: unknown, isLineOrient?: boolean, isInteractive?: boolean): unknown;
-  get(name: string): unknown;
+  get(name: string): WasaviRegisterItem;
   isWritable(name: string): boolean;
   isReadable(name: string): boolean;
   isClipboard(name: string): boolean;
@@ -280,7 +373,7 @@ interface WasaviMarks {
   getInputOriginMark(): WasaviPosition | undefined;
   update(pos: WasaviPositionLike, func?: unknown): unknown;
   dump(): unknown;
-  dumpData(): unknown;
+  dumpData(): Record<string, { row: number; col: number }>;
   save(): unknown;
   load(value?: unknown): unknown;
   isValidName(name: string): boolean;
@@ -315,6 +408,7 @@ interface WasaviEditor {
   indexOf(node: Node): number;
   getLineTopOffset(...args: readonly unknown[]): WasaviPosition;
   getLineTopOffset2(pos: WasaviPositionLike): WasaviPosition;
+  getLineTopOffset2(row: number, col: number): WasaviPosition;
   getLineTailOffset(...args: readonly unknown[]): WasaviPosition;
   getIndent(...args: readonly unknown[]): string;
   getBackIndent(...args: readonly unknown[]): string;
@@ -465,13 +559,15 @@ interface WasaviSortWorker {
   content: string | null;
   opts: Record<string, unknown> | null;
   terminalType: number;
+  /** Number of rows in the sort range (set by buildContent). */
+  rows: number;
   dosort(content: string[], key: string, regex: RegExp, opts: Record<string, unknown>): string[];
   preSort(type: number, content: string): string;
   postSort(type: number, content: string): string;
-  parseArgs(arg: string): unknown;
-  buildContent(content: string): unknown;
+  parseArgs(arg?: string): unknown;
+  buildContent(content?: string): unknown;
   sort(): unknown;
-  getContent(): unknown;
+  getContent(): string;
 }
 
 /** Result of a regex-based motion search (wasavi.js motionFindByRegex*). */
@@ -554,6 +650,16 @@ interface WasaviEditOps {
   paste(count: number, opts?: Record<string, unknown>): unknown;
 }
 
+/** An ex-command instruction (wasavi.js `ExICode`); `items`/`nestLength` are stamped only onto the `:global` latter opcodes. */
+interface WasaviExOpcode {
+  command: WasaviExCommandItem;
+  items?: (number | Node)[];
+  nestLength?: number;
+}
+
+/** The `items`/`nestLength` stamped onto a `:global` latter opcode (all that globalLatterHead/Bottom read). */
+type WasaviExGlobalOpcode = Required<Omit<WasaviExOpcode, 'command'>>;
+
 /**
  * The ex-command instruction list exposed on `app.exvm.inst` (frozen object
  * built in wasavi.js ExCommandExecutor). Members the implementation leaves
@@ -561,13 +667,14 @@ interface WasaviEditOps {
  */
 interface WasaviExViewModelInst {
   clear(): void;
-  createOpcode(command: unknown, args: unknown, rangeSource: unknown): unknown;
-  add(...args: readonly unknown[]): unknown;
+  createOpcode(command: unknown, args?: unknown, rangeSource?: unknown): WasaviExOpcode;
+  add(opcodes: readonly WasaviExOpcode[]): readonly WasaviExOpcode[];
+  add(command: unknown, args?: unknown, rangeSource?: unknown): WasaviExOpcode;
   insert(...args: readonly unknown[]): unknown;
   compile(source: unknown, parents?: unknown): unknown;
   index: number;
   readonly opcodes: readonly unknown[];
-  readonly currentOpcode: unknown;
+  readonly currentOpcode: WasaviExOpcode;
   readonly errorVectors: unknown[];
 }
 
@@ -595,6 +702,8 @@ interface WasaviExViewModel {
 interface WasaviSubstituteInfo {
   pattern?: string;
   replacement?: string;
+  clear(): void;
+  size(): number;
 }
 
 /** `:substitute` worker (classes_subst.js, ES class). */
@@ -745,6 +854,7 @@ interface WasaviEditLogger {
   logMax: number;
   readonly clusterNestLevel: number;
   readonly logLength: number;
+  readonly currentPosition: number;
   readonly isClean: boolean;
 }
 

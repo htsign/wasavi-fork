@@ -2,11 +2,23 @@
 // script-loaded frontend relies on. Type-only; emits no runtime code.
 
 // minimal surface of the WebExtension `chrome` API actually used in src/core
+
+/** A long-lived message port returned by `chrome.runtime.connect`. */
+interface ChromeRuntimePort {
+  postMessage(message: unknown): void;
+  disconnect(): void;
+  onMessage: {
+    addListener<R = unknown>(handler: (message: R) => void): void;
+    removeListener<R = unknown>(handler: (message: R) => void): void;
+  };
+}
+
 declare var chrome: {
   runtime: {
     getManifest(): { version: string };
     getURL(path: string): string;
-    sendMessage(message: unknown, callback?: (response: unknown) => void): void;
+    sendMessage<R = unknown>(message: unknown, callback?: (response: R) => void): void;
+    connect(connectInfo?: { name?: string }): ChromeRuntimePort;
     onMessage: {
       addListener(
         handler: (request: unknown, sender: unknown, sendResponse: (response?: unknown) => void) => void
@@ -50,8 +62,8 @@ interface WasaviExtensionWrapperInstance {
   // only present on the chrome instance returned by create() in an extension context
   urlInfo?: WasaviUrlInfo;
   isTopFrame(): boolean;
-  postMessage(data?: Record<string, unknown>, callback?: (response: unknown) => void): number;
-  doPostMessage(data: Record<string, unknown>, callback?: (response: unknown) => void): void;
+  postMessage<R = unknown>(data?: Record<string, unknown>, callback?: (response: R) => void): number;
+  doPostMessage<R = unknown>(data: Record<string, unknown>, callback?: (response: R) => void): void;
   connect(type?: string, callback?: (response: unknown) => void): void;
   doConnect(): void;
   disconnect(): void;

@@ -27,6 +27,124 @@
 
 const Wasavi = g.Wasavi;
 
+/**
+ * Flags parsed from an ex command's argument syntax (the `result.flags` bag
+ * built by parseArgs).
+ *
+ * @typedef {object} ExCommandArgFlags
+ * @property {boolean} force
+ * @property {boolean} hash
+ * @property {boolean} list
+ * @property {boolean} print
+ * @property {boolean} dash
+ * @property {boolean} dot
+ * @property {boolean} plus
+ * @property {boolean} carat
+ * @property {boolean} equal
+ * @property {boolean} register
+ * @property {boolean} count
+ */
+
+/**
+ * Parsed argument object handed to each command handler (the `result` object
+ * assembled by parseArgs, with extra properties stamped on by callers).
+ *
+ * @typedef {object} ExCommandArg
+ * @property {number[]} range
+ * @property {number} flagoff
+ * @property {ExCommandArgFlags} flags
+ * @property {string[]} argv
+ * @property {string} [args]
+ * @property {string} [register]
+ * @property {number} [count]
+ * @property {number} [lineNumber]
+ * @property {string} [initCommand]
+ * @property {boolean} [isBuffered]
+ */
+
+/**
+ * A command handler. Receives the application, its buffer and the parsed
+ * arguments, with `this` bound to the owning ExCommand. Returns an error
+ * message string, a Promise, or undefined; the `set` command is a generator.
+ *
+ * @typedef {(this: ExCommand, app: WasaviApp, t: WasaviEditor, a: ExCommandArg) =>
+ *   string | Promise<unknown> | void | Generator<unknown, void, unknown>} ExCommandHandler
+ */
+
+/**
+ * A file-IO / messaging response delivered to a `chrome.runtime` port or
+ * postMessage callback. Discriminated by `type` and `state`; any response may
+ * instead carry an `error` (the handlers check it first).
+ *
+ * @typedef {{ error?: [string, ...unknown[]] } & (
+ *   | { type?: undefined }
+ *   | { type: 'fileio-authorize-response', phase?: string }
+ *   | { type: 'write-response' | 'fileio-write-response', state: 'buffered', path: string }
+ *   | { type: 'write-response' | 'fileio-write-response', state: 'writing', progress: number }
+ *   | { type: 'write-response' | 'fileio-write-response', state: 'complete', meta: { path: string, bytes: number } }
+ *   | { type: 'read-response' | 'fileio-read-response', state: 'reading', progress: number }
+ *   | { type: 'read-response' | 'fileio-read-response', state: 'complete', content: string, meta: { path: string }, status: number }
+ *   | { type: 'fileio-chdir-response', data: Record<string, unknown> }
+ * )} FileIoResponse
+ */
+
+/**
+ * Parsed `:write` argument, produced by parseWriteArg and consumed by writeCore.
+ *
+ * @typedef {object} WriteArg
+ * @property {string} caller
+ * @property {boolean} isCommand
+ * @property {boolean} isAppend
+ * @property {string} path
+ * @property {boolean} [isBuffered]
+ */
+
+/**
+ * Message payload posted to the writer (background script / parent frame /
+ * page element). Members beyond the initial ones are stamped on per route.
+ *
+ * @typedef {object} WritePayload
+ * @property {string} path
+ * @property {unknown} isForce
+ * @property {boolean | undefined} isBuffered
+ * @property {string} value
+ * @property {string} [type]
+ * @property {unknown} [url]
+ * @property {unknown} [writeAs]
+ * @property {string} [encoding]
+ */
+
+/**
+ * Options bag passed to `app.edit.paste`. The `content`/`register` members are
+ * stamped on conditionally.
+ *
+ * @typedef {object} PasteOpts
+ * @property {boolean} isForward
+ * @property {boolean} lineOrientOverride
+ * @property {string} [content]
+ * @property {string} [register]
+ */
+
+/**
+ * A single key-mapping rule (produced by a map handler's toArray).
+ *
+ * @typedef {object} MapRule
+ * @property {string} lhs
+ * @property {string} rhs
+ * @property {{remap: boolean}} options
+ */
+
+/**
+ * A key-map handler stored in `app.mapManager.maps`.
+ *
+ * @typedef {object} MapHandler
+ * @property {string} name
+ * @property {() => MapRule[]} toArray
+ * @property {() => void} removeAll
+ * @property {(lhs: string) => void} remove
+ * @property {(lhs: string, rhs: string, allowRecursive: boolean) => void} register
+ */
+
 const EXFLAGS = {
 	addr2All: 1<<2,
 	addr2None: 1<<3,
@@ -40,28 +158,35 @@ const EXFLAGS = {
 	multiAsync: 1<<11
 };
 
-function ExCommand (name, shortName, syntax, flags, handler) {
-	this.name = name;
-	this.shortName = shortName;
-	this.handler = handler;
-	this.syntax = syntax;
-	this.rangeCount = flags & 3;
-	this.flags = {
-		addr2All:     !!(flags & EXFLAGS.addr2All),
-		addr2None:    !!(flags & EXFLAGS.addr2None),
-		addrZero:     !!(flags & EXFLAGS.addrZero),
-		addrZeroDef:  !!(flags & EXFLAGS.addrZeroDef),
-		printDefault: !!(flags & EXFLAGS.printDefault),
-		clearFlag:    !!(flags & EXFLAGS.clearFlag),
-		roundMax:     !!(flags & EXFLAGS.roundMax),
-		updateJump:   !!(flags & EXFLAGS.updateJump),
-		multiAsync:   !!(flags & EXFLAGS.multiAsync)
-	};
-}
+class ExCommand {
+	/**
+	 * @param {string} name
+	 * @param {string} shortName
+	 * @param {string} syntax
+	 * @param {number} flags
+	 * @param {ExCommandHandler} handler
+	 */
+	constructor(name, shortName, syntax, flags, handler) {
+		this.name = name;
+		this.shortName = shortName;
+		this.handler = handler;
+		this.syntax = syntax;
+		this.rangeCount = flags & 3;
+		this.flags = {
+			addr2All:     !!(flags & EXFLAGS.addr2All),
+			addr2None:    !!(flags & EXFLAGS.addr2None),
+			addrZero:     !!(flags & EXFLAGS.addrZero),
+			addrZeroDef:  !!(flags & EXFLAGS.addrZeroDef),
+			printDefault: !!(flags & EXFLAGS.printDefault),
+			clearFlag:    !!(flags & EXFLAGS.clearFlag),
+			roundMax:     !!(flags & EXFLAGS.roundMax),
+			updateJump:   !!(flags & EXFLAGS.updateJump),
+			multiAsync:   !!(flags & EXFLAGS.multiAsync)
+		};
+	}
 
-ExCommand.prototype = {
-	// <<<1 ExCommand class prorotype
-	clone: function () {
+	/** @returns {ExCommand} */
+	clone() {
 		return new ExCommand(
 			this.name,
 			this.shortName,
@@ -69,18 +194,36 @@ ExCommand.prototype = {
 			JSON.parse(JSON.stringify(this.flags)),
 			this.handler
 		);
-	},
-	parseArgs: function (app, range, line, syntax) {
-		function stripv (s) {
+	}
+
+	/**
+	 * @param {WasaviApp} app
+	 * @param {number[]} range
+	 * @param {string} line
+	 * @param {string} [syntax]
+	 * @returns {ExCommandArg | string}
+	 */
+	parseArgs(app, range, line, syntax) {
+		/**
+		 * @param {string} s
+		 * @returns {string}
+		 */
+		function stripv(s) {
 			return s.replace(/\u0016(.)/g, '$1');
 		}
-		function stripp (s) {
+		/**
+		 * @param {string} s
+		 * @returns {string}
+		 */
+		function stripp(s) {
 			return s.replace(/\\([^\/])/g, '$1');
 		}
-		function push_string (s) {
-			result.argv.push(s);
+		/** @param {string | number} s */
+		function push_string(s) {
+			result.argv.push(/** @type {string} */ (s));
 		}
-		function push_2words (s) {
+		/** @param {string} s */
+		function push_2words(s) {
 			s = s.replace(/^\s+/, '');
 			if (s == '') return;
 
@@ -107,7 +250,8 @@ ExCommand.prototype = {
 			// second word
 			result.argv.push(stripv(s));
 		}
-		function push_words (s) {
+		/** @param {string} s */
+		function push_words(s) {
 			var index = 0;
 			var anchor = 0;
 			var mode = 0;
@@ -172,16 +316,17 @@ ExCommand.prototype = {
 						.replace(/\\(.)/g, '$1'));
 			}
 		}
-		function push_paths (s) {
+		/** @param {string} s */
+		function push_paths(s) {
 			while ((s = s.replace(/^\s+/, '')) != '') {
-				var re = /(?:\\.|\S)*/.exec(s);
+				var re = /** @type {RegExpExecArray} */ (/(?:\\.|\S)*/.exec(s));
 				result.argv.push(stripp(re[0]));
 				s = s.substring(re[0].length);
 			}
 		}
 
 		var t = app.buffer;
-		var result = {};
+		var result = /** @type {ExCommandArg} */ ({});
 		var needCheckRest = true;
 		syntax || (syntax = this.syntax);
 		result.range = range;
@@ -326,18 +471,18 @@ flag23_loop:
 					break;
 				}
 				line = line.substring(re[0].length);
-				re = parseInt(re[0], 10);
-				if (isNaN(re)) {
+				var count = parseInt(re[0], 10);
+				if (isNaN(count)) {
 					return _('Bad address.');
 				}
-				if (re == 0 && ch != '0') {
+				if (count == 0 && ch != '0') {
 					return _('Count may not be zero.');
 				}
 				if (ch == 'a') {
 					result.range[0] = result.range[1];
-					result.range[1] = minmax(0, result.range[0] + re - 1, t.rowLength - 1);
+					result.range[1] = minmax(0, result.range[0] + count - 1, t.rowLength - 1);
 				}
-				result.count = re;
+				result.count = count;
 				result.flags.count = true;
 				break;
 
@@ -389,7 +534,7 @@ flag23_loop:
 				push_words(line);
 				ch = syntax.charAt(++i);
 				if (/\d/.test(ch)) {
-					var tmp = ch - 0;
+					var tmp = Number(ch);
 					ch = syntax.charAt(++i);
 					if ((ch != 'o' || result.argv.length != 0) && result.argv.length != tmp) {
 						return _('Missing required argument.');
@@ -411,8 +556,18 @@ flag23_loop:
 		}
 
 		return result;
-	},
-	buildArgs: function (app, range, commandNameOption, argv, args, syntax) {
+	}
+
+	/**
+	 * @param {WasaviApp} app
+	 * @param {number[]} range
+	 * @param {string} commandNameOption
+	 * @param {string[]} [argv]
+	 * @param {string} [args]
+	 * @param {string} [syntax]
+	 * @returns {ExCommandArg | string}
+	 */
+	buildArgs(app, range, commandNameOption, argv, args, syntax) {
 		var result = this.parseArgs(app, range, commandNameOption, syntax);
 		if (typeof result == 'string') {
 			return this.name + ': ' + result;
@@ -423,8 +578,14 @@ flag23_loop:
 		}
 		result.args = args || '';
 		return result;
-	},
-	fixupRange: function (app, range) {
+	}
+
+	/**
+	 * @param {WasaviApp} app
+	 * @param {number[]} range
+	 * @returns {number[] | string}
+	 */
+	fixupRange(app, range) {
 		for (var i = 0, goal = range.length; i < goal; i++) {
 			if (!this.flags.addrZero) {
 				range[i] = Math.max(0, range[i]);
@@ -439,8 +600,15 @@ flag23_loop:
 			}
 		}
 		return range;
-	},
-	run: function (app, args) {
+	}
+
+	/**
+	 * @param {WasaviApp} app
+	 * @param {ExCommandArg} args
+	 * @returns {string | {flags: ExCommandArgFlags, offset: number, value: unknown}}
+	 */
+	run(app, args) {
+		/** @type {unknown} */
 		var result;
 		try {
 			var t = app.buffer;
@@ -449,21 +617,30 @@ flag23_loop:
 				this.handler(app, t, args);
 		}
 		catch (e) {
-			result = e.toString();
+			result = `${e}`;
 			app.low.notifyError(e);
 		}
 		if (typeof result == 'string') {
 			return this.name + ': ' + result;
 		}
 		return {flags:args.flags, offset:args.flagoff, value:result};
-	},
-	toString: function () {
+	}
+
+	/** @returns {string} */
+	toString() {
 		return '[ExCommand ' + this.name + ']';
 	}
-	// >>>
-};
+}
 
-function parseWriteArg (app, t, a, caller) {
+/**
+ * @param {WasaviApp} app
+ * @param {WasaviEditor} t
+ * @param {ExCommandArg} a
+ * @param {string} caller
+ * @returns {WriteArg}
+ */
+function parseWriteArg(app, t, a, caller) {
+	/** @type {RegExpExecArray | null} */
 	var re;
 	var arg = a.argv[0] || '';
 	var isCommand = false;
@@ -493,7 +670,14 @@ function parseWriteArg (app, t, a, caller) {
 	};
 }
 
-function writeCore (app, t, a, pa) {
+/**
+ * @param {WasaviApp} app
+ * @param {WasaviEditor} t
+ * @param {ExCommandArg} a
+ * @param {WriteArg} pa
+ * @returns {string | Promise<unknown> | undefined}
+ */
+function writeCore(app, t, a, pa) {
 	pa.path || (pa.path = app.fileName);
 	var pathRegalized = app.low.regalizeFilePath(pa.path, true);
 
@@ -515,11 +699,14 @@ function writeCore (app, t, a, pa) {
 		}
 	}
 
-	var newline = app.targetElement.elementType == 'contentEditable' ?
+	var targetElement = /** @type {WasaviTargetElement} */ (app.targetElement);
+	var newline = targetElement.elementType == 'contentEditable' ?
 		'\n' : app.preferredNewline;
 	var content = t.getValue(a.range[0], a.range[1], newline);
 
+	/** @type {string} */
 	var postType;
+	/** @type {WritePayload} */
 	var payload = {
 		path:pathRegalized,
 		isForce:a.flags.force,
@@ -529,15 +716,15 @@ function writeCore (app, t, a, pa) {
 
 	// write into the element on a page
 	if (payload.path == '') {
-		switch (app.targetElement.elementType) {
+		switch (targetElement.elementType) {
 		case 'body':
 			payload.type = 'set-memorandum';
-			payload.url = app.targetElement.url;
+			payload.url = targetElement.url;
 			postType = 'body';
 			break;
 
 		default:
-			payload.writeAs = app.targetElement.writeAs;
+			payload.writeAs = targetElement.writeAs;
 			postType = 'element';
 			break;
 		}
@@ -569,9 +756,11 @@ function writeCore (app, t, a, pa) {
 	}
 
 	return new Promise(resolve => {
+		/** @type {ChromeRuntimePort | undefined} */
 		var port;
 
-		function handleResponse (res) {
+		/** @param {FileIoResponse} res */
+		function handleResponse(res) {
 			if (res.error) {
 				if (port) {
 					port.disconnect();
@@ -598,6 +787,7 @@ function writeCore (app, t, a, pa) {
 					break;
 
 				case 'complete':
+					/** @type {unknown} */
 					var result;
 
 					app.isTextDirty = false;
@@ -608,14 +798,15 @@ function writeCore (app, t, a, pa) {
 					}
 
 					if (/^(?:submit|wqs?|xit)$/.test(pa.caller)) {
-						let quit = find('quit');
-						let caller = find(pa.caller);
+						let quit = /** @type {ExCommand} */ (find('quit'));
+						let caller = /** @type {ExCommand} */ (find(pa.caller));
 
 						result = quit.handler.call(caller, app, t, a);
 					}
 					else {
-						let path = res.meta.path;
-						let bytes = res.meta.bytes;
+						let meta = res.meta;
+						let path = meta.path;
+						let bytes = meta.bytes;
 						let message = app.low.getFileIoResultInfo(path, bytes);
 
 						app.low.requestShowMessage(_('Written: {0}', message));
@@ -646,8 +837,14 @@ function writeCore (app, t, a, pa) {
 	});
 }
 
-function globalLatterHead (app, t, a) {
-	var opcode = app.exvm.inst.currentOpcode;
+/**
+ * @param {WasaviApp} app
+ * @param {WasaviEditor} t
+ * @param {ExCommandArg} a
+ * @returns {unknown}
+ */
+function globalLatterHead(app, t, a) {
+	var opcode = /** @type {WasaviExGlobalOpcode} */ (app.exvm.inst.currentOpcode);
 	var items = opcode.items;
 
 	if (app.exvm.lastError) {
@@ -658,7 +855,7 @@ function globalLatterHead (app, t, a) {
 	var row = -1;
 	while (items.length) {
 		row = -1;
-		var item = items.shift();
+		var item = /** @type {Node} */ (items.shift());
 		if (item.parentNode) {
 			row = t.indexOf(item);
 			if (0 <= row && row <= t.rowLength - 1) {
@@ -678,12 +875,27 @@ function globalLatterHead (app, t, a) {
 	}
 }
 
-function globalLatterBottom (app, t, a) {
-	var opcode = app.exvm.inst.currentOpcode;
+/**
+ * @param {WasaviApp} app
+ * @param {WasaviEditor} t
+ * @param {ExCommandArg} a
+ * @returns {void}
+ */
+function globalLatterBottom(app, t, a) {
+	var opcode = /** @type {WasaviExGlobalOpcode} */ (app.exvm.inst.currentOpcode);
 	app.exvm.inst.index -= opcode.nestLength - 1;
 }
 
-function readCore (app, t, a, content, meta, status) {
+/**
+ * @param {WasaviApp} app
+ * @param {WasaviEditor} t
+ * @param {ExCommandArg} a
+ * @param {unknown} content
+ * @param {{path: string}} meta
+ * @param {number} status
+ * @returns {string | undefined}
+ */
+function readCore(app, t, a, content, meta, status) {
 	if (typeof content != 'string' || status == 404) {
 		return _('Cannot open "{0}".', meta.path);
 	}
@@ -701,17 +913,27 @@ function readCore (app, t, a, content, meta, status) {
 	t.setSelectionRange(t.getLineTopOffset2(startLine + 1, 0));
 }
 
-function editCore (app, t, a, content, meta, status) {
+/**
+ * @param {WasaviApp} app
+ * @param {WasaviEditor} t
+ * @param {ExCommandArg} a
+ * @param {string} content
+ * @param {{path: string}} meta
+ * @param {number} status
+ * @returns {string | undefined}
+ */
+function editCore(app, t, a, content, meta, status) {
 	var charCount = content.length;
 	if (app.extensionChannel.isTopFrame()) {
 		app.fileName = meta.path;
-		document.title = /[^\/]+$/.exec(app.fileName)[0] + ' - wasavi';
+		document.title = /** @type {RegExpExecArray} */ (/[^\/]+$/.exec(meta.path))[0] + ' - wasavi';
+		/** @type {string[]} */
 		var empty = [];
-		app.preferredNewline = [
+		app.preferredNewline = /** @type {[string, number][]} */ ([
 			['\n',   (content.match(/(?:^|[^\r])\n/g) || empty).length],
 			['\r',   (content.match(/\r(?!\n)/g) || empty).length],
 			['\r\n', (content.match(/\r\n/g) || empty).length]
-		].sort(function (a, b) {return b[1] - a[1];})[0][0];
+		]).sort(function (a, b) {return b[1] - a[1];})[0][0];
 	}
 	else {
 		app.fileName = '';
@@ -730,7 +952,7 @@ function editCore (app, t, a, content, meta, status) {
 		if (typeof compileResult == 'string') {
 			return compileResult;
 		}
-		var locator = ex.inst.add(function (app, t, a) {
+		var locator = ex.inst.add(/** @param {WasaviApp} app @param {WasaviEditor} t @param {ExCommandArg} a */ function (app, t, a) {
 			t.setSelectionRange(t.getLineTopOffset2(t.rowLength - 1, 0));
 		});
 
@@ -745,9 +967,17 @@ function editCore (app, t, a, content, meta, status) {
 	app.low.requestShowMessage(app.low.getFileIoResultInfo(meta.path, charCount, status == 404));
 }
 
-function chdirCore (app, t, a, data) {
+/**
+ * @this {ExCommand}
+ * @param {WasaviApp} app
+ * @param {WasaviEditor} t
+ * @param {ExCommandArg} a
+ * @param {Record<string, unknown> | undefined} data
+ * @returns {string | undefined}
+ */
+function chdirCore(app, t, a, data) {
 	if (a.argv.length == 0) {
-		return find('pwd').handler.apply(this, arguments);
+		return /** @type {string | undefined} */ (/** @type {ExCommand} */ (find('pwd')).handler.call(this, app, t, a));
 	}
 	if (!data || !('is_dir' in data)) {
 		return _('Invalid chdir result.');
@@ -757,7 +987,7 @@ function chdirCore (app, t, a, data) {
 	}
 
 	var drive = '';
-	var path = a.argv[0];
+	var path = /** @type {string} */ (a.argv[0]);
 	var index = -1;
 
 	path = app.low.extractDriveName(path, function ($0, d) {drive = d});
@@ -773,8 +1003,15 @@ function chdirCore (app, t, a, data) {
 	}
 }
 
-function parseMapAttributes (app, attributes, options, maps) {
-	let re = /^\[(.+)\]$/.exec(attributes);
+/**
+ * @param {WasaviApp} app
+ * @param {string | number | undefined} attributes
+ * @param {Record<string, boolean>} options
+ * @param {Record<string, unknown>} maps
+ * @returns {boolean}
+ */
+function parseMapAttributes(app, attributes, options, maps) {
+	let re = /^\[(.+)\]$/.exec(/** @type {string} */ (attributes));
 	if (!re) return false;
 
 	re[1].split(',').forEach(attr => {
@@ -798,7 +1035,13 @@ function parseMapAttributes (app, attributes, options, maps) {
 	return true;
 }
 
-function selectDefaultMaps (app, a, maps) {
+/**
+ * @param {WasaviApp} app
+ * @param {ExCommandArg} a
+ * @param {Record<string, unknown>} maps
+ * @returns {void}
+ */
+function selectDefaultMaps(app, a, maps) {
 	if (Object.keys(maps).length) return;
 
 	if (a.flags.force) {
@@ -810,8 +1053,13 @@ function selectDefaultMaps (app, a, maps) {
 	}
 }
 
+/** @type {Record<string, ExCommand>} */
 var cache = {};
-/*public*/function find (name) {
+/**
+ * @param {string} name
+ * @returns {ExCommand | null}
+ */
+/*public*/function find(name) {
 	if (name in cache) {
 		return cache[name];
 	}
@@ -824,15 +1072,41 @@ var cache = {};
 	return null;
 }
 
-/*public*/function createExCommand (name, shortName, syntax, flags, handler) {
+/**
+ * @param {string} name
+ * @param {string} shortName
+ * @param {string} syntax
+ * @param {number} flags
+ * @param {ExCommandHandler} handler
+ * @returns {ExCommand}
+ */
+/*public*/function createExCommand(name, shortName, syntax, flags, handler) {
 	return new ExCommand(name, shortName, syntax, flags, handler);
 }
 
-/*public*/function parseRange (app, s, requiredCount, allowZeroAddress) {
+/**
+ * The `rows` accumulator built by parseRange: a number array augmented with a
+ * `last` reducer and an optional `specifiedAddresses` count.
+ *
+ * @typedef {number[] & {
+ *   last(t: WasaviEditor, count: number, isGlobal?: boolean): ExRangeRows | string,
+ *   specifiedAddresses?: number
+ * }} ExRangeRows
+ */
+
+/**
+ * @param {WasaviApp} app
+ * @param {string} s
+ * @param {number} [requiredCount]
+ * @param {boolean} [allowZeroAddress]
+ * @returns {WasaviExParseRangeResult | string}
+ */
+/*public*/function parseRange(app, s, requiredCount, allowZeroAddress) {
 	var t = app.buffer;
-	var rows = [];
+	var rows = /** @type {ExRangeRows} */ (/** @type {number[]} */ ([]));
 	var ss = t.selectionStart;
-	var error = false;
+	var error = '';
+	/** @type {RegExpExecArray | null} */
 	var re;
 
 	if ((re = spc('^S*%').exec(s))) {
@@ -858,7 +1132,7 @@ var cache = {};
 				found = true;
 			}
 			else if ((re = /^\d+/.exec(s))) {
-				var n = re[0] - 1;
+				var n = Number(re[0]) - 1;
 				if (n < 0) {
 					n = allowZeroAddress ? -1 : 0;
 				}
@@ -906,7 +1180,7 @@ var cache = {};
 					break;
 				}
 
-				rows.push(t.linearPositionToBinaryPosition(result.offset).row);
+				rows.push(/** @type {WasaviPosition} */ (t.linearPositionToBinaryPosition(result.offset)).row);
 				s = s.substring(re[0].length);
 				app.isJumpBaseUpdateRequested = true;
 				found = true;
@@ -934,7 +1208,7 @@ var cache = {};
 					break;
 				}
 
-				rows.push(t.linearPositionToBinaryPosition(result.offset).row);
+				rows.push(/** @type {WasaviPosition} */ (t.linearPositionToBinaryPosition(result.offset)).row);
 				s = s.substring(re[0].length);
 				app.isJumpBaseUpdateRequested = true;
 				found = true;
@@ -957,14 +1231,14 @@ var cache = {};
 					var offset = re[1] == '' ?
 						(re[0].charAt(0) == '+' ? 1 : -1) :
 						parseInt(re[0], 10);
-					rows.lastItem += offset;
+					rows.lastItem = /** @type {number} */ (rows.lastItem) + offset;
 					if (regexSpecified) {
 						app.lastRegexFindCommand.verticalOffset = offset;
 					}
 					s = s.substring(re[0].length);
 				}
 
-				if (rows.lastItem < 0) {
+				if (/** @type {number} */ (rows.lastItem) < 0) {
 					rows.lastItem = allowZeroAddress ? -1 : 0;
 				}
 
@@ -982,11 +1256,11 @@ var cache = {};
 				if (rows.length == 0) {
 					rows.push(t.selectionStartRow);
 				}
-				if (rows.lastItem > t.rowLength) {
+				if (/** @type {number} */ (rows.lastItem) > t.rowLength) {
 					error = _('Out of range.');
 					break;
 				}
-				t.setSelectionRange(new Wasavi.Position(rows.lastItem, 0));
+				t.setSelectionRange(new Wasavi.Position(/** @type {number} */ (rows.lastItem), 0));
 				s = s.substring(1);
 				!found && rows.push(t.selectionStartRow);
 			}
@@ -996,30 +1270,37 @@ var cache = {};
 		}
 	}
 
+	/**
+	 * @this {ExRangeRows}
+	 * @param {WasaviEditor} t
+	 * @param {number} count
+	 * @param {boolean} [isGlobal]
+	 * @returns {ExRangeRows | string}
+	 */
 	rows.last = function (t, count, isGlobal) {
-		var result = [];
+		var result = /** @type {ExRangeRows} */ (/** @type {number[]} */ ([]));
 		count = Math.min(count, 2);
 		if (count == 1) {
 			if (this.length >= 1) {
-				result = [this.lastItem];
+				result = /** @type {ExRangeRows} */ ([/** @type {number} */ (this.lastItem)]);
 			}
 			else {
-				result = [t.selectionStartRow];
+				result = /** @type {ExRangeRows} */ ([t.selectionStartRow]);
 			}
 		}
 		else if (count == 2) {
 			if (this.length >= 2) {
-				result = [ this[this.length - 2], this[this.length - 1] ];
+				result = /** @type {ExRangeRows} */ ([ this[this.length - 2], this[this.length - 1] ]);
 			}
 			else if (this.length == 1) {
-				result = [ this[0], this[0] ];
+				result = /** @type {ExRangeRows} */ ([ this[0], this[0] ]);
 			}
 			else {
 				if (isGlobal) {
-					result = [0, t.rowLength - 1];
+					result = /** @type {ExRangeRows} */ ([0, t.rowLength - 1]);
 				}
 				else {
-					result = [ t.selectionStartRow, t.selectionStartRow ];
+					result = /** @type {ExRangeRows} */ ([ t.selectionStartRow, t.selectionStartRow ]);
 				}
 			}
 			if (result[1] < result[0]) {
@@ -1032,10 +1313,10 @@ var cache = {};
 
 	t.setSelectionRange(ss);
 
-	return error || {
+	return error || /** @type {WasaviExParseRangeResult} */ ({
 		rows: requiredCount == undefined ? rows : rows.last(t, requiredCount),
 		rest: s
-	};
+	});
 }
 
 /*public*/var defaultCommand = new ExCommand(
@@ -1047,15 +1328,29 @@ var cache = {};
 	}
 );
 
-/*public*/function printRow (app, t, from, to, flags) {
-	function getLineNumber (i) {
+/**
+ * @param {WasaviApp} app
+ * @param {WasaviEditor} t
+ * @param {number} from
+ * @param {number} to
+ * @param {Record<string, boolean>} flags
+ * @returns {void}
+ */
+/*public*/function printRow(app, t, from, to, flags) {
+	/**
+	 * @param {number} i
+	 * @returns {string}
+	 */
+	function getLineNumber(i) {
 		return ('     ' + (i + 1)).substr(-6) + '  ';
 	}
-	function getLineNumberNull () {
+	/** @returns {string} */
+	function getLineNumberNull() {
 		return '';
 	}
 	var lg = flags.hash ? getLineNumber : getLineNumberNull;
 	if (flags.list) {
+		/** @type {Record<number, string>} */
 		var escapeReplacements = {
 			7: '\\a', 8: '\\b', 9: '\\t', 10: '\\n', 11: '\\v', 12: '\\f', 13: '\\r', 92:'\\\\'
 		};
@@ -1094,11 +1389,13 @@ var cache = {};
 
 /*public*/var commands = [
 	new ExCommand('abbreviate', 'ab', 'W', 0, function (app, t, a) {
-		function dispAbbrev (ab) {
+		/** @param {Record<string, WasaviAbbrevEntry>} ab */
+		function dispAbbrev(ab) {
 			const MIN_WIDTH = 3;
 			const PAD_WIDTH = 4;
 
 			var maxWidth = MIN_WIDTH;
+			/** @type {(string | [string, string])[]} */
 			var list = [];
 
 			for (var i in ab) {
@@ -1136,9 +1433,15 @@ var cache = {};
 			app.low.requestConsoleOpen();
 		}
 
-		var lhs, rhs, option;
+		var abbrevs = app.abbrevs;
+		/** @type {string | undefined} */
+		var lhs;
+		/** @type {string | undefined} */
+		var rhs;
+		/** @type {string | undefined} */
+		var option;
 		lhs = a.argv.shift();
-		if (/^\[.+\]$/.test(lhs)) {
+		if (/^\[.+\]$/.test(/** @type {string} */ (lhs))) {
 			option = lhs;
 			lhs = a.argv.shift();
 		}
@@ -1147,24 +1450,25 @@ var cache = {};
 		// prior option
 		switch (option) {
 		case '[clear]':
-			app.abbrevs.clear();
+			abbrevs.clear();
 			return;
 		}
 
 		// no args: display all abbreviations currently defined
 		if (lhs == undefined && rhs == undefined) {
-			dispAbbrev(app.abbrevs);
+			dispAbbrev(abbrevs);
 		}
 
 		// one arg: display abbreviaion which corresponds to lhs
 		else if (lhs != undefined && rhs == undefined) {
+			/** @type {Record<string, WasaviAbbrevEntry>} */
 			var tmp = {};
 			var tmpLhs = lhs.substr(-1) == '*' ? lhs.substring(0, lhs.length - 1) : null;
 
-			for (var i in app.abbrevs) {
+			for (var i in abbrevs) {
 				if (tmpLhs && i.indexOf(tmpLhs) == 0
 				||  !tmpLhs && i == lhs) {
-					tmp[i] = app.abbrevs[i];
+					tmp[i] = abbrevs[i];
 				}
 			}
 
@@ -1173,11 +1477,11 @@ var cache = {};
 
 		// two args: define new abbreviation
 		else if (lhs != undefined && rhs != undefined) {
-			if (!app.config.vars.iskeyword.test(lhs.substr(-1))) {
+			if (!(/** @type {RegExp} */ (app.config.vars.iskeyword)).test(lhs.substr(-1))) {
 				return _('The keyword of abbreviation must end with a word character.');
 			}
 
-			app.abbrevs[lhs] = {
+			abbrevs[lhs] = {
 				final: option == '[final]' || option == '[noremap]',
 				value: app.keyManager.insertFnKeyHeader(rhs)
 			};
@@ -1186,10 +1490,9 @@ var cache = {};
 	new ExCommand('cd', 'cd', 'f', 0, function (app, t, a) {
 		return new Promise(resolve => {
 			var port = chrome.runtime.connect({name: 'fsctl'});
-			port.onMessage.addListener(res => {
+			port.onMessage.addListener(/** @param {FileIoResponse} res */ res => {
 				if (res.error) {
 					port.disconnect();
-					port = null;
 					resolve(_.apply(null, res.error));
 					return;
 				}
@@ -1201,8 +1504,7 @@ var cache = {};
 
 				case 'fileio-chdir-response':
 					port.disconnect();
-					port = null;
-					resolve(chdirCore(app, t, a, res.data));
+					resolve(chdirCore.call(this, app, t, a, res.data));
 					break;
 				}
 			});
@@ -1213,21 +1515,22 @@ var cache = {};
 		});
 	}),
 	new ExCommand('chdir', 'chd', 'f', 0, function (app, t, a) {
-		return find('cd').handler.apply(this, arguments);
+		return /** @type {ExCommand} */ (find('cd')).handler.call(this, app, t, a);
 	}),
 	new ExCommand('copy', 'co', 'l1', 2 | EXFLAGS.printDefault, function (app, t, a) {
 		var content = t.getValue(a.range[0], a.range[1], '\n');
-		t.setSelectionRange(new Wasavi.Position(a.lineNumber, 0));
+		var lineNumber = /** @type {number} */ (a.lineNumber);
+		t.setSelectionRange(new Wasavi.Position(lineNumber, 0));
 		app.edit.paste(1, {
 			isForward:true,
 			lineOrientOverride:true,
 			content:content
 		});
 		var copied = a.range[1] - a.range[0] + 1;
-		if (copied >= app.config.vars.report) {
+		if (copied >= /** @type {number} */ (app.config.vars.report)) {
 			app.low.requestShowMessage(_('Copied {0} {line:0}.', copied));
 		}
-		var finalRow = minmax(0, a.lineNumber + 1 + copied - 1, t.rowLength - 1);
+		var finalRow = minmax(0, lineNumber + 1 + copied - 1, t.rowLength - 1);
 		t.setSelectionRange(t.getLineTopOffset2(finalRow, 0));
 		app.isEditCompleted = true;
 	}),
@@ -1235,10 +1538,10 @@ var cache = {};
 		t.setSelectionRange(new Wasavi.Position(a.range[0], 0));
 		t.isLineOrientSelection = true;
 		var deleted = a.range[1] - a.range[0] + 1;
-		app.edit.yank(deleted, true, a.flags.register ? a.register : '');
+		app.edit.yank(deleted, true, a.flags.register ? /** @type {string} */ (a.register) : '');
 		app.edit.deleteSelection();
 		t.isLineOrientSelection = false;
-		if (deleted >= app.config.vars.report) {
+		if (deleted >= /** @type {number} */ (app.config.vars.report)) {
 			app.low.requestShowMessage(_('Deleted {0} {line:0}.', deleted));
 		}
 		var n = new Wasavi.Position(Math.min(a.range[0], t.rowLength - 1), 0);
@@ -1274,12 +1577,15 @@ var cache = {};
 		}
 
 		return new Promise(resolve => {
+			/** @type {ChromeRuntimePort | undefined} */
 			var port;
+			/** @type {{path: unknown, type?: string, url?: unknown, encoding?: string}} */
 			var payload = {
 				path:app.low.regalizeFilePath(path, true) || app.fileName
 			};
 
-			function handleResponse (res) {
+			/** @param {FileIoResponse} res */
+			function handleResponse(res) {
 				if (res.error) {
 					if (port) {
 						port.disconnect();
@@ -1313,12 +1619,14 @@ var cache = {};
 				}
 			}
 
+			var targetElement = /** @type {WasaviTargetElement} */ (app.targetElement);
+
 			// read from the element on a page
 			if (payload.path == '') {
-				switch (app.targetElement.elementType) {
+				switch (targetElement.elementType) {
 				case 'body':
 					payload.type = 'get-memorandum';
-					payload.url = app.targetElement.url;
+					payload.url = targetElement.url;
 					app.extensionChannel.postMessage(payload, handleResponse);
 					break;
 
@@ -1353,7 +1661,7 @@ var cache = {};
 
 			if (a.argv[0] == '/'
 			|| /[^\\]\/$/.test(a.argv[0])
-			|| /^\.{1,2}$/.test(newPath.lastItem)) {
+			|| /^\.{1,2}$/.test(/** @type {string} */ (newPath.lastItem))) {
 				newPath.push('');
 			}
 
@@ -1373,16 +1681,18 @@ var cache = {};
 		app.low.requestShowMessage(app.low.getFileInfo(true));
 	}),
 	new ExCommand('filesystem', 'files', 'wN', 0, function (app, t, a) {
+		var fstab = app.fstab;
+		/** @type {string[]} */
 		var list = [];
 		var command = (a.argv[0] || '').replace(/\u0016(.)/g, '$1');
 		if (/^(?:de?f?a?u?l?t?)$/.test(command)) {
 			if (a.argv.length <= 1) {
 				app.low.requestShowMessage(
-					_('default file system: {0}', app.fstab[app.fileSystemIndex].name));
+					_('default file system: {0}', fstab[app.fileSystemIndex].name));
 			}
 			else {
 				var target = a.argv[1];
-				app.fstab.some(function (fs, i) {
+				fstab.some(function (fs, i) {
 					if (fs.name == target) {
 						app.fileSystemIndex = i;
 						return true;
@@ -1399,13 +1709,13 @@ var cache = {};
 			});
 		}
 		else if (/^(?:st?a?t?u?s?)$/.test(command)) {
-			if (app.fstab.length) {
+			if (fstab.length) {
 				list.push(_('*** available file systems ***'));
 				var maxWidth = 0;
-				app.fstab.forEach(function (fs) {
+				fstab.forEach(function (fs) {
 					maxWidth = Math.max(maxWidth, fs.name.length);
 				});
-				app.fstab.forEach(function (fs, i) {
+				fstab.forEach(function (fs, i) {
 					list.push(
 						(app.fileSystemIndex == i ? '*' : ' ') +
 						' ' + fs.name + multiply(' ', maxWidth - fs.name.length) +
@@ -1429,12 +1739,20 @@ var cache = {};
 		}
 	}),
 	new ExCommand('global', 'g', '!s', 2 | EXFLAGS.addr2All, function (app, t, a) {
-		function getItems (text, textPreLength) {
+		/**
+		 * @param {string} text
+		 * @param {number} textPreLength
+		 * @returns {(number | Node)[] | string}
+		 */
+		function getItems(text, textPreLength) {
+			/** @type {RegExpExecArray | null} */
 			var re;
+			/** @type {(number | Node)[]} */
 			var items = [];
 			var prevOffset;
 			var prevRow;
 			var nullNewline = {length:0};
+			var pattern = /** @type {RegExp} */ (patternRegex);
 			pattern.lastIndex = 0;
 			if (inverted) {
 				var rangeStartRow = t.indexOf(t.rowNodes(r[0]));
@@ -1442,7 +1760,7 @@ var cache = {};
 				if (re) {
 					var pos = pattern.lastIndex - re[0].length;
 					var row, delta;
-					row = t.linearPositionToBinaryPosition(pos + textPreLength).row;
+					row = /** @type {WasaviPosition} */ (t.linearPositionToBinaryPosition(pos + textPreLength)).row;
 					items.push(row - rangeStartRow);
 					prevOffset = pos;
 					prevRow = row;
@@ -1469,13 +1787,14 @@ var cache = {};
 					if (items.length >= r[1] - r[0] + 1) {
 						return _('Pattern found in every line: {0}', patternString);
 					}
+					/** @type {Node[]} */
 					var tmp = [], container = t.elm;
 					for (var i = r[0]; i <= r[1]; i++) {
 						//tmp.push(container.childNodes[i]);
 						tmp.push(t.rowNodes(i));
 					}
 					for (var i = items.length - 1; i >= 0; i--) {
-						tmp.splice(items[i], 1);
+						tmp.splice(/** @type {number} */ (items[i]), 1);
 					}
 					items = tmp;
 				}
@@ -1485,7 +1804,7 @@ var cache = {};
 				if (re) {
 					var pos = pattern.lastIndex - re[0].length;
 					var row, delta;
-					row = t.linearPositionToBinaryPosition(pos + textPreLength).row;
+					row = /** @type {WasaviPosition} */ (t.linearPositionToBinaryPosition(pos + textPreLength)).row;
 					items.push(t.rowNodes(row));
 					prevOffset = pos;
 					prevRow = row;
@@ -1519,6 +1838,7 @@ var cache = {};
 
 		var r = a.range;
 		var inverted = !!a.flags.force;
+		/** @type {string} */
 		var pattern = a.argv[0];
 		var command = a.argv[1];
 
@@ -1533,9 +1853,10 @@ var cache = {};
 			app.registers.set('/', app.lastRegexFindCommand.pattern);
 		}
 		var patternString = pattern;
-		pattern = app.low.getFindRegex(pattern);
+		var patternRegex = app.low.getFindRegex(pattern);
 
 		var textPreLength;
+		/** @type {Range | null} */
 		var rg = document.createRange();
 		rg.setStartBefore(t.rowNodes(0));
 		rg.setEndBefore(t.rowNodes(r[0]));
@@ -1558,7 +1879,7 @@ var cache = {};
 		}
 
 		// generate opcodes
-		t.setSelectionRange(new Wasavi.Position(t.indexOf(items[0]), 0));
+		t.setSelectionRange(new Wasavi.Position(t.indexOf(/** @type {Node} */ (items[0])), 0));
 		var head = ex.inst.add(globalLatterHead);
 		var result = ex.inst.compile(command, this.name);
 		var bottom = ex.inst.add(globalLatterBottom);
@@ -1585,17 +1906,21 @@ var cache = {};
 	}),
 	new ExCommand('join', 'j', '!c11', 2 | EXFLAGS.printDefault, function (app, t, a) {
 		var head = a.range[0];
-		var tail = Math.min(t.rowLength - 1, a.range[1] + (a.flags.count ? a.count - 1 : 0));
+		var tail = Math.min(t.rowLength - 1, a.range[1] + (a.flags.count ? /** @type {number} */ (a.count) - 1 : 0));
 		t.setSelectionRange(new Wasavi.Position(head, 0));
 		app.edit.joinLines(tail - head, a.flags.force);
 		t.setSelectionRange(t.getLineTopOffset2(head, 0));
 		app.isEditCompleted = true;
 	}),
 	new ExCommand('k', 'k', 'w1r', 1, function (app, t, a) {
-		return find('mark').handler.apply(this, arguments);
+		return /** @type {ExCommand} */ (find('mark')).handler.call(this, app, t, a);
 	}),
 	new ExCommand('map', 'map', '!W', 0, function (app, t, a) {
-		function dispMap (map, name) {
+		/**
+		 * @param {MapRule[]} map
+		 * @param {string} name
+		 */
+		function dispMap(map, name) {
 			if (map.length) {
 				let maxWidth = 0;
 				let list = [_('*** {0} map ***', name)];
@@ -1622,8 +1947,11 @@ var cache = {};
 		}
 
 		let lhs = a.argv.shift();
+		/** @type {string | undefined} */
 		let rhs;
+		/** @type {Record<string, boolean>} */
 		let options = {};
+		/** @type {Record<string, MapHandler>} */
 		let maps = {};
 
 		if (parseMapAttributes(app, lhs, options, maps)) {
@@ -1657,7 +1985,7 @@ var cache = {};
 			let delimiter;
 			for (let i in maps) {
 				delimiter && app.backlog.push(delimiter);
-				dispMap(maps[i].toArray().filter(o => o.lhs.indexOf(lhs) >= 0), maps[i].name);
+				dispMap(maps[i].toArray().filter(o => o.lhs.indexOf(/** @type {string} */ (lhs)) >= 0), maps[i].name);
 				delimiter = ' ';
 			}
 		}
@@ -1702,7 +2030,7 @@ var cache = {};
 	}),
 	new ExCommand('move', 'm', 'l', 2 | EXFLAGS.printDefault, function (app, t, a) {
 		var r = a.range;
-		var dest = a.lineNumber;
+		var dest = /** @type {number} */ (a.lineNumber);
 		if (dest >= r[0] && dest < r[1]) {
 			return _('Destination is in inside source.');
 		}
@@ -1733,7 +2061,7 @@ var cache = {};
 				});
 			}
 
-			if (rows >= app.config.vars.report) {
+			if (rows >= /** @type {number} */ (app.config.vars.report)) {
 				app.low.requestShowMessage(_('Moved {0} {line:0}.', rows));
 			}
 
@@ -1745,23 +2073,26 @@ var cache = {};
 		app.extensionChannel.postMessage({type:'open-options'});
 	}),
 	new ExCommand('pwd', 'pw', '', 0, function (app, t, a) {
+		var fstab = app.fstab;
+		var fileSystemIndex = app.fileSystemIndex;
 		app.low.requestShowMessage(
-			app.fstab[app.fileSystemIndex].name +
+			fstab[fileSystemIndex].name +
 			':' +
-			app.fstab[app.fileSystemIndex].cwd);
+			fstab[fileSystemIndex].cwd);
 	}),
 	new ExCommand('print', 'p', 'ca1', 2 | EXFLAGS.clearFlag, function (app, t, a) {
 		a.flags.print = true;
-		return defaultCommand.handler.apply(this, arguments);
+		return defaultCommand.handler.call(this, app, t, a);
 	}),
 	new ExCommand('put', 'pu', 'b', 1 | EXFLAGS.printDefault | EXFLAGS.addrZero | EXFLAGS.addrZeroDef, function (app, t, a) {
-		var register = a.flags.register ? a.register : '"';
+		var register = a.flags.register ? /** @type {string} */ (a.register) : '"';
+		/** @type {PasteOpts} */
 		var opts = {
 			isForward:true,
 			lineOrientOverride:true
 		};
 
-		function doput () {
+		function doput() {
 			t.setSelectionRange(new Wasavi.Position(minmax(-1, a.range[0], t.rowLength - 1), 0));
 			app.edit.paste(1, opts);
 			t.setSelectionRange(t.getLineTopOffset2(Math.max(0, t.selectionStartRow), 0));
@@ -1784,7 +2115,7 @@ var cache = {};
 				return v.error;
 			}
 
-			opts.content = v.result;
+			opts.content = /** @type {string} */ (/** @type {unknown} */ (v.result));
 			register = register.charAt(0);
 			app.registers.get('=').set(expressionString);
 
@@ -1803,7 +2134,7 @@ var cache = {};
 
 		else {
 			return new Promise(resolve => {
-				app.extensionChannel.getClipboard(text => {
+				app.extensionChannel.getClipboard(/** @param {unknown} text */ text => {
 					app.registers.get('*').set(text);
 
 					if (text == '') {
@@ -1819,7 +2150,7 @@ var cache = {};
 	}),
 	new ExCommand('quit', 'q', '!', 0, function (app, t, a) {
 		if (/^(?:wqs|submit)$/.test(this.name)) {
-			app.targetElement.isSubmitRequested = true;
+			/** @type {WasaviTargetElement} */ (app.targetElement).isSubmitRequested = true;
 		}
 		if (a.flags.force) {
 			app.isTextDirty = false;
@@ -1842,10 +2173,9 @@ var cache = {};
 
 		return new Promise(resolve => {
 			var port = chrome.runtime.connect({name: 'fsctl'});
-			port.onMessage.addListener(res => {
+			port.onMessage.addListener((/** @type {FileIoResponse} */ res) => {
 				if (res.error) {
 					port.disconnect();
-					port = null;
 					resolve(_.apply(null, res.error));
 					return;
 				}
@@ -1863,7 +2193,6 @@ var cache = {};
 
 					case 'complete':
 						port.disconnect();
-						port = null;
 						resolve(readCore(app, t, a, res.content, res.meta, res.status));
 						break;
 					}
@@ -1890,7 +2219,7 @@ var cache = {};
 		}
 	}),
 	new ExCommand('s', 's', 's', 2, function (app, t, a) {
-		var pattern;
+		var pattern = '';
 		if (this.name == '~') {
 			if (!app.registers.exists('/')
 			|| (pattern = app.registers.get('/').data) == '') {
@@ -1898,26 +2227,28 @@ var cache = {};
 			}
 		}
 
+		/** @type {Record<string, [number[], string, string, string]>} */
 		var argmap = {
 			's': [a.range, a.argv[0], a.argv[1], a.argv[2]],
 			'&': [a.range, '',        '%',       a.argv[0]],
-			'~': [a.range, pattern,   '~',       a.argv[0]]
+			'~': [a.range, pattern, '~', a.argv[0]]
 		};
 		var worker = new Wasavi.SubstituteWorker(app);
 
-		return worker.run.apply(worker, argmap[this.name]);
+		return worker.run.apply(worker, /** @type {[[number, number], string, string, string]} */ (argmap[this.name]));
 	}),
 	new ExCommand('&', '&', 's', 2, function (app, t, a) {
-		return find('s').handler.apply(this, arguments);
+		return /** @type {ExCommand} */ (find('s')).handler.call(this, app, t, a);
 	}),
 	new ExCommand('~', '~', 's', 2, function (app, t, a) {
-		return find('s').handler.apply(this, arguments);
+		return /** @type {ExCommand} */ (find('s')).handler.call(this, app, t, a);
 	}),
 	new ExCommand('script', 'sc', 's', 2, function (app, t, a) {
 		return 'Under development!';
 	}),
 	new ExCommand('set', 'se', 'wN', 0, function* (app, t, a) {
-		var messages;
+		/** @type {string[]} */
+		var messages = [];
 		var emphasis = false;
 		if (a.argv.length == 0) {
 			messages = app.config.dump(app.backlog.cols);
@@ -1940,7 +2271,7 @@ var cache = {};
 			}
 		}
 		else {
-			var messages = [];
+			messages = [];
 			var opcode = app.exvm.inst.currentOpcode;
 
 			for (var i = 0; i < a.argv.length; i++) {
@@ -2000,13 +2331,15 @@ var cache = {};
 					}
 					// assignment
 					else {
+						/** @type {string | undefined} */
 						var value = undefined;
 						if (re[2] == '=') {
 							value = arg.substring(re[0].length);
 							'\'"'.split('').some(function (q) {
-								if (value.charAt(0) != q) return;
-								value = value.substr(-1) == q ?
-									value.substring(1, value.length - 1) :
+								var s = /** @type {string} */ (value);
+								if (s.charAt(0) != q) return;
+								value = s.substr(-1) == q ?
+									s.substring(1, s.length - 1) :
 									undefined;
 								return true;
 							});
@@ -2090,7 +2423,7 @@ var cache = {};
 				}
 			}
 
-			if (worker.rows >= app.config.vars.report) {
+			if (worker.rows >= /** @type {number} */ (app.config.vars.report)) {
 				app.low.requestShowMessage(_('Sorted {0} {line:0}.', worker.rows));
 			}
 
@@ -2120,7 +2453,7 @@ var cache = {};
 		app.low.requestShowMessage('Whassup?');
 	}),
 	new ExCommand('submit', 'sub', '!s', 2 | EXFLAGS.addr2All | EXFLAGS.addrZeroDef, function (app, t, a) {
-		return find('write').handler.apply(this, arguments);
+		return /** @type {ExCommand} */ (find('write')).handler.call(this, app, t, a);
 	}),
 	new ExCommand('registers', 'reg', '', 0, function (app, t, a) {
 		app.backlog.push(app.registers.dump());
@@ -2133,18 +2466,19 @@ var cache = {};
 		}
 	}),
 	new ExCommand('to', 't', 'l1', 2 | EXFLAGS.printDefault, function (app, t, a) {
-		return find('copy').handler.apply(this, arguments);
+		return /** @type {ExCommand} */ (find('copy')).handler.call(this, app, t, a);
 	}),
 	new ExCommand('unabbreviate', 'una', 'w1r', 0, function (app, t, a) {
+		var abbrevs = app.abbrevs;
 		var lhs = a.argv[0];
 		if (lhs == '[all]') {
-			app.abbrevs.clear();
+			abbrevs.clear();
 		}
-		else if (!(lhs in app.abbrevs)) {
+		else if (!(lhs in abbrevs)) {
 			return _('{0} is not an abbreviation.', lhs);
 		}
 		else {
-			delete app.abbrevs[lhs];
+			delete abbrevs[lhs];
 		}
 	}),
 	new ExCommand('undo', 'u', '', 0 | EXFLAGS.updateJump, function (app, t, a) {
@@ -2161,7 +2495,9 @@ var cache = {};
 	}),
 	new ExCommand('unmap', 'unm', '!W', 0, function (app, t, a) {
 		let lhs = a.argv.shift();
+		/** @type {Record<string, boolean>} */
 		let options = {};
+		/** @type {Record<string, MapHandler>} */
 		let maps = {};
 
 		if (parseMapAttributes(app, lhs, options, maps)) {
@@ -2181,7 +2517,7 @@ var cache = {};
 		else {
 			// remove the rule corresponding to lhs
 			for (let i in maps) {
-				maps[i].remove(lhs);
+				maps[i].remove(/** @type {string} */ (lhs));
 			}
 		}
 	}),
@@ -2190,7 +2526,7 @@ var cache = {};
 	}),
 	new ExCommand('v', 'v', 's', 2 | EXFLAGS.addr2All | EXFLAGS.updateJump, function (app, t, a) {
 		a.flags.force = true;
-		return find('global').handler.apply(this, arguments);
+		return /** @type {ExCommand} */ (find('global')).handler.call(this, app, t, a);
 	}),
 	new ExCommand('write', 'w', '!s', 2 | EXFLAGS.addr2All | EXFLAGS.addrZeroDef, function (app, t, a) {
 		var parsedArgs = parseWriteArg(app, t, a, this.name);
@@ -2209,7 +2545,7 @@ var cache = {};
 		else if (this.name == 'xit' && !app.isTextDirty) {
 			// Because text is not modified, "xit" command is
 			// consequently equivalent to "quit" command.
-			result = find('quit').handler.apply(this, arguments);
+			result = /** @type {ExCommand} */ (find('quit')).handler.call(this, app, t, a);
 		}
 		else {
 			// Other patterns are sequenced "write" command;
@@ -2221,36 +2557,37 @@ var cache = {};
 		return result;
 	}),
 	new ExCommand('wq', 'wq', '!s', 2 | EXFLAGS.addr2All | EXFLAGS.addrZeroDef, function (app, t, a) {
-		return find('write').handler.apply(this, arguments);
+		return /** @type {ExCommand} */ (find('write')).handler.call(this, app, t, a);
 	}),
 	new ExCommand('wqs', 'wqs', '!s', 2 | EXFLAGS.addr2All | EXFLAGS.addrZeroDef, function (app, t, a) {
-		return find('write').handler.apply(this, arguments);
+		return /** @type {ExCommand} */ (find('write')).handler.call(this, app, t, a);
 	}),
 	new ExCommand('xit', 'x', '!s', 2 | EXFLAGS.addr2All | EXFLAGS.addrZeroDef, function (app, t, a) {
-		return find('write').handler.apply(this, arguments);
+		return /** @type {ExCommand} */ (find('write')).handler.call(this, app, t, a);
 	}),
 	new ExCommand('yank', 'ya', 'bca', 2, function (app, t, a) {
 		var p = t.selectionStart;
 		t.setSelectionRange(new Wasavi.Position(a.range[0], 0));
-		app.edit.yank(a.range[1] - a.range[0] + 1, true, a.flags.register ? a.register : '');
+		app.edit.yank(a.range[1] - a.range[0] + 1, true, a.flags.register ? /** @type {string} */ (a.register) : '');
 		t.setSelectionRange(p);
 	}),
 	new ExCommand('>', '>', 'mca1', 2, function (app, t, a) {
 		t.setSelectionRange(new Wasavi.Position(a.range[0], 0));
-		app.edit.shift(a.range[1] - a.range[0] + 1, a.argv[0]);
+		app.edit.shift(a.range[1] - a.range[0] + 1, /** @type {number} */ (/** @type {unknown} */ (a.argv[0])));
 		t.setSelectionRange(t.getLineTopOffset2(a.range[1], 0));
 	}),
 	new ExCommand('<', '<', 'mca1', 2, function (app, t, a) {
 		t.setSelectionRange(new Wasavi.Position(a.range[0], 0));
-		app.edit.unshift(a.range[1] - a.range[0] + 1, a.argv[0]);
+		app.edit.unshift(a.range[1] - a.range[0] + 1, /** @type {number} */ (/** @type {unknown} */ (a.argv[0])));
 		t.setSelectionRange(t.getLineTopOffset2(a.range[1], 0));
 	}),
 	new ExCommand('@', '@', 'b', 1, function (app, t, a) {
+		/** @type {string | undefined} */
 		var command;
-		var register;
+		var register = '';
 
 		if (a.flags.register) {
-			register = a.register;
+			register = a.register ?? '';
 		}
 		else {
 			if (!app.registers.exists('@')) {
@@ -2272,7 +2609,7 @@ var cache = {};
 			return _('Register {0} was used recursively.', register);
 		}
 
-		function doexec () {
+		function doexec() {
 			var ex = app.exvm.clone();
 			t.setSelectionRange(new Wasavi.Position(a.range[0], 0));
 			var result = ex.inst.compile(command);
@@ -2307,7 +2644,7 @@ var cache = {};
 				return v.error;
 			}
 
-			command = v.result;
+			command = /** @type {string} */ (/** @type {unknown} */ (v.result));
 			register = register.charAt(0);
 			app.registers.get('=').set(expression);
 
@@ -2329,7 +2666,7 @@ var cache = {};
 
 		else {
 			return new Promise(resolve => {
-				app.extensionChannel.getClipboard(text => {
+				app.extensionChannel.getClipboard(/** @param {unknown} text */ text => {
 					app.registers.get('*').set(text);
 
 					if (text == '') {
@@ -2343,7 +2680,7 @@ var cache = {};
 		}
 	}),
 	new ExCommand('*', '*', 'b', 1, function (app, t, a) {
-		return find('@').handler.apply(this, arguments);
+		return /** @type {ExCommand} */ (find('@')).handler.call(this, app, t, a);
 	})
 ].sort(function (a, b) {return a.name.length - b.name.length;});
 
@@ -2356,6 +2693,6 @@ Wasavi.ExCommand = Object.freeze({
 	commands: commands
 });
 
-})(typeof global == 'object' ? global : window);
+})(typeof globalThis == 'object' ? globalThis : window);
 
 // vim:set ts=4 sw=4 fenc=UTF-8 ff=unix ft=javascript fdm=marker fmr=<<<,>>> :
