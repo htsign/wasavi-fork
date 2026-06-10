@@ -154,11 +154,11 @@ declare var unicodeUtils: {
   readonly BREAK_ACTION: Record<string, number>;
   readonly LineBreaker: Function;
   readonly FfttDictionary: Function;
-  getScriptClass(ch: string): number;
-  isSpace(cp: number): boolean;
-  isClosedPunct(cp: number): boolean;
-  isSTerm(cp: number): boolean;
-  isPTerm(cp: number): boolean;
+  getScriptClass(cp: number): number;
+  isSpace(ch: string): boolean;
+  isClosedPunct(ch: string): boolean;
+  isSTerm(ch: string): boolean;
+  isPTerm(ch: string): boolean;
   isIdeograph(ch: string): boolean;
   isNonLetter(ch: string): boolean;
   isHighSurrogate(cp: number): boolean;

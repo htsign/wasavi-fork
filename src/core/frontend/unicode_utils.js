@@ -299,16 +299,47 @@ const BREAK_ACTION = {
  * classes
  */
 
-function StringStream (s) {
-	this.s = s || '';
-	this.index = 0;
-	this.goal = this.s.length;
-}
-StringStream.prototype = {
-	get isEnd () {
+/**
+ * A single code point produced by StringStream.
+ *
+ * @typedef {object} CodePoint
+ * @property {number} codePoint
+ * @property {number} index
+ * @property {number} length
+ */
+
+/**
+ * A CodePoint annotated with line break information as the algorithm processes
+ * it. `breakProp` is assigned the moment the item enters LineBreakArray;
+ * `breakAction` is filled in later by LineBreaker.run.
+ *
+ * @typedef {CodePoint & {breakProp: number, breakAction?: number}} LineBreakItem
+ */
+
+/**
+ * Equivalent-characters map for a single source character, keyed by the
+ * transliteration target characters. `false` when no equivalents exist.
+ *
+ * @typedef {Record<string, true> | false} FfttResult
+ */
+
+/** @typedef {(cp: number, data: string) => FfttResult} FfttHandler */
+
+class StringStream {
+	/** @param {string} [s] */
+	constructor(s) {
+		this.s = s || '';
+		this.index = 0;
+		this.goal = this.s.length;
+	}
+
+	get isEnd() {
 		return this.index >= this.goal;
-	},
-	getItem: function () {
+	}
+
+	/** @returns {CodePoint} */
+	getItem() {
+		/** @type {CodePoint} */
 		var result = {
 			codePoint:0,
 			index:this.index,
@@ -333,16 +364,27 @@ StringStream.prototype = {
 		result.codePoint = cp;
 		return result;
 	}
-};
-
-function LineBreakArray (s, dictData) {
-	this.stream = new StringStream(s);
-	this.dictData = dictData;
-	this.items = [];
-	this.cache = {};
 }
-LineBreakArray.prototype = {
-	getProp: function (cp) {
+
+class LineBreakArray {
+	/**
+	 * @param {string} s
+	 * @param {string} dictData
+	 */
+	constructor(s, dictData) {
+		this.stream = new StringStream(s);
+		this.dictData = dictData;
+		/** @type {LineBreakItem[]} */
+		this.items = [];
+		/** @type {Record<number, number>} */
+		this.cache = {};
+	}
+
+	/**
+	 * @param {number} cp
+	 * @returns {number}
+	 */
+	getProp(cp) {
 		if (cp in this.cache) {
 			return this.cache[cp];
 		}
@@ -367,10 +409,15 @@ LineBreakArray.prototype = {
 			}
 		}
 		return this.cache[cp] = BREAK_PROP.XX;
-	},
-	get: function (index) {
+	}
+
+	/**
+	 * @param {number} index
+	 * @returns {LineBreakItem | false}
+	 */
+	get(index) {
 		while (this.items.length <= index && !this.stream.isEnd) {
-			var item = this.stream.getItem();
+			var item = /** @type {LineBreakItem} */ (this.stream.getItem());
 			var prop = this.getProp(item.codePoint);
 			// LB1 rule
 			switch (prop) {
@@ -396,26 +443,58 @@ LineBreakArray.prototype = {
 		}
 		return this.items[index] || false;
 	}
-};
 
-function LineBreaker (dictData) {
-	function findComplexBreak (props, prop, index, count) {
+	/**
+	 * Returns the entry at `index`, typed as present. Used where the line
+	 * breaking algorithm guarantees the index is populated; it shares get()'s
+	 * stream-extension behaviour, and if the entry is absent the downstream
+	 * property access throws exactly as a bare get() result would.
+	 *
+	 * @param {number} index
+	 * @returns {LineBreakItem}
+	 */
+	at(index) {
+		return /** @type {LineBreakItem} */ (this.get(index));
+	}
+}
+
+class LineBreaker {
+	#dictData;
+
+	/** @param {string} dictData */
+	constructor(dictData) {
+		this.#dictData = dictData;
+	}
+
+	/**
+	 * @param {LineBreakArray} props
+	 * @param {number} index
+	 * @param {number} count
+	 * @returns {number}
+	 */
+	static #findComplexBreak(props, index, count) {
 		if (count == 0) return 0;
 		for (var i = 1; i < count; i++) {
-			props.get(index + i - 1).breakAction = BREAK_ACTION.PROHIBITED;
-			if (props.get(index + i).breakProp != BREAK_PROP.SA) {
+			props.at(index + i - 1).breakAction = BREAK_ACTION.PROHIBITED;
+			if (props.at(index + i).breakProp != BREAK_PROP.SA) {
 				break;
 			}
 		}
 		return i;
 	}
-	function run (s, callback) {
-		var props = new LineBreakArray(s, dictData);
+
+	/**
+	 * @param {string} s
+	 * @param {(item: LineBreakItem) => unknown} [callback]
+	 * @returns {LineBreakItem[]}
+	 */
+	run(s, callback) {
+		var props = new LineBreakArray(s, this.#dictData);
 		if (props.get(0) === false) return props.items;
 		typeof callback != 'function' && (callback = function () {});
 
 		// class of 'before' character
-		var prop = props.get(0).breakProp;
+		var prop = props.at(0).breakProp;
 
 		// treat SP at start of input as if it followed a WJ
 		if (prop == BREAK_PROP.SP) {
@@ -432,34 +511,34 @@ function LineBreaker (dictData) {
 		for (var i = 1;
 		props.get(i) !== false
 		&& prop != BREAK_PROP.BK
-		&& (prop != BREAK_PROP.CR || props.get(i).breakProp == BREAK_PROP.LF);
+		&& (prop != BREAK_PROP.CR || props.at(i).breakProp == BREAK_PROP.LF);
 		i++) {
-			var curProp = props.get(i).breakProp;
+			var curProp = props.at(i).breakProp;
 
 			// handle BK, NL and LF explicitly
 			if (curProp == BREAK_PROP.BK
 			||  curProp == BREAK_PROP.NL
 			||  curProp == BREAK_PROP.LF) {
-				props.get(i - 1).breakAction = BREAK_ACTION.PROHIBITED;
+				props.at(i - 1).breakAction = BREAK_ACTION.PROHIBITED;
 				prop = BREAK_PROP.BK;
-				if (callback(props.get(i - 1)) === true) break;
+				if (callback(props.at(i - 1)) === true) break;
 				continue;
 			}
 
 			// handle CR explicitly
 			if (curProp == BREAK_PROP.CR) {
-				props.get(i - 1).breakAction = BREAK_ACTION.PROHIBITED;
+				props.at(i - 1).breakAction = BREAK_ACTION.PROHIBITED;
 				prop = BREAK_PROP.CR;
-				if (callback(props.get(i - 1)) === true) break;
+				if (callback(props.at(i - 1)) === true) break;
 				continue;
 			}
 
 			// handle spaces explicitly
 			if (curProp == BREAK_PROP.SP) {
 				// apply rule LB7: x SP
-				props.get(i - 1).breakAction = BREAK_ACTION.PROHIBITED;
+				props.at(i - 1).breakAction = BREAK_ACTION.PROHIBITED;
 
-				if (callback(props.get(i - 1)) === true) break;
+				if (callback(props.at(i - 1)) === true) break;
 
 				// do not update prop
 				continue;
@@ -467,13 +546,13 @@ function LineBreaker (dictData) {
 
 			// handle complex scripts in a separate function
 			if (curProp == BREAK_PROP.SA) {
-				i += findComplexBreak(
-					props, prop, i - 1, props.length - (i - 1));
+				i += LineBreaker.#findComplexBreak(
+					props, i - 1, props.items.length - (i - 1));
 
-				if (callback(props.get(i - 1)) === true) break;
+				if (callback(props.at(i - 1)) === true) break;
 
 				if (props.get(i) !== false) {
-					prop = props.get(i).breakProp;
+					prop = props.at(i).breakProp;
 					continue;
 				}
 			}
@@ -481,32 +560,32 @@ function LineBreaker (dictData) {
 			// look up pair table information in BREAK_PAIRS_TABLE [before, after];
 			var breakAction;
 			if (prop in BREAK_PAIRS_TABLE && curProp in BREAK_PAIRS_TABLE) {
-				breakAction = BREAK_PAIRS_TABLE[prop].charAt(curProp) - 0;
+				breakAction = Number(BREAK_PAIRS_TABLE[prop].charAt(curProp));
 			}
 			else {
 				breakAction = BREAK_ACTION.DIRECT;
 			}
 
 			// save break action in output array
-			props.get(i - 1).breakAction = breakAction;
+			props.at(i - 1).breakAction = breakAction;
 
 			// resolve indirect break
 			if (breakAction == BREAK_ACTION.INDIRECT) {
-				if (props.get(i - 1).breakProp == BREAK_PROP.SP) {
-					props.get(i - 1).breakAction = BREAK_ACTION.INDIRECT;
+				if (props.at(i - 1).breakProp == BREAK_PROP.SP) {
+					props.at(i - 1).breakAction = BREAK_ACTION.INDIRECT;
 				}
 				else {
-					props.get(i - 1).breakAction = BREAK_ACTION.PROHIBITED;
+					props.at(i - 1).breakAction = BREAK_ACTION.PROHIBITED;
 				}
 			}
 
 			// resolve combining mark break
 			else if (breakAction == BREAK_ACTION.COMBINING_INDIRECT) {
 				// do not break before CM
-				props.get(i - 1).breakAction = BREAK_ACTION.PROHIBITED;
-				if (props.get(i - 1).breakProp == BREAK_PROP.SP) {
+				props.at(i - 1).breakAction = BREAK_ACTION.PROHIBITED;
+				if (props.at(i - 1).breakProp == BREAK_PROP.SP) {
 					// new: space is not a base
-					props.get(i - 1).breakAction = BREAK_ACTION.COMBINING_INDIRECT;
+					props.at(i - 1).breakAction = BREAK_ACTION.COMBINING_INDIRECT;
 					/*
 					// legacy: keep SP CM together
 					props.get(i - 1).breakAction = BREAK_ACTION.PROHIBITED;
@@ -516,10 +595,10 @@ function LineBreaker (dictData) {
 								BREAK_ACTION.INDIRECT : BREAK_ACTION.DIRECT;
 					}
 					*/
-					if (callback(props.get(i - 1)) === true) break;
+					if (callback(props.at(i - 1)) === true) break;
 				}
 				else {
-					if (callback(props.get(i - 1)) === true) break;
+					if (callback(props.at(i - 1)) === true) break;
 					continue;
 				}
 			}
@@ -527,9 +606,9 @@ function LineBreaker (dictData) {
 			// this is the case OP SP* CM
 			else if (breakAction == BREAK_ACTION.COMBINING_PROHIBITED) {
 				// no break allowed
-				props.get(i - 1).breakAction = BREAK_ACTION.COMBINING_PROHIBITED;
-				if (props.get(i - 1).breakProp != BREAK_PROP.SP) {
-					if (callback(props.get(i - 1)) === true) break;
+				props.at(i - 1).breakAction = BREAK_ACTION.COMBINING_PROHIBITED;
+				if (props.at(i - 1).breakProp != BREAK_PROP.SP) {
+					if (callback(props.at(i - 1)) === true) break;
 
 					// apply rule LB9: X CM* -> X
 					continue;
@@ -538,14 +617,14 @@ function LineBreaker (dictData) {
 
 			// save prop of 'before' character (unless bypassed by 'continue')
 			prop = curProp;
-			if (callback(props.get(i - 1)) === true) break;
+			if (callback(props.at(i - 1)) === true) break;
 		}
 
 		// always break at the end
-		props.get(i - 1).breakAction = BREAK_ACTION.EXPLICIT;
+		props.at(i - 1).breakAction = BREAK_ACTION.EXPLICIT;
 
 		// purge invalid item
-		while (!('breakAction' in props.items.lastItem)) {
+		while (!('breakAction' in props.items[props.items.length - 1])) {
 			props.items.pop();
 		}
 
@@ -564,7 +643,13 @@ function LineBreaker (dictData) {
 		}
 		*/
 	}
-	function dump (s, props) {
+
+	/**
+	 * @param {string} s
+	 * @param {readonly LineBreakItem[]} props
+	 * @returns {string}
+	 */
+	dump(s, props) {
 		var result = [];
 		var fragment = '';
 		for (var i = 0, goal = props.length; i < goal; i++) {
@@ -584,68 +669,92 @@ function LineBreaker (dictData) {
 		}
 		return result.join('\n');
 	}
-
-	publish(this, run, dump);
 }
 
-function FfttDictionary (dictData) {
-	var data = {}, cache = {};
-	var handlers = {
-		general: function (cp, data) {
-			var index = find(cp, data, 3);
-			if (index === false) return false;
-			var result = {};
-			result[data.charAt(index + 2)] = true;
-			return result;
-		},
-		han_ja: (function () {
-			// packmap info derived from Unicode 9.0.0
-			// generated by "src/unicode-tools/make-fftt-hanja-dict.js --packmap"
-			const packmap = {
-				 0x000001: 'a'
-				,0x000002: 'b'
-				,0x000004: 'c'
-				,0x000008: 'd'
-				,0x000010: 'e'
-				,0x000020: 'f'
-				,0x000040: 'g'
-				,0x000080: 'h'
-				,0x000100: 'i'
-				,0x000200: 'j'
-				,0x000400: 'k'
-				//omitted: 'l'
-				,0x000800: 'm'
-				,0x001000: 'n'
-				,0x002000: 'o'
-				,0x004000: 'p'
-				//omitted: 'q'
-				,0x008000: 'r'
-				,0x010000: 's'
-				,0x020000: 't'
-				,0x040000: 'u'
-				//omitted: 'v'
-				,0x080000: 'w'
-				//omitted: 'x'
-				,0x100000: 'y'
-				,0x200000: 'z'
-			};
-			return function (cp, data) {
-				var index = find(cp, data, 5);
+class FfttDictionary {
+	/** @type {Record<string, string>} */
+	#data = {};
+	/** @type {Record<string, FfttResult>} */
+	#cache = {};
+	/** @type {Record<string, FfttHandler>} */
+	#handlers;
+
+	// packmap info derived from Unicode 9.0.0
+	// generated by "src/unicode-tools/make-fftt-hanja-dict.js --packmap"
+	/** @type {Record<number, string>} */
+	static #packmap = {
+		 0x000001: 'a'
+		,0x000002: 'b'
+		,0x000004: 'c'
+		,0x000008: 'd'
+		,0x000010: 'e'
+		,0x000020: 'f'
+		,0x000040: 'g'
+		,0x000080: 'h'
+		,0x000100: 'i'
+		,0x000200: 'j'
+		,0x000400: 'k'
+		//omitted: 'l'
+		,0x000800: 'm'
+		,0x001000: 'n'
+		,0x002000: 'o'
+		,0x004000: 'p'
+		//omitted: 'q'
+		,0x008000: 'r'
+		,0x010000: 's'
+		,0x020000: 't'
+		,0x040000: 'u'
+		//omitted: 'v'
+		,0x080000: 'w'
+		//omitted: 'x'
+		,0x100000: 'y'
+		,0x200000: 'z'
+	};
+
+	/** @param {Record<string, string>} [dictData] */
+	constructor(dictData) {
+		this.#handlers = {
+			general: (cp, data) => {
+				var index = this.#find(cp, data, 3);
 				if (index === false) return false;
-				var result = {}, bits = pick3(data, index + 2);
-				for (var i in packmap) {
-					if (bits & (i - 0)) {
-						result[packmap[i]] = true;
+				/** @type {Record<string, true>} */
+				var result = {};
+				result[data.charAt(index + 2)] = true;
+				return result;
+			},
+			han_ja: (cp, data) => {
+				var index = this.#find(cp, data, 5);
+				if (index === false) return false;
+				/** @type {Record<string, true>} */
+				var result = {};
+				var bits = pick3(data, index + 2);
+				for (var i in FfttDictionary.#packmap) {
+					if (bits & Number(i)) {
+						result[FfttDictionary.#packmap[Number(i)]] = true;
 					}
 				}
 				return result;
-			};
-		})()
-	};
+			}
+		};
+
+		if (!dictData) return;
+		for (var i in dictData) {
+			var m = /** @type {keyof this} */ ('add' + i + 'Data');
+			m in this && /** @type {(d: string) => void} */ (this[m])(dictData[i]);
+		}
+	}
 
 	// private
-	function nop () {}
-	function find (cp, data, units) {
+	/** @type {FfttHandler} */
+	#nop = () => false;
+
+	/**
+	 * @param {number} cp
+	 * @param {string} data
+	 * @param {number} units
+	 * @returns {number | false}
+	 */
+	#find(cp, data, units) {
 		var left = 0, right = ((data.length / units) >> 0) - 1;
 		var middle, index, target;
 		while (left <= right) {
@@ -665,40 +774,48 @@ function FfttDictionary (dictData) {
 		}
 		return false;
 	}
-	function init () {
-		if (!dictData) return;
-		for (var i in dictData) {
-			var m = 'add' + i + 'Data';
-			m in this && this[m](dictData[i]);
+
+	// public
+	/** @param {string} d binary string */
+	addGeneralData(d) {
+		if (typeof d == 'string') {
+			this.#data.general = d;
 		}
 	}
 
-	// public
-	function addGeneralData (/*binary string*/d) {
+	/** @param {string} d binary string */
+	addHanJaData(d) {
 		if (typeof d == 'string') {
-			data.general = d;
+			this.#data.han_ja = d;
 		}
 	}
-	function addHanJaData (/*binary string*/d) {
-		if (typeof d == 'string') {
-			data.han_ja = d;
-		}
-	}
-	function addData (/*string*/name, /*any*/d, /*function*/handler) {
+
+	/**
+	 * @param {string} name
+	 * @param {string} d
+	 * @param {FfttHandler} [handler]
+	 */
+	addData(name, d, handler) {
 		name = '' + name;
-		data[name] = d;
-		handlers[name] = typeof handler == 'function' ? handler : nop;
+		this.#data[name] = d;
+		this.#handlers[name] = typeof handler == 'function' ? handler : this.#nop;
 	}
-	function get (/*string*/ch) {
+
+	/**
+	 * @param {string} ch
+	 * @returns {FfttResult}
+	 */
+	get(ch) {
+		/** @type {FfttResult} */
 		var result = false;
 		if (ch.charCodeAt(0) <= 0x7f) {
 			return result;
 		}
-		if (ch in cache) {
-			return cache[ch];
+		if (ch in this.#cache) {
+			return this.#cache[ch];
 		}
-		for (var j in data) {
-			var o = handlers[j](ch.charCodeAt(0), data[j]);
+		for (var j in this.#data) {
+			var o = this.#handlers[j](ch.charCodeAt(0), this.#data[j]);
 			if (!o) continue;
 			if (result) {
 				for (var k in o) {
@@ -709,48 +826,67 @@ function FfttDictionary (dictData) {
 				result = o;
 			}
 		}
-		return cache[ch] = result;
-	}
-	function match (/*string*/ch, /*string*/target) {
-		if (ch == target) return true;
-		var o = this.get(ch);
-		return o && target in o;
+		return this.#cache[ch] = result;
 	}
 
-	//
-	publish(this,
-		addGeneralData, addHanJaData, addData,
-		get, match
-	);
-	init.call(this);
+	/**
+	 * @param {string} ch
+	 * @param {string} target
+	 * @returns {boolean}
+	 */
+	match(ch, target) {
+		if (ch == target) return true;
+		var o = this.get(ch);
+		return o !== false && target in o;
+	}
 }
 
 /*
  * variables
  */
 
+/** @type {Record<string, RegExp>} */
 var generalSpaceRegexCache = {};
 
 /*
  * functions
  */
 
-function pick2 (data, index) {
+/**
+ * @param {string} data
+ * @param {number} index
+ * @returns {number}
+ */
+function pick2(data, index) {
 	return data.charCodeAt(index)
 		|  data.charCodeAt(index + 1) << 8;
 }
-function pick3 (data, index) {
+/**
+ * @param {string} data
+ * @param {number} index
+ * @returns {number}
+ */
+function pick3(data, index) {
 	return data.charCodeAt(index)
 		|  data.charCodeAt(index + 1) << 8
 		|  data.charCodeAt(index + 2) << 16;
 }
-function pick4 (data, index) {
+/**
+ * @param {string} data
+ * @param {number} index
+ * @returns {number}
+ */
+function pick4(data, index) {
 	return data.charCodeAt(index)
 		|  data.charCodeAt(index + 1) << 8
 		|  data.charCodeAt(index + 2) << 16
 		|  data.charCodeAt(index + 3) << 24;
 }
-function getScriptClass (cp) {
+/**
+ * @param {number} cp
+ * @returns {number}
+ */
+function getScriptClass(cp) {
 	//                    0: space
 	// (script-id << 8) | 1: letter (word component)
 	// (script-id << 8) | 2: other
@@ -759,51 +895,101 @@ function getScriptClass (cp) {
 		0 :
 		(Unistring.getScriptProp(cp) << 8) | (isNonLetter(ch) ? 2 : 1);
 }
-function isSpace (ch) {
+/**
+ * @param {string} ch
+ * @returns {boolean}
+ */
+function isSpace(ch) {
 	return REGEX_ZS.test(ch.charAt(0));
 }
-function isClosedPunct (ch) {
+/**
+ * @param {string} ch
+ * @returns {boolean}
+ */
+function isClosedPunct(ch) {
 	return REGEX_PE.test(ch.charAt(0));
 }
-function isSTerm (ch) {
+/**
+ * @param {string} ch
+ * @returns {boolean}
+ */
+function isSTerm(ch) {
 	return REGEX_STERM.test(ch.charAt(0));
 }
-function isPTerm (ch) {
+/**
+ * @param {string} ch
+ * @returns {boolean}
+ */
+function isPTerm(ch) {
 	return REGEX_PTERM.test(ch.charAt(0));
 }
-function isIdeograph (ch) {
+/**
+ * @param {string} ch
+ * @returns {boolean}
+ */
+function isIdeograph(ch) {
 	return REGEX_HAN_FAMILY.test(ch.charAt(0));
 }
-function isNonLetter (ch) {
+/**
+ * @param {string} ch
+ * @returns {boolean}
+ */
+function isNonLetter(ch) {
 	return REGEX_NON_LETTER.test(ch.charAt(0));
 }
-function isHighSurrogate (cp) {
+/**
+ * @param {number} cp
+ * @returns {boolean}
+ */
+function isHighSurrogate(cp) {
 	return cp >= 0xd800 && cp <= 0xdb7f;
 }
-function isLowSurrogate (cp) {
+/**
+ * @param {number} cp
+ * @returns {boolean}
+ */
+function isLowSurrogate(cp) {
 	return cp >= 0xdc00 && cp <= 0xdfff;
 }
-function toUCS32 (hcp, lcp) {
+/**
+ * @param {number} hcp
+ * @param {number} lcp
+ * @returns {number}
+ */
+function toUCS32(hcp, lcp) {
 	return ((hcp & 0x03c0) + 0x0040) << 10
 		| (hcp & 0x003f) << 10
 		| (lcp & 0x03ff);
 }
-function toUTF16 (cp) {
+/**
+ * @param {number} cp
+ * @returns {string}
+ */
+function toUTF16(cp) {
 	var p = (cp & 0x1f0000) >> 16;
 	var o = cp & 0xffff;
 	return p ?
 		String.fromCharCode(0xd800 | ((p - 1) << 6) | ((o & 0xfc00) >> 10)) + String.fromCharCode(0xdc00 | (o & 0x03ff)) :
 		String.fromCharCode(o);
 }
-function canBreak (act) {
+/**
+ * @param {number} act
+ * @returns {boolean}
+ */
+function canBreak(act) {
 	return act == BREAK_ACTION.DIRECT
 		|| act == BREAK_ACTION.INDIRECT
 		|| act == BREAK_ACTION.COMBINING_INDIRECT
 		|| act == BREAK_ACTION.EXPLICIT;
 }
 
-function getUnicodeGeneralSpaceRegex (source, opts) {
-	var g = /g/.test(opts);
+/**
+ * @param {string} source
+ * @param {string} [opts]
+ * @returns {RegExp}
+ */
+function getUnicodeGeneralSpaceRegex(source, opts) {
+	var g = /g/.test(opts ?? '');
 	if (source in generalSpaceRegexCache && !g) {
 		return generalSpaceRegexCache[source];
 	}
@@ -841,15 +1027,15 @@ var unicodeUtils = Object.freeze({
 	getUnicodeGeneralSpaceRegex:getUnicodeGeneralSpaceRegex
 });
 
-if (typeof module !== 'undefined' && typeof exports !== 'undefined') {
-	exports.unicodeUtils = unicodeUtils;
-	exports.spc = unicodeUtils.getUnicodeGeneralSpaceRegex;
+if (typeof module !== 'undefined' && module.exports) {
+	module.exports.unicodeUtils = unicodeUtils;
+	module.exports.spc = unicodeUtils.getUnicodeGeneralSpaceRegex;
 }
 else {
 	g.unicodeUtils = unicodeUtils;
 	g.spc = unicodeUtils.getUnicodeGeneralSpaceRegex;
 }
 
-})(typeof global == 'object' ? global : window);
+})(typeof globalThis == 'object' ? globalThis : window);
 
 // vim:set ts=4 sw=4 fenc=UTF-8 ff=unix ft=javascript fdm=marker :
