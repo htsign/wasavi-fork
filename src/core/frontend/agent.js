@@ -26,7 +26,7 @@
 typeof WasaviExtensionWrapper != 'undefined'
 && !WasaviExtensionWrapper.urlInfo.isExternal
 && /^text\/html|^application\/xhtml/.test(document.contentType)
-&& (function (global) {
+&& (function (g) {
 
 // consts <<<1
 const EXTENSION_SPECIFIER = 'data-texteditor-extension';
@@ -49,35 +49,80 @@ const ACCEPTABLE_TYPES = {
 	body:     'enablePage'
 };
 
+/**
+ * @typedef {object} SiteOverrideSelector
+ * @property {string} selector
+ * @property {boolean | undefined} blocked
+ * @property {string | undefined} setargs
+ */
+/**
+ * @typedef {object} SiteOverrides
+ * @property {SiteOverrideSelector[]} _selectors
+ * @property {(element: Element) => boolean | undefined} blocked
+ * @property {(element: Element) => string | undefined} setargs
+ */
+/**
+ * @typedef {object} MarkdownAppendable
+ * @property {(text: string) => void} append
+ */
+/**
+ * @typedef {object} PseudoMutationObserver
+ * @property {Element | null} element
+ * @property {(target: Node, options?: MutationObserverInit) => void} observe
+ * @property {() => void} disconnect
+ * @property {() => string} toString
+ */
+/**
+ * @typedef {object} MutationObserverLike
+ * @property {(target: Node, options?: MutationObserverInit) => void} observe
+ * @property {() => void} disconnect
+ */
+/**
+ * @typedef {new (handler?: unknown) => MutationObserverLike} MutationObserverCtor
+ */
+
 // page global variables <<<1
 var extension = WasaviExtensionWrapper.create();
 var isTestFrame = /^http:\/\/127\.0\.0\.1(:\d+)?\/test_frame\.html/.test(window.location.href);
-var isOptionsPage = window.location.href == extension.urlInfo.optionsUrl;
+var isOptionsPage = window.location.href == /** @type {WasaviUrlInfo} */ (extension.urlInfo).optionsUrl;
+/** @type {Record<string, boolean> | undefined} */
 var allowedElements;
+/** @type {readonly Record<string, unknown>[] | undefined} */
 var shortcutCode;
+/** @type {string | undefined} */
 var fontFamily;
+/** @type {boolean | undefined} */
 var quickActivation;
+/** @type {boolean | undefined} */
 var devMode;
+/** @type {boolean | undefined} */
 var logMode;
+/** @type {SiteOverrides | undefined} */
 var siteOverrides;
+/** @type {number | undefined} */
 var statusLineHeight;
+/** @type {string[] | undefined} */
 var testLog;
+/** @type {Record<string, Agent>} */
 var wasaviAgentsHash = {};
 var diag = {
+	/** @type {string[] | null} */
 	_messages: null,
+	/** @type {number | null} */
 	_lastPush: null,
-	init: function () {
+	init() {
 		this._messages = [];
 		this._lastPush = Date.now();
 		return this;
 	},
-	push: function (s) {
+	/** @param {string} s */
+	push(s) {
 		if (!this._messages) return;
 		var now = Date.now();
-		this._messages.push(((now - this._lastPush) / 1000).toFixed(3) + 's\t' + s);
+		this._messages.push(((now - (this._lastPush ?? 0)) / 1000).toFixed(3) + 's\t' + s);
 		this._lastPush = now;
 	},
-	out: function () {
+	out() {
 		if (!this._messages) return;
 		error(this._messages.join('\n'));
 		this._messages = null;
@@ -85,25 +130,37 @@ var diag = {
 };
 
 // utility functions <<<1
-function log () {
-	logMode && console.log('wasavi agent: ' + Array.prototype.slice.call(arguments).join(' '));
+/** @param {...unknown} args */
+function log(...args) {
+	logMode && console.log('wasavi agent: ' + args.join(' '));
 }
-function info () {
-	logMode && console.info('wasavi agent: ' + Array.prototype.slice.call(arguments).join(' '));
+/** @param {...unknown} args */
+function info(...args) {
+	logMode && console.info('wasavi agent: ' + args.join(' '));
 }
-function error () {
-	logMode && console.error('wasavi agent: ' + Array.prototype.slice.call(arguments).join(' '));
+/** @param {...unknown} args */
+function error(...args) {
+	logMode && console.error('wasavi agent: ' + args.join(' '));
 }
 
-function $ (id) {
+/**
+ * @param {string | HTMLElement} id
+ * @returns {HTMLElement | null}
+ */
+function $(id) {
 	return typeof id == 'string' ? document.getElementById(id) : id;
 }
 
-function _ () {
-	return Array.prototype.slice.call(arguments);
+/**
+ * @param {...unknown} args
+ * @returns {unknown[]}
+ */
+function _(...args) {
+	return args;
 }
 
-function getUniqueClass () {
+/** @returns {string} */
+function getUniqueClass() {
 	var result;
 	do {
 		result = 'wasavi_tmp_' + Math.floor(Math.random() * 0x10000);
@@ -111,13 +168,24 @@ function getUniqueClass () {
 	return result;
 }
 
-function fireCustomEvent (name, detail, target) {
+/**
+ * @param {string} name
+ * @param {unknown} detail
+ * @param {EventTarget} [target]
+ * @returns {void}
+ */
+function fireCustomEvent(name, detail, target) {
 	var ev = document.createEvent('CustomEvent');
 	ev.initCustomEvent(name, false, false, detail);
 	(target || document).dispatchEvent(ev);
 }
 
-function multiply (letter, times) {
+/**
+ * @param {string} letter
+ * @param {number} times
+ * @returns {string}
+ */
+function multiply(letter, times) {
 	if (letter == '' || times <= 0) return '';
 	var result = letter;
 	while (result.length < times) {
@@ -126,14 +194,20 @@ function multiply (letter, times) {
 	return result.length == times ? result : result.substring(0, letter.length * times);
 }
 
-function getShadowActiveElement (node) {
+/**
+ * @param {Element | null} node
+ * @returns {Element | null}
+ */
+function getShadowActiveElement(node) {
 	// @see https://github.com/akahuku/wasavi/issues/124
 	// @see http://jsbin.com/fizeger/edit?html,output
 	if (!node) return null;
 	for (;;) {
+		/** @type {ShadowRoot | null} */
 		var root = node.shadowRoot;
 		if (!root) return node;
 
+		/** @type {Element | null} */
 		var inner = root.activeElement;
 		if (!inner) return node;
 
@@ -142,14 +216,35 @@ function getShadowActiveElement (node) {
 }
 
 var markDown = (function () {
-	function getStyle (node, prop) {
-		if (node.style[prop]) return node.style[prop];
+	/**
+	 * @typedef {(this: ToPlainText, node: Element, nodeName: string) => void} MarkdownUnitHandler
+	 */
+	/**
+	 * @typedef {object} MarkdownOpts
+	 * @property {Record<string, MarkdownUnitHandler>} [preunits]
+	 * @property {Record<string, MarkdownUnitHandler>} [postunits]
+	 * @property {(this: ToPlainText, self: ToPlainText) => void} [onbeforeprocess]
+	 * @property {(this: ToPlainText, self: ToPlainText) => void} [onafterprocess]
+	 */
+
+	/**
+	 * @param {HTMLElement} node
+	 * @param {keyof CSSStyleDeclaration & string} prop
+	 * @returns {string}
+	 */
+	function getStyle(node, prop) {
+		if (node.style[prop]) return /** @type {string} */ (node.style[prop]);
 		if (node.nodeName == 'SCRIPT') return 'none';
-		var style = node.ownerDocument.defaultView.getComputedStyle(node, '');
-		return style[prop];
+		var style = /** @type {WindowProxy} */ (node.ownerDocument.defaultView).getComputedStyle(node, '');
+		return /** @type {string} */ (style[prop]);
 	}
 
-	function getQuotedCount (node, rootNode) {
+	/**
+	 * @param {Node | null} node
+	 * @param {Node} rootNode
+	 * @returns {number}
+	 */
+	function getQuotedCount(node, rootNode) {
 		var result = 0;
 		for (; node; node = node.parentNode) {
 			if (node.nodeName == 'BLOCKQUOTE') {
@@ -162,76 +257,123 @@ var markDown = (function () {
 		return result;
 	}
 
-	function isBlock (display) {
+	/**
+	 * @param {string} display
+	 * @returns {boolean}
+	 */
+	function isBlock(display) {
 		return 'table-row block list-item'.indexOf(display) >= 0;
 	}
 
-	function isForceInline (display) {
+	/**
+	 * @param {string} display
+	 * @returns {boolean}
+	 */
+	function isForceInline(display) {
 		return 'table-row'.indexOf(display) >= 0;
 	}
 
-	function Unit (text, nodeName, display, whiteSpace, quotedCount) {
-		this.text = [text];
-		this.nodeName = nodeName || '';
-		this.display = display || '';
-		this.whiteSpace = whiteSpace || '';
-		this.quotedCount = quotedCount || 0;
-	}
+	class Unit {
+		/** @type {string[] | string} */
+		text;
+		/** @type {string} */
+		nodeName;
+		/** @type {string} */
+		display;
+		/** @type {string} */
+		whiteSpace;
+		/** @type {number} */
+		quotedCount;
+		/** @type {number | undefined} */
+		listDepth;
+		/** @type {boolean | undefined} */
+		isFirstListItem;
+		/** @type {boolean | undefined} */
+		isLastListItem;
 
-	Unit.prototype = {
-		append: function (text) {
-			var last = this.text.length - 1;
-			if (this.text[last] == '') {
-				this.text[last] = text.replace(/^\s+/, '');
+		/**
+		 * @param {string} text
+		 * @param {string} [nodeName]
+		 * @param {string} [display]
+		 * @param {string} [whiteSpace]
+		 * @param {number} [quotedCount]
+		 */
+		constructor(text, nodeName, display, whiteSpace, quotedCount) {
+			this.text = [text];
+			this.nodeName = nodeName || '';
+			this.display = display || '';
+			this.whiteSpace = whiteSpace || '';
+			this.quotedCount = quotedCount || 0;
+		}
+
+		/**
+		 * @param {string} text
+		 * @returns {void}
+		 */
+		append(text) {
+			var buffer = /** @type {string[]} */ (this.text);
+			var last = buffer.length - 1;
+			if (buffer[last] == '') {
+				buffer[last] = text.replace(/^\s+/, '');
 			}
 			else {
-				var re1 = /^(.*?)(\s*)$/.exec(this.text[last]);
-				var re2 = /^(\s*)([\s\S]*)$/.exec(text);
-				this.text[last] =
+				var re1 = /** @type {RegExpExecArray} */ (/^(.*?)(\s*)$/.exec(buffer[last]));
+				var re2 = /** @type {RegExpExecArray} */ (/^(\s*)([\s\S]*)$/.exec(text));
+				buffer[last] =
 					(re1[1] || '') +
 					((re1[2] && re1[2].length || re2[1] && re2[1].length) ? ' ' : '') +
 					(re2[2] || '').replace(/[\n\t ]+/g, ' ');
 			}
-		},
-		appendNewline: function () {
-			this.text.push('');
 		}
-	};
 
-	function ToPlainText (opts) {
-		this.opts = opts || {};
-		this.buffer = null;
-	};
+		/** @returns {void} */
+		appendNewline() {
+			/** @type {string[]} */ (this.text).push('');
+		}
+	}
 
-	ToPlainText.prototype = {
-		preunits: {
-			a: function () { this.append('[') },
-			b: function () { this.append('**') },
-			br: function () { this.appendNewline() },
-			code: function () { this.append('`') },
-			h1: function (node, nodeName) { this.append(multiply('#', nodeName.substring(1) - 0) + ' ') },
-			h2: function () { this.preunits.h1.apply(this, arguments) },
-			h3: function () { this.preunits.h1.apply(this, arguments) },
-			h4: function () { this.preunits.h1.apply(this, arguments) },
-			h5: function () { this.preunits.h1.apply(this, arguments) },
-			h6: function () { this.preunits.h1.apply(this, arguments) },
-			hr: function () { this.append('* * *') },
-			i: function () { this.append('_') },
-			img: function (node, nodeName) {
+	class ToPlainText {
+		/** @type {MarkdownOpts} */
+		opts;
+		/** @type {Unit[]} */
+		buffer;
+
+		/** @param {MarkdownOpts} [opts] */
+		constructor(opts) {
+			this.opts = opts || {};
+			this.buffer = [];
+		}
+
+		/** @type {Record<string, MarkdownUnitHandler>} */
+		preunits = {
+			a() { this.append('[') },
+			b() { this.append('**') },
+			br() { this.appendNewline() },
+			code() { this.append('`') },
+			h1(node, nodeName) { this.append(multiply('#', Number(nodeName.substring(1))) + ' ') },
+			h2(node, nodeName) { this.preunits.h1.call(this, node, nodeName) },
+			h3(node, nodeName) { this.preunits.h1.call(this, node, nodeName) },
+			h4(node, nodeName) { this.preunits.h1.call(this, node, nodeName) },
+			h5(node, nodeName) { this.preunits.h1.call(this, node, nodeName) },
+			h6(node, nodeName) { this.preunits.h1.call(this, node, nodeName) },
+			hr() { this.append('* * *') },
+			i() { this.append('_') },
+			img(node, nodeName) {
 				this.append(
 					'![' + (node.getAttribute('alt') || '') + ']' +
 					'(' + (node.getAttribute('src') || '') + ')'
 				);
 			},
-			li: function (node) {
+			li(node) {
+				var parentNode = /** @type {Element} */ (node.parentNode);
 				var prefix = '* ';
-				var listIndex = Array.prototype.indexOf.call(node.parentNode.children, node);
-				if (node.parentNode.nodeName == 'OL') {
+				var listIndex = Array.prototype.indexOf.call(parentNode.children, node);
+				if (parentNode.nodeName == 'OL') {
 					prefix = (listIndex + 1) + '. ';
 				}
 				this.append(prefix);
 				this.prop('isFirstListItem', listIndex == 0);
-				this.prop('isLastListItem', listIndex == node.parentNode.children.length - 1);
+				this.prop('isLastListItem', listIndex == parentNode.children.length - 1);
 
 				var depth = -1;
 				for (var p = node.parentNode; p; p = p.parentNode) {
@@ -241,19 +383,23 @@ var markDown = (function () {
 				}
 				this.prop('listDepth', depth);
 			}
-		},
-		postunits: {
-			a: function (node) { this.append('](' + node.getAttribute('href') + ')') },
-			b: function () { this.append('**') },
-			code: function () { this.append('`') },
-			i: function () { this.append('_') }
-		},
-		dump: function () {
+		};
+
+		/** @type {Record<string, MarkdownUnitHandler>} */
+		postunits = {
+			a(node) { this.append('](' + node.getAttribute('href') + ')') },
+			b() { this.append('**') },
+			code() { this.append('`') },
+			i() { this.append('_') }
+		};
+
+		/** @returns {string} */
+		dump() {
 			var buffer = ['*** dump ***'];
 			this.buffer.forEach(function (b, i) {
 				var tmp = [
 					'--- #' + i + ' ---',
-					'    text: "' + b.text.replace(/\n/g, '\\n')
+					'    text: "' + /** @type {string} */ (b.text).replace(/\n/g, '\\n')
 										  .replace(/\t/g, '\\t') + '"',
 					' display: ' + b.display +
 						', nodeName: ' + b.nodeName +
@@ -271,39 +417,83 @@ var markDown = (function () {
 				buffer.push.apply(buffer, tmp);
 			});
 			return buffer.join('\n');
-		},
-		newUnit: function (nodeName, display, whiteSpace, quotedCount) {
+		}
+
+		/**
+		 * @param {string} nodeName
+		 * @param {string} display
+		 * @param {string} whiteSpace
+		 * @param {number} quotedCount
+		 * @returns {void}
+		 */
+		newUnit(nodeName, display, whiteSpace, quotedCount) {
 			this.buffer.push(new Unit('', nodeName, display, whiteSpace, quotedCount));
-		},
-		getResult: function () {
+		}
+
+		/** @returns {string} */
+		getResult() {
 			return this.buffer.map(function (b) {return b.text}).join('');
-		},
-		append: function () {
+		}
+
+		/**
+		 * @param {string} text
+		 * @returns {void}
+		 */
+		append(text) {
 			var i = this.buffer.length - 1;
 			if (i < 0) return;
-			return this.buffer[i].append.apply(this.buffer[i], arguments);
-		},
-		appendNewline: function () {
+			return this.buffer[i].append(text);
+		}
+
+		/** @returns {void} */
+		appendNewline() {
 			var i = this.buffer.length - 1;
 			if (i < 0) return;
-			this.buffer[i].appendNewline.apply(this.buffer[i], arguments);
-		},
-		prop: function (propName, value) {
+			this.buffer[i].appendNewline();
+		}
+
+		/**
+		 * @param {'isFirstListItem' | 'isLastListItem' | 'listDepth'} propName
+		 * @param {boolean | number} value
+		 * @returns {void}
+		 */
+		prop(propName, value) {
 			var i = this.buffer.length - 1;
 			if (i < 0) return;
-			this.buffer[i][propName] = value;
-		},
-		emit: function () {
-			var args = Array.prototype.slice.call(arguments);
-			var eventName = args.shift();
-			if (typeof this.opts[eventName] != 'function') return;
+			var u = this.buffer[i];
+			switch (propName) {
+			case 'isFirstListItem':
+			case 'isLastListItem':
+				u[propName] = /** @type {boolean} */ (value);
+				break;
+			case 'listDepth':
+				u[propName] = /** @type {number} */ (value);
+				break;
+			}
+		}
+
+		/**
+		 * @param {'onbeforeprocess' | 'onafterprocess'} eventName
+		 * @param {ToPlainText} self
+		 * @returns {void}
+		 */
+		emit(eventName, self) {
+			var handler = this.opts[eventName];
+			if (typeof handler != 'function') return;
 			try {
-				this.opts[eventName].apply(this, args);
+				handler.call(this, self);
 			}
 			catch (e) {}
-		},
-		mainloop: function (node, rootNode) {
-			var display = getStyle(node, 'display');
+		}
+
+		/**
+		 * @param {Node} node
+		 * @param {Node} rootNode
+		 * @returns {void}
+		 */
+		mainloop(node, rootNode) {
+			var element = /** @type {HTMLElement} */ (node);
+			var display = getStyle(element, 'display');
 			if (display == 'none') return;
 
 			var block = isBlock(display);
@@ -311,17 +501,17 @@ var markDown = (function () {
 				this.newUnit(
 					node.nodeName,
 					display,
-					getStyle(node, 'whiteSpace'),
+					getStyle(element, 'whiteSpace'),
 					getQuotedCount(node, rootNode)
 				);
 			}
 
 			var nodeName = node.nodeName.toLowerCase();
 			if (this.opts.preunits && nodeName in this.opts.preunits) {
-				this.opts.preunits[nodeName].call(this, node, nodeName);
+				this.opts.preunits[nodeName].call(this, element, nodeName);
 			}
 			else if (nodeName in this.preunits) {
-				this.preunits[nodeName].call(this, node, nodeName);
+				this.preunits[nodeName].call(this, element, nodeName);
 			}
 
 			var lastUnitIndex = -1;
@@ -329,15 +519,16 @@ var markDown = (function () {
 				var c = node.childNodes[i];
 
 				if (c.nodeType == 3) {
+					var parentNode = /** @type {HTMLElement} */ (c.parentElement);
 					if (lastUnitIndex >= 0 && lastUnitIndex != this.buffer.length - 1) {
 						this.newUnit(
-							c.parentNode.nodeName,
-							getStyle(c.parentNode, 'display'),
-							getStyle(c.parentNode, 'whiteSpace'),
+							parentNode.nodeName,
+							getStyle(parentNode, 'display'),
+							getStyle(parentNode, 'whiteSpace'),
 							getQuotedCount(node, rootNode)
 						);
 					}
-					this.append(c.nodeValue);
+					this.append(c.nodeValue ?? '');
 					lastUnitIndex = this.buffer.length - 1;
 				}
 				else {
@@ -345,19 +536,21 @@ var markDown = (function () {
 				}
 			}
 
-			var nodeName = node.nodeName.toLowerCase();
+			nodeName = node.nodeName.toLowerCase();
 			if (this.opts.postunits && nodeName in this.opts.postunits) {
-				this.opts.postunits[nodeName].call(this, node, nodeName);
+				this.opts.postunits[nodeName].call(this, element, nodeName);
 			}
 			else if (nodeName in this.postunits) {
-				this.postunits[nodeName].call(this, node, nodeName);
+				this.postunits[nodeName].call(this, element, nodeName);
 			}
-		},
-		normalize: function () {
+		}
+
+		/** @returns {void} */
+		normalize() {
 			for (var i = 0, buffer = this.buffer; i < buffer.length; i++) {
 				var u = buffer[i];
 
-				u.text = u.text.join('\n');
+				u.text = /** @type {string[]} */ (u.text).join('\n');
 				if (u.text.length == 0) {
 					buffer.splice(i, 1);
 					i--;
@@ -368,7 +561,7 @@ var markDown = (function () {
 				var u = buffer[i];
 
 				if (u.display == 'list-item') {
-					u.text = multiply(' ', u.listDepth * 2) + u.text;
+					u.text = multiply(' ', (u.listDepth ?? 0) * 2) + u.text;
 				}
 
 				if (u.quotedCount) {
@@ -390,22 +583,33 @@ var markDown = (function () {
 					}
 				}
 			}
-		},
-		exec: function (input) {
-			input = $(input);
+		}
+
+		/**
+		 * @param {string | HTMLElement} input
+		 * @returns {string}
+		 */
+		exec(input) {
+			var root = /** @type {HTMLElement} */ ($(input));
 			this.buffer = [];
 			this.emit('onbeforeprocess', this);
-			this.mainloop(input, input);
+			this.mainloop(root, root);
 			this.normalize();
 			this.emit('onafterprocess', this);
 			return this.getResult();
 		}
-	};
+	}
 
-	function identify (node) {
+	/**
+	 * @param {string | HTMLElement} node
+	 * @returns {string[]}
+	 */
+	function identify(node) {
+		/** @type {string[]} */
 		var tmpIds = [];
 		Array.prototype.forEach.call(
-			$(node).querySelectorAll('a, img, object, embed'),
+			$(node)?.querySelectorAll('a, img, object, embed') ?? [],
+			/** @param {Element} node */
 			function (node) {
 				if (node.hasAttribute('id')) return;
 
@@ -422,7 +626,11 @@ var markDown = (function () {
 		return tmpIds;
 	}
 
-	function unidentify (tmpIds) {
+	/**
+	 * @param {unknown} tmpIds
+	 * @returns {void}
+	 */
+	function unidentify(tmpIds) {
 		if (!(tmpIds instanceof Array)) return;
 		tmpIds.forEach(function (id) {
 			var node = $(id);
@@ -430,7 +638,12 @@ var markDown = (function () {
 		});
 	}
 
-	function run (input, opts) {
+	/**
+	 * @param {string | HTMLElement} input
+	 * @param {MarkdownOpts} [opts]
+	 * @returns {string}
+	 */
+	function run(input, opts) {
 		return (new ToPlainText(opts)).exec(input);
 	}
 
@@ -441,33 +654,49 @@ var markDown = (function () {
 	};
 })();
 
-function getMutationObserver (type, mediator) {
-	return window.MutationObserver
-	|| window.WebKitMutationObserver
-	|| window.OMutationObserver
-	|| window.MozMutationObserver
-	|| function (handler) {
-		return {
-			element: null,
-			observe: function (element) {
-				this.element = element;
-				this.element && this.element.addEventListener(
-					'DOM' + type, mediator, false);
-			},
-			disconnect: function () {
-				this.element && this.element.removeEventListener(
-					'DOM' + type, mediator, false);
-				this.element = null;
-			},
-			toString: function () {
-				return '[object WasaviPseudoMutationObserver]';
-			}
-		};
-	};
+/**
+ * @param {string} type
+ * @param {EventListener} mediator
+ * @returns {MutationObserverCtor}
+ */
+function getMutationObserver(type, mediator) {
+	var win = /** @type {Record<string, typeof MutationObserver | undefined>} */ (/** @type {unknown} */ (window));
+	return /** @type {MutationObserverCtor} */ (/** @type {unknown} */ (
+		window.MutationObserver
+		|| win.WebKitMutationObserver
+		|| win.OMutationObserver
+		|| win.MozMutationObserver
+		|| /** @param {unknown} [handler] @returns {PseudoMutationObserver} */ function (handler) {
+			return {
+				/** @type {Element | null} */
+				element: null,
+				/** @param {Node} target @param {MutationObserverInit} [options] */
+				observe(target, options) {
+					this.element = /** @type {Element} */ (target);
+					this.element && this.element.addEventListener(
+						'DOM' + type, mediator, false);
+				},
+				disconnect() {
+					this.element && this.element.removeEventListener(
+						'DOM' + type, mediator, false);
+					this.element = null;
+				},
+				toString() {
+					return '[object WasaviPseudoMutationObserver]';
+				}
+			};
+		}
+	));
 }
 
-function getFocusables (sentinel) {
+/**
+ * @param {Element} sentinel
+ * @returns {Element[]}
+ */
+function getFocusables(sentinel) {
+	/** @type {Element[]} */
 	var ordered = [];
+	/** @type {Element[]} */
 	var unordered = [];
 	var nodes = document.evaluate([
 		'//a[@href]',
@@ -481,35 +710,45 @@ function getFocusables (sentinel) {
 	].join('|'), document.body, null, window.XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
 
 	for (var i = 0, goal = nodes.snapshotLength; i < goal; i++) {
-		var node = nodes.snapshotItem(i);
-		var s = document.defaultView.getComputedStyle(node, '');
+		var node = /** @type {Element} */ (nodes.snapshotItem(i));
+		var s = /** @type {WindowProxy} */ (document.defaultView).getComputedStyle(node, '');
 		if (s.visibility != 'visible') continue;
 		if (node == sentinel) continue;
 
-		var ti = parseInt(node.getAttribute('tabIndex'));
+		var ti = parseInt(node.getAttribute('tabIndex') ?? '');
 		(!isNaN(ti) && ti > 0 ? ordered : unordered).push(node);
 	}
 
 	return ordered.concat(unordered);
 }
 
-function assign () {
-	var args = Array.prototype.slice.call(arguments);
-	var element = args.shift();
+/**
+ * @param {HTMLElement} element
+ * @param {...(string | number)} args
+ * @returns {void}
+ */
+function assign(element, ...args) {
+	var style = /** @type {Record<string, string | number>} */ (/** @type {unknown} */ (element.style));
 	for (var i = 0, goal = args.length; i < goal; i += 2) {
-		var styleName = args[i];
+		var styleName = /** @type {string} */ (args[i]);
 		var value = args[i + 1];
-		if (element.style[styleName] == value) continue;
-		element.style[styleName] = value;
+		if (style[styleName] == value) continue;
+		style[styleName] = value;
 	}
 }
 
-function createElementRemoveListener (element, callback) {
-	function fireRemoved () {
+/**
+ * @param {Element} element
+ * @param {(e: {target: Element}) => void} callback
+ * @returns {{connect: () => void, disconnect: () => void}}
+ */
+function createElementRemoveListener(element, callback) {
+	function fireRemoved() {
 		callback({target: element});
 	}
 
-	function handleRemove (records) {
+	/** @param {MutationRecord[]} records */
+	function handleRemove(records) {
 		element
 		&& records.some(function (r) {
 			return r.removedNodes
@@ -518,25 +757,30 @@ function createElementRemoveListener (element, callback) {
 		&& fireRemoved();
 	}
 
-	function connect () {
+	function connect() {
 		var target = /\bWasaviPseudoMutationObserver\b/.test(mo.toString()) ?
-				element : element.parentNode;
+				element : /** @type {Node} */ (element.parentNode);
 		mo.observe(target, {childList: true});
 	}
 
-	function disconnect () {
+	function disconnect() {
 		mo.disconnect();
 	}
 
-	var mo = getMutationObserver('NodeRemoved', fireRemoved);
+	var moCtor = getMutationObserver('NodeRemoved', fireRemoved);
 
-	mo = new mo(handleRemove);
+	var mo = new moCtor(handleRemove);
 	connect();
 	return {connect: connect, disconnect: disconnect};
 }
 
-function createElementResizeListener (element, callback) {
-	function fireIfResized (e) {
+/**
+ * @param {HTMLElement} element
+ * @param {(e: {target: HTMLElement}) => void} callback
+ * @returns {{connect: () => void, disconnect: () => void, fire: () => void}}
+ */
+function createElementResizeListener(element, callback) {
+	function fireIfResized() {
 		if (timer) return;
 		timer = setTimeout(function () {
 			timer = null;
@@ -544,23 +788,31 @@ function createElementResizeListener (element, callback) {
 		}, 100);
 	}
 
-	function attrModified (e) {
-		e.attrName == 'style' && fireIfResized();
+	/**
+	 * @param {Event} e
+	 * @returns {void}
+	 */
+	function attrModified(e) {
+		/** @type {{attrName?: string}} */ (/** @type {unknown} */ (e)).attrName == 'style' && fireIfResized();
 	}
 
-	function connect () {
+	function connect() {
 		mo.observe(element, {attributes: true, attributeFilter: ['style']});
 		window.addEventListener('resize', fireIfResized, false);
 		element.addEventListener('mouseup', fireIfResized, false);
 	}
 
-	function disconnect () {
+	function disconnect() {
 		mo.disconnect();
 		window.removeEventListener('resize', fireIfResized, false);
 		element.removeEventListener('mouseup', fireIfResized, false);
 	}
 
-	function getRect (element) {
+	/**
+	 * @param {HTMLElement} element
+	 * @returns {{left: number, top: number, width: number, height: number}}
+	 */
+	function getRect(element) {
 		var r = element.getBoundingClientRect();
 		return {
 			left: r.left,
@@ -570,28 +822,41 @@ function createElementResizeListener (element, callback) {
 		};
 	}
 
-	var mo = getMutationObserver('AttrModified', attrModified);
+	var moCtor = getMutationObserver('AttrModified', attrModified);
 	var rect = getRect(element);
+	/** @type {ReturnType<typeof setTimeout> | null} */
 	var timer;
 
-	mo = new mo(fireIfResized);
+	var mo = new moCtor(fireIfResized);
 	connect();
 	return {connect: connect, disconnect: disconnect, fire: fireIfResized};
 }
 
 //
 
-function isAcceptable (key) {
-	return key in ACCEPTABLE_TYPES && allowedElements[ACCEPTABLE_TYPES[key]];
+/**
+ * @param {string} key
+ * @returns {boolean}
+ */
+function isAcceptable(key) {
+	return key in ACCEPTABLE_TYPES && /** @type {Record<string, boolean>} */ (allowedElements)[ACCEPTABLE_TYPES[/** @type {keyof typeof ACCEPTABLE_TYPES} */ (key)]];
 }
 
-function isLaunchableElement (target) {
-	return target.isContentEditable && allowedElements.enableContentEditable
-		|| target.nodeName == 'BODY' && allowedElements.enablePage
-		|| /^(?:TEXTAREA|INPUT)$/.test(target.nodeName) && isAcceptable(target.type);
+/**
+ * @param {HTMLElement} target
+ * @returns {boolean}
+ */
+function isLaunchableElement(target) {
+	return target.isContentEditable && (allowedElements?.enableContentEditable ?? false)
+		|| target.nodeName == 'BODY' && (allowedElements?.enablePage ?? false)
+		|| /^(?:TEXTAREA|INPUT)$/.test(target.nodeName) && isAcceptable(/** @type {HTMLInputElement} */ (target).type);
 }
 
-function doesTargetAllowLaunch (target) {
+/**
+ * @param {Element} target
+ * @returns {boolean}
+ */
+function doesTargetAllowLaunch(target) {
 	/*
 	 * <textarea>
 	 * <textarea data-texteditor-extension="auto">
@@ -611,37 +876,102 @@ function doesTargetAllowLaunch (target) {
 	return true;
 }
 
-function matchWithShortcut (e) {
+/**
+ * @param {KeyboardEvent} e
+ * @returns {boolean | undefined}
+ */
+function matchWithShortcut(e) {
 	return shortcutCode && shortcutCode.some(function (code) {
+		var event = /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (e));
 		for (var i in code) {
 			if (!(i in e)) return false;
-			if (e[i] !== code[i]) return false;
+			if (event[i] !== code[i]) return false;
 		}
 		return true;
 	});
 }
 
-function getFullscreenRect () {
+/** @returns {DOMRect} */
+function getFullscreenRect() {
 	var cover = document.body.appendChild(document.createElement('div'));
 	cover.style.position = 'fixed';
 	cover.style.left = cover.style.top =
 	cover.style.right = cover.style.bottom = FULLSCREEN_MARGIN + 'px';
 	var result = cover.getBoundingClientRect();
-	cover.parentNode.removeChild(cover);
+	cover.remove();
 	return result;
 }
 
 // classes <<<1
-var Agent = (function () {
+/**
+ * @typedef {object} LocateRect
+ * @property {number} left
+ * @property {number} top
+ * @property {number} width
+ * @property {number} height
+ * @property {number} [right]
+ * @property {number} [bottom]
+ */
+/**
+ * @typedef {object} LocateOpts
+ * @property {boolean | null} [isFullscreen]
+ * @property {number | null} [width]
+ * @property {number | null} [height]
+ */
+/**
+ * @typedef {object} ElementRemoveListener
+ * @property {() => void} connect
+ * @property {() => void} disconnect
+ */
+/**
+ * @typedef {object} ElementResizeListener
+ * @property {() => void} connect
+ * @property {() => void} disconnect
+ * @property {() => void} fire
+ */
+/**
+ * @typedef {object} AgentRequestProps
+ * @property {string} [tabId]
+ * @property {string} [childTabId]
+ * @property {number} [frameId]
+ * @property {string} [fontFamily]
+ * @property {string} [value]
+ * @property {number} [width]
+ * @property {number} [height]
+ * @property {string} [writeAs]
+ * @property {boolean} [isImplicit]
+ * @property {boolean} [isForce]
+ * @property {boolean} [isSyncSize]
+ * @property {string} [key]
+ * @property {string} [type]
+ * @property {string} [siteOverrides]
+ * @property {number} [statusLineHeight]
+ * @property {boolean} [quickActivation]
+ * @property {boolean} [devMode]
+ * @property {boolean} [logMode]
+ * @property {Record<string, boolean>} [targets]
+ * @property {readonly Record<string, unknown>[]} [shortcutCode]
+ * @property {Record<string, unknown>} [items]
+ */
+/** @typedef {AgentRequestProps & Record<string, unknown>} AgentRequest */
+/**
+ * @typedef {(data?: unknown) => void} AgentResponse
+ */
 
 	// private functions
-	function isFixedPosition (element) {
+	/**
+	 * @param {Element} element
+	 * @returns {boolean}
+	 */
+	function isFixedPosition(element) {
 		if (element == document.body) return true;
 		var isFixed = false;
-		for (var tmp = element; tmp; tmp = tmp.parentNode) {
+		/** @type {Node | null} */
+		var tmp = element;
+		for (; tmp; tmp = tmp.parentNode) {
 			if (tmp.nodeType == window.Node.DOCUMENT_NODE) break;
 			if (tmp.nodeType == window.Node.DOCUMENT_FRAGMENT_NODE) break;
-			var s = document.defaultView.getComputedStyle(tmp, '');
+			var s = /** @type {WindowProxy} */ (document.defaultView).getComputedStyle(/** @type {Element} */ (tmp), '');
 			if (s && s.position == 'fixed') {
 				isFixed = true;
 				break;
@@ -650,7 +980,12 @@ var Agent = (function () {
 		return isFixed;
 	}
 
-	function getFontStyle (s, fontFamilyOverride) {
+	/**
+	 * @param {CSSStyleDeclaration} s
+	 * @param {string} [fontFamilyOverride]
+	 * @returns {string}
+	 */
+	function getFontStyle(s, fontFamilyOverride) {
 		return [
 			s.fontStyle, s.fontVariant, s.fontWeight,
 			s.fontSize + '/' + s.lineHeight,
@@ -658,45 +993,61 @@ var Agent = (function () {
 		].join(' ');
 	}
 
-	function getNodePath (element) {
+	/**
+	 * @param {Element} element
+	 * @returns {string}
+	 */
+	function getNodePath(element) {
+		/** @type {string[]} */
 		var result = [];
-		for (var node = element; node && node.parentNode; node = node.parentNode) {
+		/** @type {Node | null} */
+		var node = element;
+		while (node?.parentNode) {
 			var nodeName = node.nodeName.toLowerCase();
-			if (node.parentNode.getElementsByTagName) {
+			var parentNode = /** @type {Element} */ (node.parentNode);
+			if (parentNode.getElementsByTagName) {
 				var index = Array.prototype.indexOf.call(
-					node.parentNode.getElementsByTagName(node.nodeName), node);
+					parentNode.getElementsByTagName(node.nodeName), node);
 				result.unshift(nodeName + '[' + index + ']');
 			}
 			else {
 				result.unshift(nodeName);
 			}
+			node = node.parentNode;
 		}
 		return result.join(' ');
 	}
 
-	function locate (iframe, target, opts) {
+	/**
+	 * @param {HTMLElement} iframe
+	 * @param {HTMLElement} target
+	 * @param {LocateOpts} [opts]
+	 * @returns {LocateRect}
+	 */
+	function locate(iframe, target, opts) {
 		opts || (opts = {});
 		var isFullscreen = !!opts.isFullscreen;
 
 		if (isFullscreen) {
-			var rect = getFullscreenRect();
+			var fsRect = getFullscreenRect();
 			assign(
 				iframe,
 				'position', 'fixed',
 				'left', FULLSCREEN_MARGIN + 'px',
 				'top', FULLSCREEN_MARGIN + 'px',
-				'width', rect.width + 'px',
-				'height', rect.height + 'px');
+				'width', fsRect.width + 'px',
+				'height', fsRect.height + 'px');
 
-			return rect;
+			return fsRect;
 		}
 		else {
-			var rect = target.getBoundingClientRect();
-			rect = {
-				left:   rect.left,
-				top:    rect.top,
-				width:  Math.max(MIN_WIDTH_PIXELS, rect.width),
-				height: Math.max(MIN_HEIGHT_PIXELS, rect.height + statusLineHeight)
+			var domRect = target.getBoundingClientRect();
+			/** @type {LocateRect} */
+			var rect = {
+				left:   domRect.left,
+				top:    domRect.top,
+				width:  Math.max(MIN_WIDTH_PIXELS, domRect.width),
+				height: Math.max(MIN_HEIGHT_PIXELS, domRect.height + (statusLineHeight ?? 0))
 			};
 			rect.right = rect.left + rect.width;
 			rect.bottom = rect.top + rect.height;
@@ -719,14 +1070,14 @@ var Agent = (function () {
 				height: rect.height
 			};
 
-			var crect = getFullscreenRect();
-			crect = {
-				left:   crect.left   + offsetLeft,
-				top:    crect.top    + offsetTop,
-				right:  crect.right  + offsetLeft,
-				bottom: crect.bottom + offsetTop,
-				width:  crect.width,
-				height: crect.height
+			var fullRect = getFullscreenRect();
+			var crect = {
+				left:   fullRect.left   + offsetLeft,
+				top:    fullRect.top    + offsetTop,
+				right:  fullRect.right  + offsetLeft,
+				bottom: fullRect.bottom + offsetTop,
+				width:  fullRect.width,
+				height: fullRect.height
 			}
 
 			if (result.width > crect.width) result.width = crect.width;
@@ -749,35 +1100,102 @@ var Agent = (function () {
 		}
 	}
 
+	/**
+	 * @param {MessageEvent} e
+	 * @returns {void}
+	 */
+	function handlePostMessage(e) {
+		if (WasaviExtensionWrapper.IS_GECKO) {
+			if (e.origin != 'moz-extension://' + /** @type {{id: string}} */ (/** @type {unknown} */ (chrome.runtime)).id) return;
+		}
+		else if (window.chrome) {
+			if (e.origin != 'chrome-extension://' + /** @type {{id: string}} */ (/** @type {unknown} */ (chrome.runtime)).id) return;
+		}
+		diag.push('wasavi: ' + e.data);
+	}
+
+	class Agent {
+	/** @type {HTMLElement | null} */
+	targetElement;
+	/** @type {number} */
+	frameId;
+	/** @type {ElementRemoveListener | null | undefined} */
+	targetElementRemoveListener;
+	/** @type {ElementResizeListener | null | undefined} */
+	targetElementResizeListener;
+	/** @type {HTMLIFrameElement | null} */
+	wasaviFrame;
+	/** @type {string | null} */
+	wasaviFrameTabId;
+	/** @type {ReturnType<typeof setTimeout> | null} */
+	wasaviFrameTimeoutTimer;
+	/** @type {number | null} */
+	widthOwn;
+	/** @type {number | null} */
+	heightOwn;
+	/** @type {boolean | null} */
+	isFullscreen;
+	/** @type {boolean | null} */
+	isSyncSize;
+	/** @type {ReturnType<typeof setTimeout> | null} */
+	stateClearTimer;
+
+	/**
+	 * @param {HTMLElement} element
+	 * @param {number} frameId
+	 */
+	constructor(element, frameId) {
+		this.targetElement = element;
+		this.frameId = frameId;
+		this.targetElementRemoveListener = null;
+		this.targetElementResizeListener = null;
+		this.wasaviFrame = null;
+		this.wasaviFrameTabId = null;
+		this.wasaviFrameTimeoutTimer = null;
+		this.widthOwn = null;
+		this.heightOwn = null;
+		this.isFullscreen = false;
+		this.isSyncSize = false;
+		this.stateClearTimer = null;
+		this.#prepare();
+	}
+
 	// private methods
-	function prepare () {
+	/** @returns {void} */
+	#prepare() {
 		fireCustomEvent('WasaviStarting', 0);
 		diag.init().push('agent: entering prepare()');
 		window.addEventListener('message', handlePostMessage, false);
 
-		readContentFromElement(this.targetElement, (function (element, content, type, writeAs) {
+		readContentFromElement(this.targetElement, (element, content, type, writeAs) => {
 			if (typeof content != 'string') {
-				cleanup.call(this);
+				this.#cleanup();
 				error('retrieving the content of element timed out.');
 				diag.out();
 				return;
 			}
 
+			/** @type {AgentRequest} */
 			var payload = {
 				value: content,
 				elementType: type,
 				writeAs: writeAs || ''
 			};
 			if (type == 'textarea') {
-				payload.readOnly = element.readOnly || element.disabled;
+				var textarea = /** @type {HTMLTextAreaElement} */ (element);
+				payload.readOnly = textarea.readOnly || textarea.disabled;
 			}
 
 			this.targetElement = element;
-			run.call(this, payload);
-		}).bind(this));
+			this.#run(payload);
+		});
 	}
 
-	function run (overrides) {
+	/**
+	 * @param {AgentRequest} [overrides]
+	 * @returns {void}
+	 */
+	#run(overrides) {
 		diag.push('agent: entering run()');
 
 		/*
@@ -806,10 +1224,10 @@ var Agent = (function () {
 		 *
 		 */
 
-		var element = this.targetElement;
+		var element = /** @type {HTMLInputElement} */ (this.targetElement);
 
 		// create iframe
-		this.targetElement.setAttribute(EXTENSION_CURRENT, extension.name);
+		element.setAttribute(EXTENSION_CURRENT, extension.name);
 		this.wasaviFrame = document.createElement('iframe');
 		assign(
 			this.wasaviFrame,
@@ -817,7 +1235,7 @@ var Agent = (function () {
 			'overflow', 'hidden',
 			'visibility', 'hidden',
 			'zIndex', 0x7fffffff);
-		this.wasaviFrame.src = extension.urlInfo.frameSource;
+		this.wasaviFrame.src = /** @type {WasaviUrlInfo} */ (extension.urlInfo).frameSource;
 		document.body.appendChild(this.wasaviFrame);
 
 		// set up some properties
@@ -828,19 +1246,20 @@ var Agent = (function () {
 		// register some event listeners
 		this.targetElementRemoveListener = createElementRemoveListener(
 			this.wasaviFrame,
-			(function () {
-				cleanup.call(this);
+			() => {
+				this.#cleanup();
 				error('wasavi terminated abnormally.');
 				diag.out();
-			}).bind(this)
+			}
 		);
-		this.wasaviFrameTimeoutTimer = setTimeout(function (that) {
-			cleanup.call(that);
+		this.wasaviFrameTimeoutTimer = setTimeout((/** @type {Agent} */ that) => {
+			that.#cleanup();
 			that.wasaviFrameTimeoutTimer = null;
 		}, BOOT_WAIT_TIMEOUT_MSECS, this);
 
 		// build boot data payload and post it
 		var rect = locate(this.wasaviFrame, element);
+		/** @type {AgentRequest} */
 		var payload = {
 			type: 'push-payload',
 			parentTabId: extension.tabId,
@@ -852,7 +1271,7 @@ var Agent = (function () {
 			nodeName: element.nodeName,
 			nodePath: getNodePath(element),
 			elementType: element.type,
-			setargs: siteOverrides.setargs(element) || '',
+			setargs: siteOverrides?.setargs(element) || '',
 			selectionStart: element.selectionStart || 0,
 			selectionEnd: element.selectionEnd || 0,
 			scrollTop: element.scrollTop || 0,
@@ -860,7 +1279,7 @@ var Agent = (function () {
 			readOnly: false,
 			value: '',
 			rect: {width: rect.width, height: rect.height},
-			fontStyle: getFontStyle(document.defaultView.getComputedStyle(element, ''), fontFamily),
+			fontStyle: getFontStyle(/** @type {WindowProxy} */ (document.defaultView).getComputedStyle(element, ''), fontFamily),
 			marks: element.getAttribute(MARKS_ID)
 		}
 		if (overrides) {
@@ -873,23 +1292,27 @@ var Agent = (function () {
 		diag.push('agent: leaving run()');
 	}
 
-	function blurFromFrame () {
+	/** @returns {void} */
+	#blurFromFrame() {
 		try {
-			this.wasaviFrame.contentWindow
-			&& this.wasaviFrame.contentWindow.blur
-			&& this.wasaviFrame.contentWindow.blur();
+			this.wasaviFrame?.contentWindow?.blur?.();
 		} catch (e) {}
 
 		try {
-			this.wasaviFrame.blur && this.wasaviFrame.blur();
+			this.wasaviFrame?.blur?.();
 		} catch (e) {}
 	}
 
-	function cleanup (value, isImplicit) {
+	/**
+	 * @param {string} [value]
+	 * @param {boolean} [isImplicit]
+	 * @returns {void}
+	 */
+	#cleanup(value, isImplicit) {
 		if (this.targetElement) {
 			if (typeof value == 'string') {
 				writeContentToElement(this.targetElement, value, {
-					writeAs: this.targetElement.writeAs
+					writeAs: /** @type {{writeAs?: string}} */ (this.targetElement).writeAs
 				});
 			}
 			!isImplicit && this.targetElement.focus();
@@ -897,7 +1320,8 @@ var Agent = (function () {
 			this.targetElement = null;
 		}
 		if (this.targetElementRemoveListener) {
-			this.targetElementRemoveListener = this.targetElementRemoveListener.disconnect();
+			this.targetElementRemoveListener.disconnect();
+			this.targetElementRemoveListener = undefined;
 		}
 		if (this.wasaviFrame) {
 			if (this.wasaviFrame.parentNode) {
@@ -910,7 +1334,8 @@ var Agent = (function () {
 			this.stateClearTimer = null;
 		}
 		if (this.targetElementResizeListener) {
-			this.targetElementResizeListener = this.targetElementResizeListener.disconnect();
+			this.targetElementResizeListener.disconnect();
+			this.targetElementResizeListener = undefined;
 		}
 
 		if (Object.keys(wasaviAgentsHash).length == 1) {
@@ -921,8 +1346,12 @@ var Agent = (function () {
 
 		delete wasaviAgentsHash[this.frameId];
 	}
-	
-	function handleTargetResize (e) {
+
+	/**
+	 * @param {{target: HTMLElement}} e
+	 * @returns {void}
+	 */
+	#handleTargetResize(e) {
 		if (!this.wasaviFrame || !this.targetElement) return;
 		locate(this.wasaviFrame, this.targetElement, {
 			isFullscreen: this.isFullscreen,
@@ -931,18 +1360,12 @@ var Agent = (function () {
 		});
 	}
 
-	function handlePostMessage (e) {
-		if (WasaviExtensionWrapper.IS_GECKO) {
-			if (e.origin != 'moz-extension://' + chrome.runtime.id) return;
-		}
-		else if (window.chrome) {
-			if (e.origin != 'chrome-extension://' + chrome.runtime.id) return;
-		}
-		diag.push('wasavi: ' + e.data);
-	}
-
 	// public methods
-	function notifyToChild (payload) {
+	/**
+	 * @param {unknown} payload
+	 * @returns {void}
+	 */
+	notifyToChild(payload) {
 		if (!this.wasaviFrameTabId) return;
 		extension.postMessage({
 			type: 'transfer',
@@ -951,13 +1374,18 @@ var Agent = (function () {
 		});
 	}
 
-	function setStateClearTimer (callback, msec) {
+	/**
+	 * @param {((that: Agent) => void) | null} callback
+	 * @param {number} [msec]
+	 * @returns {void}
+	 */
+	setStateClearTimer(callback, msec) {
 		if (this.stateClearTimer) {
 			clearTimeout(this.stateClearTimer);
 			this.stateClearTimer = null;
 		}
 		if (typeof callback == 'function') {
-			this.stateClearTimer = setTimeout(function (that) {
+			this.stateClearTimer = setTimeout((/** @type {Agent} */ that) => {
 				that.stateClearTimer = null;
 				try {
 					callback(that);
@@ -968,14 +1396,20 @@ var Agent = (function () {
 		}
 	}
 
-	function initialized (req, sender, response) {
+	/**
+	 * @param {AgentRequest} req
+	 * @param {unknown} sender
+	 * @param {AgentResponse} response
+	 * @returns {void}
+	 */
+	initialized(req, sender, response) {
 		if (!this.wasaviFrame) return;
-		this.wasaviFrameTabId = req.childTabId;
+		this.wasaviFrameTabId = req.childTabId ?? null;
 		this.wasaviFrame.style.boxShadow = '0 3px 8px 4px rgba(0,0,0,0.5)';
 		this.wasaviFrame.setAttribute('data-wasavi-state', 'running');
 		this.targetElementResizeListener = createElementResizeListener(
-			this.targetElement,
-			handleTargetResize.bind(this));
+			/** @type {HTMLElement} */ (this.targetElement),
+			this.#handleTargetResize.bind(this));
 
 		if (Object.keys(wasaviAgentsHash).length == 1) {
 			window.addEventListener('beforeunload', handleBeforeUnload, false);
@@ -985,19 +1419,26 @@ var Agent = (function () {
 			if (!$('wasavi_frame')) {
 				this.wasaviFrame.id = 'wasavi_frame';
 			}
-			$('test-log').value = '';
+			/** @type {HTMLInputElement} */ ($('test-log')).value = '';
 		}
 
 		response({type: 'got-initialized'});
 	}
 
-	function ready (req, sender, response) {
-		this.wasaviFrame.style.visibility = 'visible';
+	/**
+	 * @param {AgentRequest} req
+	 * @param {unknown} sender
+	 * @param {AgentResponse} response
+	 * @returns {void}
+	 */
+	ready(req, sender, response) {
+		var frame = /** @type {HTMLIFrameElement} */ (this.wasaviFrame);
+		frame.style.visibility = 'visible';
 		document.activeElement != this.wasaviFrame && this.focusMe(req, sender, response);
 		info('wasavi started');
 		fireCustomEvent('WasaviStarted', 0);
 
-		clearTimeout(this.wasaviFrameTimeoutTimer);
+		clearTimeout(/** @type {ReturnType<typeof setTimeout>} */ (this.wasaviFrameTimeoutTimer));
 		this.wasaviFrameTimeoutTimer = null;
 
 		window.removeEventListener('message', handlePostMessage, false);
@@ -1005,12 +1446,18 @@ var Agent = (function () {
 		diag.out();
 	}
 
-	function windowState (req, sender, response) {
+	/**
+	 * @param {AgentRequest} req
+	 * @param {unknown} sender
+	 * @param {AgentResponse} response
+	 * @returns {void}
+	 */
+	windowState(req, sender, response) {
 		switch (req.state) {
 		case 'maximized':
 		case 'normal':
 			this.isFullscreen = req.state == 'maximized';
-			locate(this.wasaviFrame, this.targetElement, {
+			locate(/** @type {HTMLElement} */ (this.wasaviFrame), /** @type {HTMLElement} */ (this.targetElement), {
 				isFullscreen: this.isFullscreen
 			});
 			response({
@@ -1021,36 +1468,44 @@ var Agent = (function () {
 		}
 	}
 
-	function focusMe (req, sender, response) {
+	/**
+	 * @param {AgentRequest} req
+	 * @param {unknown} sender
+	 * @param {AgentResponse} response
+	 * @returns {void}
+	 */
+	focusMe(req, sender, response) {
 		try {
-			this.wasaviFrame.focus && this.wasaviFrame.focus();
+			this.wasaviFrame?.focus?.();
 		} catch (e) {}
 
 		try {
-			this.wasaviFrame.contentWindow
-			&& this.wasaviFrame.contentWindow.focus
-			&& this.wasaviFrame.contentWindow.focus();
+			this.wasaviFrame?.contentWindow?.focus?.();
 		} catch (e) {}
 
 		response({type: 'focus-me-response'});
 	}
 
-	function focusChanged (req) {
-		var focusables = getFocusables(this.wasaviFrame);
-		var index = focusables.indexOf(this.targetElement);
+	/**
+	 * @param {AgentRequest} req
+	 * @returns {void}
+	 */
+	focusChanged(req) {
+		var focusables = getFocusables(/** @type {Element} */ (this.wasaviFrame));
+		var index = focusables.indexOf(/** @type {Element} */ (this.targetElement));
 		try {
 			if (index >= 0) {
 				var next = req.direction == 1 ?
 					(index + 1) % focusables.length :
 					(index + focusables.length - 1) % focusables.length;
 
-				blurFromFrame.call(this);
+				this.#blurFromFrame();
 
-				if (next == this.targetElement) {
+				if (next == /** @type {unknown} */ (this.targetElement)) {
 					document.body.focus();
 				}
 				else {
-					focusables[next].focus();
+					/** @type {HTMLElement} */ (focusables[next]).focus();
 				}
 			}
 			else {
@@ -1060,79 +1515,102 @@ var Agent = (function () {
 		catch (e) {}
 	}
 
-	function blinkMe (req) {
-		this.wasaviFrame.style.visibility = 'hidden';
-		setTimeout(function (frame) {
+	/**
+	 * @param {AgentRequest} req
+	 * @returns {void}
+	 */
+	blinkMe(req) {
+		var frame = /** @type {HTMLIFrameElement} */ (this.wasaviFrame);
+		frame.style.visibility = 'hidden';
+		setTimeout((/** @type {HTMLIFrameElement} */ frame) => {
 			frame.style.visibility = '';
 		}, 1000, this.wasaviFrame);
 	}
 
-	function setSize (req, sender, response) {
+	/**
+	 * @param {AgentRequest} req
+	 * @param {unknown} sender
+	 * @param {AgentResponse} response
+	 * @returns {void}
+	 */
+	setSize(req, sender, response) {
+		var target = /** @type {HTMLElement} */ (this.targetElement);
 		if ('isSyncSize' in req) {
-			this.isSyncSize = req.isSyncSize;
+			this.isSyncSize = req.isSyncSize ?? false;
 			if (this.isSyncSize) {
 				this.widthOwn = this.heightOwn = null;
 			}
 			else {
-				this.widthOwn = this.targetElement.offsetWidth;
-				this.heightOwn = this.targetElement.offsetHeight;
+				this.widthOwn = target.offsetWidth;
+				this.heightOwn = target.offsetHeight;
 			}
 		}
 		if ('width' in req) {
 			if (this.isSyncSize) {
-				this.targetElement.style.width = req.width + 'px';
+				target.style.width = req.width + 'px';
 				this.widthOwn = null;
 			}
 			else {
-				this.widthOwn = req.width;
+				this.widthOwn = req.width ?? 0;
 			}
 		}
 		if ('height' in req) {
 			if (this.isSyncSize) {
-				this.targetElement.style.height = req.height + 'px';
+				target.style.height = req.height + 'px';
 				this.heightOwn = null;
 			}
 			else {
-				this.heightOwn = req.height;
+				this.heightOwn = req.height ?? 0;
 			}
 		}
-		this.targetElementResizeListener.fire();
+		this.targetElementResizeListener?.fire();
 		response({
 			type: 'relocate',
 			isSyncSize: req.isSyncSize
 		});
 	}
 
-	function terminated (req) {
+	/**
+	 * @param {AgentRequest} req
+	 * @returns {void}
+	 */
+	terminated(req) {
 		if (isTestFrame) {
 			this.setStateClearTimer(null);
-			document.querySelector('h1').style.color = '';
+			/** @type {HTMLElement} */ (document.querySelector('h1')).style.color = '';
 		}
 		if (req.marks) {
-			this.targetElement.setAttribute(MARKS_ID, req.marks);
+			/** @type {HTMLElement} */ (this.targetElement).setAttribute(MARKS_ID, /** @type {string} */ (req.marks));
 		}
 		if (req.isSubmitRequested
 		&& this.targetElement
-		&& this.targetElement.form
-		&& this.targetElement.form.action != '') {
-			setTimeout(function (form) {
+		&& /** @type {HTMLInputElement} */ (this.targetElement).form
+		&& /** @type {HTMLInputElement} */ (this.targetElement).form.action != '') {
+			setTimeout((/** @type {HTMLFormElement} */ form) => {
 				var submitter = form.querySelector(
 					'input[type="submit"],button[type="submit"]');
 				if (submitter) {
-					submitter.click();
+					/** @type {HTMLElement} */ (submitter).click();
 				}
 				else {
 					form.submit();
 				}
-			}, 1, this.targetElement.form);
+			}, 1, /** @type {HTMLInputElement} */ (this.targetElement).form);
 		}
-		cleanup.call(this, req.value, req.isImplicit);
+		this.#cleanup(req.value, req.isImplicit);
 		info('wasavi terminated');
 		fireCustomEvent('WasaviTerminated', Object.keys(wasaviAgentsHash).length);
 	}
 
-	function read (req, sender, response) {
-		readContentFromElement(this.targetElement, (function (element, content, type) {
+	/**
+	 * @param {AgentRequest} req
+	 * @param {unknown} sender
+	 * @param {AgentResponse} response
+	 * @returns {void}
+	 */
+	read(req, sender, response) {
+		readContentFromElement(this.targetElement, (element, content, type) => {
+			/** @type {AgentRequest} */
 			var payload = {type: 'read-response'};
 
 			if (typeof content != 'string') {
@@ -1148,30 +1626,37 @@ var Agent = (function () {
 			}
 
 			response(payload);
-		}).bind(this));
+		});
 	}
 
-	function write (req, sender, response) {
+	/**
+	 * @param {AgentRequest} req
+	 * @param {unknown} sender
+	 * @param {AgentResponse} response
+	 * @returns {void}
+	 */
+	write(req, sender, response) {
+		/** @type {AgentRequest} */
 		var payload = {type: 'write-response'};
 		try {
-			var result = writeContentToElement(this.targetElement, req.value, {
+			var result = writeContentToElement(this.targetElement, req.value ?? '', {
 				isForce: req.isForce,
 				writeAs: req.writeAs
 			});
 			if (typeof result == 'number') {
 				var ev;
 
-				if (/^(?:INPUT|TEXTAREA)$/.test(this.targetElement.nodeName)) {
+				if (/^(?:INPUT|TEXTAREA)$/.test(this.targetElement?.nodeName ?? '')) {
 					// input event
 					// NOTE: input event constructor is fluid.
 					ev = document.createEvent('Event');
 					ev.initEvent('input', true, false);
-					this.targetElement.dispatchEvent(ev);
+					/** @type {HTMLElement} */ (this.targetElement).dispatchEvent(ev);
 
 					// change event
 					ev = document.createEvent('Event');
 					ev.initEvent('change', true, false);
-					this.targetElement.dispatchEvent(ev);
+					/** @type {HTMLElement} */ (this.targetElement).dispatchEvent(ev);
 				}
 
 				payload.state = 'complete';
@@ -1188,7 +1673,7 @@ var Agent = (function () {
 			}
 		}
 		catch (ex) {
-			payload.error = _('Internal exception: ' + ex.message);
+			payload.error = _('Internal exception: ' + /** @type {Error} */ (ex).message);
 		}
 		finally {
 			payload.exstate = {
@@ -1199,58 +1684,33 @@ var Agent = (function () {
 		}
 	}
 
-	function requestBlur (req) {
-		this.wasaviFrame.blur();
+	/**
+	 * @param {AgentRequest} req
+	 * @returns {void}
+	 */
+	requestBlur(req) {
+		this.wasaviFrame?.blur();
 		document.body.focus();
 	}
 
-	function reload (req) {
+	/**
+	 * @param {AgentRequest} req
+	 * @returns {void}
+	 */
+	reload(req) {
 		setTimeout(() => {
 			window.removeEventListener('beforeunload', handleBeforeUnload, false);
 			window.location.reload();
 		}, 1000);
 	}
-
-	// constructor
-	function Agent (element, frameId) {
-		this.targetElement = element;
-		this.frameId = frameId;
-		this.targetElementRemoveListener = null;
-		this.targetElementResizeListener = null;
-		this.wasaviFrame = null;
-		this.wasaviFrameTabId = null;
-		this.wasaviFrameTimeoutTimer = null;
-		this.widthOwn = null;
-		this.heightOwn = null;
-		this.isFullscreen = false;
-		this.isSyncSize = false;
-		this.stateClearTimer = null;
-		prepare.call(this);
 	}
 
-	Agent.prototype = {
-		notifyToChild:      notifyToChild,
-		setStateClearTimer: setStateClearTimer,
-
-		initialized:  initialized,
-		ready:        ready,
-		windowState:  windowState,
-		focusMe:      focusMe,
-		focusChanged: focusChanged,
-		blinkMe:      blinkMe,
-		setSize:      setSize,
-		terminated:   terminated,
-		read:         read,
-		write:        write,
-		requestBlur:  requestBlur,
-		reload:       reload
-	};
-
-	return Agent;
-})();
-
 // agent manager functions <<<1
-function startAgent (targetElement) {
+/**
+ * @param {HTMLElement} targetElement
+ * @returns {void}
+ */
+function startAgent(targetElement) {
 	for (var i = 0; i < INSTANCE_MAX; i++) {
 		if (i in wasaviAgentsHash) continue;
 		wasaviAgentsHash[i] = new Agent(targetElement, i);
@@ -1258,7 +1718,12 @@ function startAgent (targetElement) {
 	}
 }
 
-function findAgent (target, property) {
+/**
+ * @param {Element | null} target
+ * @param {keyof Agent} [property]
+ * @returns {Agent | null}
+ */
+function findAgent(target, property) {
 	property || (property = 'targetElement');
 	for (var i in wasaviAgentsHash) {
 		if (wasaviAgentsHash[i][property] == target) {
@@ -1268,21 +1733,30 @@ function findAgent (target, property) {
 	return null;
 }
 
-function keylog () {
+/**
+ * @param {...unknown} args
+ * @returns {void}
+ */
+function keylog(...args) {
 	testLog || (testLog = []);
-	testLog.push(Array.prototype.slice.call(arguments).join('\t'));
+	testLog.push(args.join('\t'));
 }
 
-function keylogOutput () {
-	var t = $('test-log');
+/** @returns {void} */
+function keylogOutput() {
+	var t = /** @type {HTMLInputElement | null} */ ($('test-log'));
 	if (!t) return;
 	t.value.length && (t.value += '\n');
-	t.value += testLog.join('\n');
+	t.value += /** @type {string[]} */ (testLog).join('\n');
 	t.scrollTop = t.scrollHeight - t.clientHeight;
-	testLog.length = 0;
+	/** @type {string[]} */ (testLog).length = 0;
 }
 
-function getGlobRegex (s) {
+/**
+ * @param {string} s
+ * @returns {RegExp | null}
+ */
+function getGlobRegex(s) {
 	try {
 		return new RegExp('^' + s
 			.replace(/[\\^$+.()|{}]/g, function ($0) {return '\\' + $0})
@@ -1294,10 +1768,15 @@ function getGlobRegex (s) {
 	}
 }
 
-function parseSiteOverrides (list) {
+/**
+ * @param {string} list
+ * @returns {SiteOverrides}
+ */
+function parseSiteOverrides(list) {
+	/** @type {SiteOverrides} */
 	let result = {
 		_selectors: [],
-		blocked: function (element) {
+		blocked(element) {
 			return this._selectors.some(s => {
 				try {
 					let match = Array.prototype.indexOf.call(
@@ -1307,7 +1786,8 @@ function parseSiteOverrides (list) {
 				catch (e) {}
 			});
 		},
-		setargs: function (element) {
+		setargs(element) {
+			/** @type {string | undefined} */
 			let result;
 			this._selectors.some(s => {
 				try {
@@ -1325,11 +1805,19 @@ function parseSiteOverrides (list) {
 		}
 	};
 
-	function splitex (string, delimiter, limit) {
+	/**
+	 * @param {string} string
+	 * @param {string | RegExp} delimiter
+	 * @param {number} limit
+	 * @returns {string[]}
+	 */
+	function splitex(string, delimiter, limit) {
 		let regex = new RegExp(delimiter, 'g');
+		/** @type {string[]} */
 		let result = [];
 		let from = 0;
-		let re;
+		/** @type {RegExpExecArray | null} */
+		let re = null;
 
 		while (result.length < limit && (re = regex.exec(string))) {
 			result.push(string.substring(from, re.index));
@@ -1355,10 +1843,13 @@ function parseSiteOverrides (list) {
 
 		let [urlPattern, selector, action] = parts;
 
-		urlPattern = getGlobRegex(urlPattern);
-		if (!urlPattern || !urlPattern.test(window.location.href)) return;
+		let urlRegex = getGlobRegex(urlPattern);
+		if (!urlRegex || !urlRegex.test(window.location.href)) return;
 
-		let blocked, setargs;
+		/** @type {boolean | undefined} */
+		let blocked;
+		/** @type {string | undefined} */
+		let setargs;
 
 		if (action.toLowerCase() == 'block') {
 			blocked = true;
@@ -1385,12 +1876,16 @@ function parseSiteOverrides (list) {
 	return result;
 }
 
-function connect (callback) {
+/**
+ * @param {(req: AgentRequest) => void} callback
+ * @returns {void}
+ */
+function connect(callback) {
 	var connected = false;
 	var retryRest = 5;
 	var wait = 1000;
 	var eventName = isOptionsPage ? 'init-options' : 'init-agent';
-	var gotInit = function (req) {
+	var gotInit = function (/** @type {AgentRequest} */ req) {
 		if (connected) return;
 		connected = true;
 		callback(req);
@@ -1400,13 +1895,18 @@ function connect (callback) {
 		retryRest--;
 		wait += 1000;
 		setTimeout(function () {checkIfConnectedOrRetry()}, wait);
-		extension.connect(eventName, gotInit);
+		extension.connect(eventName, /** @type {(response: unknown) => void} */ (gotInit));
 	}
 
 	checkIfConnectedOrRetry();
 }
 
-function createPageAgent (listenKeydown, usePageContextScript) {
+/**
+ * @param {boolean} listenKeydown
+ * @param {boolean} usePageContextScript
+ * @returns {void}
+ */
+function createPageAgent(listenKeydown, usePageContextScript) {
 	var parent = document.head || document.body || document.documentElement;
 	if (!parent) return;
 
@@ -1419,8 +1919,9 @@ function createPageAgent (listenKeydown, usePageContextScript) {
 	if (usePageContextScript) {
 		var s = document.createElement('script');
 		s.onload = function () {
-			this.onload = null;
-			this.parentNode && this.parentNode.removeChild(this);
+			var self = /** @type {HTMLScriptElement} */ (this);
+			self.onload = null;
+			self.parentNode && self.parentNode.removeChild(self);
 		};
 		s.type = 'text/javascript';
 		s.src = extension.getPageContextScriptSrc();
@@ -1428,13 +1929,31 @@ function createPageAgent (listenKeydown, usePageContextScript) {
 	}
 }
 
+/**
+ * @typedef {(element: HTMLElement, content: string | null, type?: string | null, writeAs?: string | null) => void} ContentCallback
+ */
+/**
+ * @typedef {object} ContentQueueSlot
+ * @property {HTMLElement} element
+ * @property {ContentCallback} callback
+ * @property {ReturnType<typeof setTimeout> | null} timeoutTimer
+ */
 var readContentFromElement = (function () {
+	/** @type {(this: MarkdownAppendable, n: Element, name: string) => void} */
 	function pre (n, name) {this.append('<wasavi:' + name + ' id="' + n.id + '">')}
+	/** @type {(this: MarkdownAppendable, n: Element, name: string) => void} */
 	function post (n, name) {this.append('</wasavi:' + name + '>')}
 
-	function findPseudoTextAreaContainer (element) {
+	/**
+	 * @param {HTMLElement} element
+	 * @returns {HTMLElement | null}
+	 */
+	function findPseudoTextAreaContainer(element) {
+		/** @type {HTMLElement | null} */
 		var result = null;
-		for (var e = element; e; e = e.parentNode) {
+		/** @type {HTMLElement | null} */
+		var e = element;
+		for (; e; e = /** @type {HTMLElement | null} */ (e.parentNode)) {
 			if (!e.classList) continue;
 			if (e.classList.contains('CodeMirror')
 			||  e.classList.contains('ace_editor')) {
@@ -1445,7 +1964,11 @@ var readContentFromElement = (function () {
 		return result;
 	}
 
-	function handleResponseGetContent (e) {
+	/**
+	 * @param {CustomEvent<string>} e
+	 * @returns {void}
+	 */
+	function handleResponseGetContent(e) {
 		var index = e.detail.indexOf('\t');
 		if (index < 0) return;
 
@@ -1465,14 +1988,24 @@ var readContentFromElement = (function () {
 			'pseudoTextArea');
 	}
 
-	function getMarkdown (element) {
-		element = $(element);
+	/**
+	 * @param {string | HTMLElement} element
+	 * @returns {string}
+	 */
+	function getMarkdown(element) {
+		element = /** @type {HTMLElement} */ ($(element));
 		markDown.identify(element);
 		return markDown.run(element, markdownOpts);
 	}
 
-	function getBodyContent () {
-		var content = [], el, s;
+	/** @returns {string} */
+	function getBodyContent() {
+		/** @type {string[]} */
+		var content = [];
+		/** @type {Element | null} */
+		var el;
+		/** @type {string | null} */
+		var s;
 
 		// title
 		if ((el = document.querySelector('title, h1')) && (s = el.textContent) != '') {
@@ -1481,7 +2014,7 @@ var readContentFromElement = (function () {
 
 		// url
 		if ((el = document.querySelector('link[rel="canonical"]')) && (s = el.getAttribute('href')) != '') {
-			content.push(s);
+			content.push(s ?? '');
 		}
 		else {
 			content.push(window.location.href);
@@ -1489,11 +2022,11 @@ var readContentFromElement = (function () {
 
 		// description
 		if ((el = document.querySelector('meta[name="description"]')) && (s = el.getAttribute('content')) != '') {
-			content.push('', s);
+			content.push('', s ?? '');
 		}
 
 		// selection
-		if ((s = window.getSelection().toString()
+		if ((s = (window.getSelection()?.toString() ?? '')
 			.replace(/(?:\r\n|\r|\n)/g, '\n')
 			.replace(/\n{2,}/g, '\n')) != '') {
 			content.push('', s);
@@ -1502,10 +2035,12 @@ var readContentFromElement = (function () {
 		return content.join('\n');
 	}
 
+	/** @type {Record<string, ContentQueueSlot>} */
 	var callbackQueue = {};
 	var markdownOpts = {
 		preunits: {
-			img: function (node, nodeName) { this.append('<wasavi:img id="' + node.id + '"></wasavi:img>') },
+			/** @type {(this: MarkdownAppendable, node: Element, nodeName: string) => void} */
+			img(node, nodeName) { this.append('<wasavi:img id="' + node.id + '"></wasavi:img>') },
 			a: pre, embed: pre, object: pre
 		},
 		postunits: {
@@ -1513,9 +2048,15 @@ var readContentFromElement = (function () {
 		}
 	};
 
-	document.addEventListener('WasaviResponseGetContent', handleResponseGetContent, false);
+	document.addEventListener('WasaviResponseGetContent', /** @type {EventListener} */ (handleResponseGetContent), false);
 
-	return function readContentFromElement (element, callback) {
+	/**
+	 * @param {HTMLElement | null} element
+	 * @param {ContentCallback} callback
+	 * @returns {void}
+	 */
+	return function readContentFromElement(element, callback) {
+		element = /** @type {HTMLElement} */ (element);
 		var pseudoTextArea = findPseudoTextAreaContainer(element);
 
 		if (pseudoTextArea) {
@@ -1525,7 +2066,7 @@ var readContentFromElement = (function () {
 				element: pseudoTextArea,
 				callback: callback,
 				timeoutTimer: setTimeout(
-					function (className) {
+					function (/** @type {string} */ className) {
 						var slot = callbackQueue[className];
 						if (!slot) return;
 
@@ -1538,7 +2079,7 @@ var readContentFromElement = (function () {
 				)
 			};
 			setTimeout(
-				function (className) {
+				function (/** @type {string} */ className) {
 					fireCustomEvent('WasaviRequestGetContent', className);
 				},
 				1, className
@@ -1546,11 +2087,11 @@ var readContentFromElement = (function () {
 		}
 
 		else if (/^(?:INPUT|TEXTAREA)$/.test(element.nodeName)) {
-			callback(element, element.value, element.nodeName.toLowerCase());
+			callback(element, /** @type {HTMLInputElement} */ (element).value, element.nodeName.toLowerCase());
 		}
 
 		else if (element.isContentEditable) {
-			let setargs = siteOverrides.setargs(element);
+			let setargs = siteOverrides?.setargs(element);
 			let writeAs = 'html';
 			if (setargs) {
 				let re = /\bwriteas\s*=\s*(\w+)/.exec(setargs);
@@ -1572,77 +2113,101 @@ var readContentFromElement = (function () {
 	};
 })();
 
+/**
+ * @typedef {(f: DocumentFragment, content: string) => number} WriteJob
+ */
+/**
+ * @typedef {object} WriteOpts
+ * @property {boolean} [isForce]
+ * @property {string} [writeAs]
+ */
 var writeContentToElement = (function () {
-	function toDiv (f, content) {
+	/** @type {WriteJob} */
+	function toDiv(f, content) {
 		var length = 0;
-		content = content.split('\n');
+		var lines = content.split('\n');
 
-		for (var i = 0, goal = content.length; i < goal; i++) {
+		for (var i = 0, goal = lines.length; i < goal; i++) {
 			f.appendChild(document.createElement('div'))
-				.appendChild(document.createTextNode(content[i]));
-			length += content[i].length + 1;
+				.appendChild(document.createTextNode(lines[i]));
+			length += lines[i].length + 1;
 		}
 
 		return length;
 	}
 
-	function toParagraph (f, content) {
+	/** @type {WriteJob} */
+	function toParagraph(f, content) {
 		var length = 0;
-		content = content.split('\n');
+		var lines = content.split('\n');
 
-		for (var i = 0, goal = content.length; i < goal; i++) {
+		for (var i = 0, goal = lines.length; i < goal; i++) {
 			f.appendChild(document.createElement('p'))
-				.appendChild(document.createTextNode(content[i]));
-			length += content[i].length + 1;
+				.appendChild(document.createTextNode(lines[i]));
+			length += lines[i].length + 1;
 		}
 
 		return length;
 	}
 
-	function toTextAndBreak (f, content) {
+	/** @type {WriteJob} */
+	function toTextAndBreak(f, content) {
 		var length = 0;
-		content = content.split('\n');
+		var lines = content.split('\n');
 
-		for (var i = 0, goal = content.length - 1; i < goal; i++) {
-			f.appendChild(document.createTextNode(content[i]));
+		for (var i = 0, goal = lines.length - 1; i < goal; i++) {
+			f.appendChild(document.createTextNode(lines[i]));
 			f.appendChild(document.createElement('br'));
-			length += content[i].length + 1;
+			length += lines[i].length + 1;
 		}
 
-		if (content.length >= 1) {
-			f.appendChild(document.createTextNode(content[content.length - 1]));
-			length += content[i].length;
+		if (lines.length >= 1) {
+			f.appendChild(document.createTextNode(lines[lines.length - 1]));
+			length += lines[i].length;
 		}
 
 		return length;
 	}
 
-	function toPlaintext (f, content) {
+	/** @type {WriteJob} */
+	function toPlaintext(f, content) {
 		f.appendChild(document.createTextNode(content));
 		return content.length;
 	}
 
-	function elementsOf (root, children) {
+	/**
+	 * @param {Element} root
+	 * @param {readonly string[]} children
+	 * @returns {Element[]}
+	 */
+	function elementsOf(root, children) {
+		/** @type {Element[]} */
 		var result = [];
 		for (var i = 0, goal = children.length; i < goal; i++) {
-			result.push.apply(
-				result,
-				root.getElementsByTagName('wasavi:' + children[i]));
+			result.push(...root.getElementsByTagName('wasavi:' + children[i]));
 		}
 		return result;
 	}
 
-	function toHTMLImage (element) {
+	/**
+	 * @param {Element} element
+	 * @returns {void}
+	 */
+	function toHTMLImage(element) {
 		var id = element.getAttribute('id');
 		if (!id) return;
 
 		var linked = $(id);
 		if (!linked) return;
 
-		element.parentNode.replaceChild(linked, element);
+		element.parentNode?.replaceChild(linked, element);
 	}
 
-	function toHTMLAnchor (element) {
+	/**
+	 * @param {Element} element
+	 * @returns {void}
+	 */
+	function toHTMLAnchor(element) {
 		var id = element.getAttribute('id');
 		if (!id) return;
 
@@ -1653,13 +2218,19 @@ var writeContentToElement = (function () {
 		r.selectNodeContents(element);
 		var contents = r.extractContents();
 
-		element.parentNode.replaceChild(linked, element);
+		element.parentNode?.replaceChild(linked, element);
 		r.selectNodeContents(linked);
 		r.deleteContents();
 		linked.appendChild(contents);
 	}
 
-	function overwrite (element, content, job) {
+	/**
+	 * @param {Element} element
+	 * @param {string} content
+	 * @param {WriteJob} job
+	 * @returns {number | unknown[]}
+	 */
+	function overwrite(element, content, job) {
 		var f = document.createDocumentFragment();
 		var length = job(f, content);
 
@@ -1672,11 +2243,16 @@ var writeContentToElement = (function () {
 			return length;
 		}
 		catch (e) {
-			return _('Exception while saving: {0}', e.message);
+			return _('Exception while saving: {0}', /** @type {Error} */ (e).message);
 		}
 	}
 
-	function buildHTML (element, content) {
+	/**
+	 * @param {Element} element
+	 * @param {string} content
+	 * @returns {number}
+	 */
+	function buildHTML(element, content) {
 		var r = document.createRange();
 		r.selectNodeContents(element);
 
@@ -1690,7 +2266,14 @@ var writeContentToElement = (function () {
 		return element.textContent.length;
 	}
 
-	return function writeContentToElement (element, content, opts) {
+	/**
+	 * @param {HTMLElement | null} element
+	 * @param {string | null} content
+	 * @param {WriteOpts} [opts]
+	 * @returns {number | unknown[]}
+	 */
+	return function writeContentToElement(element, content, opts) {
+		element = /** @type {HTMLElement} */ (element);
 		content || (content = '');
 		opts || (opts = {});
 
@@ -1707,17 +2290,18 @@ var writeContentToElement = (function () {
 		}
 
 		else if (/^(?:INPUT|TEXTAREA)$/.test(element.nodeName)) {
-			if (element.readOnly) {
+			var input = /** @type {HTMLInputElement} */ (element);
+			if (input.readOnly) {
 				if (opts.isForce) {
-					element.readOnly = false;
+					input.readOnly = false;
 				}
 				else {
 					return _('Element to be written has readonly attribute (use "!" to override).');
 				}
 			}
-			if (element.disabled) {
+			if (input.disabled) {
 				if (opts.isForce) {
-					element.disabled = false;
+					input.disabled = false;
 				}
 				else {
 					return _('Element to be written has disabled attribute (use "!" to override).');
@@ -1727,11 +2311,11 @@ var writeContentToElement = (function () {
 				return _('Invalid text format.');
 			}
 			try {
-				element.value = content;
+				input.value = content;
 				return content.length;
 			}
 			catch (e) {
-				return _('Exception while saving: {0}', e.message);
+				return _('Exception while saving: {0}', /** @type {Error} */ (e).message);
 			}
 		}
 
@@ -1760,7 +2344,7 @@ var writeContentToElement = (function () {
 			 *
 			 *       line1 \n line2 ...
 			 */
-			switch (opts.writeAs.toLowerCase()) {
+			switch ((opts.writeAs ?? '').toLowerCase()) {
 			case 'div':
 				return overwrite(element, content, toDiv);
 
@@ -1789,58 +2373,76 @@ var writeContentToElement = (function () {
 })();
 
 // event listeners <<<1
-function handleKeydown (e) {
+/**
+ * @param {KeyboardEvent} e
+ * @returns {void}
+ */
+function handleKeydown(e) {
 	if (!e || !e.target || !allowedElements) return;
 	if (e.keyCode == 16 || e.keyCode == 17 || e.keyCode == 18) return;
 
-	var target = getShadowActiveElement(e.target);
-	if (siteOverrides.blocked(target)) return;
-	if (!isLaunchableElement(target)) return;
-	if (!doesTargetAllowLaunch(target)) return;
+	var target = getShadowActiveElement(/** @type {Element} */ (e.target));
+	if (siteOverrides?.blocked(/** @type {Element} */ (target))) return;
+	if (!isLaunchableElement(/** @type {HTMLElement} */ (target))) return;
+	if (!doesTargetAllowLaunch(/** @type {Element} */ (target))) return;
 	if (!matchWithShortcut(e)) return;
 	if (findAgent(target)) return;
 
 	e.preventDefault();
 	e.stopPropagation();
-	startAgent(target);
+	startAgent(/** @type {HTMLElement} */ (target));
 }
 
-function handleTargetFocus (e) {
+/**
+ * @param {FocusEvent} e
+ * @returns {void}
+ */
+function handleTargetFocus(e) {
 	if (!quickActivation || !e || !e.target || !allowedElements) return;
 
-	var target = getShadowActiveElement(e.target);
-	if (siteOverrides.blocked(target)) return;
-	if (!isLaunchableElement(target)) return;
-	if (!doesTargetAllowLaunch(target)) return;
+	var target = getShadowActiveElement(/** @type {Element} */ (e.target));
+	if (siteOverrides?.blocked(/** @type {Element} */ (target))) return;
+	if (!isLaunchableElement(/** @type {HTMLElement} */ (target))) return;
+	if (!doesTargetAllowLaunch(/** @type {Element} */ (target))) return;
 	if (findAgent(target)) return;
 
 	e.preventDefault();
-	startAgent(target);
+	startAgent(/** @type {HTMLElement} */ (target));
 }
 
-function handleRequestLaunch () {
+/** @returns {void} */
+function handleRequestLaunch() {
 	if (!allowedElements) return;
 	if (typeof document.hasFocus == 'function' && !document.hasFocus()) return;
 
 	var target = getShadowActiveElement(document.activeElement);
-	if (siteOverrides.blocked(target)) return;
-	if (!isLaunchableElement(target)) return;
-	if (!doesTargetAllowLaunch(target)) return;
+	if (siteOverrides?.blocked(/** @type {Element} */ (target))) return;
+	if (!isLaunchableElement(/** @type {HTMLElement} */ (target))) return;
+	if (!doesTargetAllowLaunch(/** @type {Element} */ (target))) return;
 	if (findAgent(target)) return;
 
-	startAgent(target);
+	startAgent(/** @type {HTMLElement} */ (target));
 }
 
-function handleBeforeUnload (e) {
+/**
+ * @param {BeforeUnloadEvent} e
+ * @returns {string | undefined}
+ */
+function handleBeforeUnload(e) {
 	if (Object.keys(wasaviAgentsHash).length) {
 		return e.returnValue = 'wasavi: Unexpected closing. Are you sure?';
 	}
 }
 
-function handleAgentInitialized (req) {
+/**
+ * @param {AgentRequest} req
+ * @returns {void}
+ */
+function handleAgentInitialized(req) {
 	if (isOptionsPage) {
-		window.WasaviOptions.extension = extension;
-		window.WasaviOptions.initPage(req);
+		var wasaviOptions = /** @type {{extension: unknown, initPage: (req: AgentRequest) => void}} */ (/** @type {Record<string, unknown>} */ (/** @type {unknown} */ (window)).WasaviOptions);
+		wasaviOptions.extension = extension;
+		wasaviOptions.initPage(req);
 	}
 
 	if (extension.isTopFrame() && document.querySelector('textarea')) {
@@ -1849,29 +2451,36 @@ function handleAgentInitialized (req) {
 }
 
 var handleBackendMessage = (function () {
-	function updateStorage (agent, req) {
+	/**
+	 * @param {Agent | null} agent
+	 * @param {AgentRequest} req
+	 * @returns {void}
+	 */
+	function updateStorage(agent, req) {
+		/** @type {string[]} */
 		var logbuf = [];
+		/** @type {unknown} */
 		var so;
 		for (var i in req.items) {
 			var value = req.items[i];
 			switch (i) {
 			case 'targets':
-				allowedElements = value;
+				allowedElements = /** @type {Record<string, boolean>} */ (value);
 				logbuf.push(i);
 				break;
 
 			case 'shortcutCode':
-				shortcutCode = value;
+				shortcutCode = /** @type {readonly Record<string, unknown>[]} */ (value);
 				logbuf.push(i);
 				break;
 
 			case 'quickActivation':
-				quickActivation = value;
+				quickActivation = /** @type {boolean} */ (value);
 				logbuf.push(i);
 				break;
 
 			case 'logMode':
-				logMode = value;
+				logMode = /** @type {boolean} */ (value);
 				logbuf.push(i);
 				break;
 
@@ -1882,78 +2491,113 @@ var handleBackendMessage = (function () {
 			}
 		}
 		if (so) {
-			siteOverrides = parseSiteOverrides(so);
+			siteOverrides = parseSiteOverrides(/** @type {string} */ (so));
 		}
 		logbuf.length && log(
 			'update-storage: consumed ', logbuf.join(', '));
 	}
 
-	function requestRun (agent, req) {
+	/**
+	 * @param {Agent | null} agent
+	 * @param {AgentRequest} req
+	 * @returns {void}
+	 */
+	function requestRun(agent, req) {
 		handleRequestLaunch();
 	}
 
-	function ping (agent, req) {
+	/**
+	 * @param {Agent | null} agent
+	 * @param {AgentRequest} req
+	 * @returns {void}
+	 */
+	function ping(agent, req) {
 	}
 
-	function notifyKeydown (agent, req) {
+	/**
+	 * @param {Agent | null} agent
+	 * @param {AgentRequest} req
+	 * @returns {void}
+	 */
+	function notifyKeydown(agent, req) {
 		if (!isTestFrame) return;
-		agent.setStateClearTimer(null);
-		if (agent.wasaviFrame.getAttribute('data-wasavi-command-state') != 'busy') {
-			agent.wasaviFrame.setAttribute('data-wasavi-command-state', 'busy');
-			document.querySelector('h1').style.color = 'red';
+		agent?.setStateClearTimer(null);
+		var frame = /** @type {HTMLIFrameElement} */ (agent?.wasaviFrame);
+		if (frame.getAttribute('data-wasavi-command-state') != 'busy') {
+			frame.setAttribute('data-wasavi-command-state', 'busy');
+			/** @type {HTMLElement} */ (document.querySelector('h1')).style.color = 'red';
 			keylog('-', '-', 'command start, frame #' + req.frameId);
 		}
 
 		var args = [];
-		'key'       in req && req.key.charCodeAt(0) >= 32 && args.push(req.key);
+		'key'       in req && (req.key ?? '').charCodeAt(0) >= 32 && args.push(req.key);
 		'keyCode'   in req && args.push(req.keyCode);
 		'eventType' in req && args.push(req.eventType);
 		keylog.apply(null, args);
 	}
 
-	function notifyError (agent, req) {
+	/**
+	 * @param {Agent | null} agent
+	 * @param {AgentRequest} req
+	 * @returns {void}
+	 */
+	function notifyError(agent, req) {
 		if (!isTestFrame) return;
 		keylog(
-			'error on ' + document.querySelector('h1').textContent,
+			'error on ' + /** @type {HTMLElement} */ (document.querySelector('h1')).textContent,
 			req.fileName + '(' + req.lineNumber + ')',
 			req.message);
 	}
 
-	function notifyState (agent, req) {
+	/**
+	 * @param {Agent | null} agent
+	 * @param {AgentRequest} req
+	 * @returns {void}
+	 */
+	function notifyState(agent, req) {
 		if (!isTestFrame) return;
-		agent.setStateClearTimer(function (agent) {
-			agent.wasaviFrame.setAttribute('data-wasavi-state', JSON.stringify(req.state));
-			agent.wasaviFrame.setAttribute('data-wasavi-input-mode', req.state.inputMode);
-			agent.wasaviFrame.removeAttribute('data-wasavi-command-state');
+		agent?.setStateClearTimer(function (agent) {
+			var frame = /** @type {HTMLIFrameElement} */ (agent.wasaviFrame);
+			var state = /** @type {Record<string, unknown>} */ (req.state);
+			frame.setAttribute('data-wasavi-state', JSON.stringify(req.state));
+			frame.setAttribute('data-wasavi-input-mode', /** @type {string} */ (state.inputMode));
+			frame.removeAttribute('data-wasavi-command-state');
 
 			keylog('notify-state');
 		});
 	}
 
-	function commandCompleted (agent, req) {
+	/**
+	 * @param {Agent | null} agent
+	 * @param {AgentRequest} req
+	 * @returns {void}
+	 */
+	function commandCompleted(agent, req) {
 		if (!isTestFrame) return;
-		agent.setStateClearTimer(function (agent) {
+		agent?.setStateClearTimer(function (agent) {
+			var frame = /** @type {HTMLIFrameElement} */ (agent.wasaviFrame);
+			var reqState = /** @type {Record<string, unknown>} */ (req.state);
 			try {
-				agent.wasaviFrame.setAttribute('data-wasavi-state', JSON.stringify(req.state));
-				agent.wasaviFrame.setAttribute('data-wasavi-input-mode', req.state.inputMode);
-				agent.wasaviFrame.setAttribute('data-wasavi-line-input', req.state.lineInput);
+				frame.setAttribute('data-wasavi-state', JSON.stringify(req.state));
+				frame.setAttribute('data-wasavi-input-mode', /** @type {string} */ (reqState.inputMode));
+				frame.setAttribute('data-wasavi-line-input', /** @type {string} */ (reqState.lineInput));
 
-				document.querySelector('h1').style.color = '';
+				/** @type {HTMLElement} */ (document.querySelector('h1')).style.color = '';
 
-				var state = $('state');
+				var state = /** @type {HTMLElement} */ ($('state'));
 				state.textContent = '';
 				['running', 'state', 'inputMode', 'row', 'col', 'lastMessage'].forEach(function (p) {
 					state.appendChild(document.createElement('div')).textContent =
-						p + ': ' + req.state[p];
+						p + ': ' + reqState[p];
 				});
 			}
 			finally {
 				if (req.type == 'command-completed') {
-					agent.wasaviFrame.removeAttribute('data-wasavi-command-state');
+					frame.removeAttribute('data-wasavi-command-state');
 					keylog('--- sequence point ---');
 				}
 				else {
-					agent.wasaviFrame.setAttribute('data-wasavi-command-state', 'completed');
+					frame.setAttribute('data-wasavi-command-state', 'completed');
 					keylog('*** complete sequence point ***');
 					keylogOutput();
 				}
@@ -1962,23 +2606,24 @@ var handleBackendMessage = (function () {
 		});
 	}
 
+	/** @type {Record<string, (agent: Agent | null, req: AgentRequest, sender: unknown, response: AgentResponse) => void>} */
 	var handlerMap = {
 		/*
 		 * messages transferred from wasavi
 		 */
 
-		'initialized':   function initialized (a,d,s,r)  { a.initialized(d, s, r) },
-		'ready':         function ready (a,d,s,r)        { a.ready(d, s, r) },
-		'window-state':  function windowState (a,d,s,r)  { a.windowState(d, s, r) },
-		'focus-me':      function focusMe (a,d,s,r)      { a.focusMe(d, s, r) },
-		'focus-changed': function focusChanged (a,d,s,r) { a.focusChanged(d, s, r) },
-		'blink-me':      function blinkMe (a,d,s,r)      { a.blinkMe(d, s, r) },
-		'set-size':      function setSize (a,d,s,r)      { a.setSize(d, s, r) },
-		'terminated':    function terminated (a,d,s,r)   { a.terminated(d, s, r) },
-		'read':          function read (a,d,s,r)         { a.read(d, s, r) },
-		'write':         function write (a,d,s,r)        { a.write(d, s, r) },
-		'request-blur':  function requestBlur (a,d,s,r)  { a.requestBlur(d, s, r) },
-		'reload':        function reload (a,d,s,r)       { a.reload(d, s, r) },
+		'initialized':   function initialized (a,d,s,r)  { a?.initialized(d, s, r) },
+		'ready':         function ready (a,d,s,r)        { a?.ready(d, s, r) },
+		'window-state':  function windowState (a,d,s,r)  { a?.windowState(d, s, r) },
+		'focus-me':      function focusMe (a,d,s,r)      { a?.focusMe(d, s, r) },
+		'focus-changed': function focusChanged (a,d,s,r) { a?.focusChanged(d) },
+		'blink-me':      function blinkMe (a,d,s,r)      { a?.blinkMe(d) },
+		'set-size':      function setSize (a,d,s,r)      { a?.setSize(d, s, r) },
+		'terminated':    function terminated (a,d,s,r)   { a?.terminated(d) },
+		'read':          function read (a,d,s,r)         { a?.read(d, s, r) },
+		'write':         function write (a,d,s,r)        { a?.write(d, s, r) },
+		'request-blur':  function requestBlur (a,d,s,r)  { a?.requestBlur(d) },
+		'reload':        function reload (a,d,s,r)       { a?.reload(d) },
 
 		/*
 		 * messages from backend
@@ -2000,6 +2645,12 @@ var handleBackendMessage = (function () {
 		'commands-completed': commandCompleted,
 	};
 
+	/**
+	 * @param {AgentRequest} req
+	 * @param {unknown} sender
+	 * @param {AgentResponse} response
+	 * @returns {void}
+	 */
 	return function (req, sender, response) {
 		if (!req || !req.type) return;
 
@@ -2007,19 +2658,25 @@ var handleBackendMessage = (function () {
 			'got "' + req.type + '" message from backend:',
 			JSON.stringify(req).substring(0, 200));
 
-		if (!(req.type in handlerMap)) return;
+		var type = req.type ?? '';
+		if (!(type in handlerMap)) return;
 
-		if ('frameId' in req) {
-			if (!(req.frameId in wasaviAgentsHash)) return;
-			handlerMap[req.type](wasaviAgentsHash[req.frameId], req, sender, response);
+		if (req.frameId != null) {
+			var frameId = req.frameId;
+			if (!(frameId in wasaviAgentsHash)) return;
+			handlerMap[type](wasaviAgentsHash[frameId], req, sender, response);
 		}
 		else {
-			handlerMap[req.type](null, req, sender, response);
+			handlerMap[type](null, req, sender, response);
 		}
 	};
 })();
 
-function handleConnect (req) {
+/**
+ * @param {AgentRequest} req
+ * @returns {void}
+ */
+function handleConnect(req) {
 	if (!req || (!isOptionsPage && (!('tabId' in req) || !req.tabId))) {
 		if (logMode) {
 			var missing = '?';
@@ -2036,14 +2693,14 @@ function handleConnect (req) {
 		return;
 	}
 
-	if (!isOptionsPage) extension.tabId = req.tabId;
+	if (!isOptionsPage) extension.tabId = req.tabId ?? null;
 	allowedElements = req.targets;
 	shortcutCode = req.shortcutCode;
 	fontFamily = req.fontFamily;
 	quickActivation = req.quickActivation;
 	devMode = req.devMode;
 	logMode = req.logMode;
-	siteOverrides = parseSiteOverrides(req.siteOverrides);
+	siteOverrides = parseSiteOverrides(req.siteOverrides ?? '');
 	statusLineHeight = req.statusLineHeight;
 
 	extension.ensureRun(handleAgentInitialized, req);
@@ -2055,6 +2712,6 @@ extension.setMessageListener(handleBackendMessage);
 document.addEventListener('WasaviRequestLaunch', handleRequestLaunch, false);
 connect(handleConnect);
 
-})(this);
+})(typeof globalThis == 'object' ? globalThis : window);
 
 // vim:set ts=4 sw=4 fileencoding=UTF-8 fileformat=unix filetype=javascript fdm=marker fmr=<<<,>>> fdl=1 :
