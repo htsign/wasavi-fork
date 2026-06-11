@@ -605,10 +605,11 @@ Wasavi.Configurator = function (app, internals, abbrevs) {
 	init();
 };
 
-Wasavi.RegexConverter = function (app) {
-	const SPECIAL_SPACE = '[\u0009\u000b\u000c\u0020\u00a0\u2000-\u200b\u2028\u2029\u3000]';
-	const SPECIAL_NONSPACE = '[\u0000-\u0008\u000a\u000d-\u001f\u0021-\u009f\u00a1-\u1fff\u200c-\u2027\u202a-\u2fff\u3001-\uffff]';
-	const META_MAP = {
+Wasavi.RegexConverter = class RegexConverter {
+	static #SPECIAL_SPACE = /** @type {const} */ ('[\u0009\u000b\u000c\u0020\u00a0\u2000-\u200b\u2028\u2029\u3000]');
+	static #SPECIAL_NONSPACE = /** @type {const} */ ('[\u0000-\u0008\u000a\u000d-\u001f\u0021-\u009f\u00a1-\u1fff\u200c-\u2027\u202a-\u2fff\u3001-\uffff]');
+	/** @type {{ backslashed: Record<string, string[]>, nonbackslashed: Record<string, string[]>, common: Record<string, string[]> }} */
+	static #META_MAP = {
 		backslashed:{
 			// index 0: vi regex -> js regex mapping (outside of character class)
 			// index 1: vi regex -> invalidated vi regex mapping
@@ -623,8 +624,8 @@ Wasavi.RegexConverter = function (app) {
 			'\\?': ['?', '\\\\?'],
 			'\\+': ['+', '\\\\+'],
 			'\\|': ['|', '\\\\|'],
-			'\\s': [SPECIAL_SPACE, '\\\\s', SPECIAL_SPACE.replace(/^\[|\]$/g, '')],
-			'\\S': [SPECIAL_NONSPACE, '\\\\S', SPECIAL_NONSPACE.replace(/^\[|\]$/g, '')]
+			'\\s': [this.#SPECIAL_SPACE, '\\\\s', this.#SPECIAL_SPACE.replace(/^\[|\]$/g, '')],
+			'\\S': [this.#SPECIAL_NONSPACE, '\\\\S', this.#SPECIAL_NONSPACE.replace(/^\[|\]$/g, '')]
 		},
 
 		nonbackslashed:{
@@ -646,7 +647,22 @@ Wasavi.RegexConverter = function (app) {
 			'$': ['$', '\\$']
 		}
 	};
-	function parse (s, forceLiteral) {
+
+	/** @type {WasaviApp} */
+	#app;
+
+	/** @param {WasaviApp} app */
+	constructor(app) {
+		this.#app = app;
+	}
+
+	/**
+	 * @param {string} s
+	 * @param {boolean} [forceLiteral]
+	 * @returns {string}
+	 */
+	#parse(s, forceLiteral) {
+		/** @type {string[]} */
 		var result = [];
 		var isInClass = false;
 		var index = forceLiteral ? 1 : 0;
@@ -660,7 +676,7 @@ Wasavi.RegexConverter = function (app) {
 			if (isInClass) {
 				if (ch == '\\') {
 					ch += s.charAt(i);
-					result.push(META_MAP.backslashed[ch][2] || ch);
+					result.push(RegexConverter.#META_MAP.backslashed[ch][2] || ch);
 				}
 				else if (ch == ']') {
 					result.push(ch);
@@ -673,12 +689,12 @@ Wasavi.RegexConverter = function (app) {
 			else {
 				if (ch == '\\') {
 					ch += s.charAt(i);
-					if (ch in META_MAP.backslashed) {
-						if (ch == '\\?' && result.lastItem == '(') {
-							result.push(META_MAP.backslashed[ch][1]);
+					if (ch in RegexConverter.#META_MAP.backslashed) {
+						if (ch == '\\?' && result.at(-1) == '(') {
+							result.push(RegexConverter.#META_MAP.backslashed[ch][1]);
 						}
 						else {
-							result.push(META_MAP.backslashed[ch][index]);
+							result.push(RegexConverter.#META_MAP.backslashed[ch][index]);
 						}
 					}
 					else {
@@ -690,11 +706,11 @@ Wasavi.RegexConverter = function (app) {
 						}
 					}
 				}
-				else if (ch in META_MAP.nonbackslashed) {
-					result.push(META_MAP.nonbackslashed[ch][index]);
+				else if (ch in RegexConverter.#META_MAP.nonbackslashed) {
+					result.push(RegexConverter.#META_MAP.nonbackslashed[ch][index]);
 				}
-				else if (ch in META_MAP.common) {
-					result.push(META_MAP.common[ch][index]);
+				else if (ch in RegexConverter.#META_MAP.common) {
+					result.push(RegexConverter.#META_MAP.common[ch][index]);
 					if (ch == '[' && !forceLiteral) {
 						isInClass = true;
 					}
@@ -709,53 +725,81 @@ Wasavi.RegexConverter = function (app) {
 		}
 		return result.join('');
 	}
-	function fixup (s) {
-		return s.replace(/\\s/g, SPECIAL_SPACE);
+
+	/**
+	 * @param {string} s
+	 * @returns {string}
+	 */
+	fixup(s) {
+		return s.replace(/\\s/g, RegexConverter.#SPECIAL_SPACE);
 	}
-	function toJsRegexString (s) {
+
+	/**
+	 * @param {string | RegExp} s
+	 * @returns {string}
+	 */
+	toJsRegexString(s) {
 		if (typeof s == 'string') {
-			return parse(s);
+			return this.#parse(s);
 		}
 		else if (s instanceof RegExp) {
 			return s.source;
 		}
 		throw new SyntaxError('invalid regex source');
 	}
-	function toLiteralString (s) {
-		return parse(s, true);
+
+	/**
+	 * @param {string} s
+	 * @returns {string}
+	 */
+	toLiteralString(s) {
+		return this.#parse(s, true);
 	}
-	function toJsRegex (s, opts) {
+
+	/**
+	 * @param {string | RegExp} s
+	 * @param {string} [opts]
+	 * @returns {RegExp | null}
+	 */
+	toJsRegex(s, opts) {
+		/** @type {RegExp | null} */
 		var result;
 		try {
-			result = new RegExp(toJsRegexString(s), opts || '');
+			result = new RegExp(this.toJsRegexString(s), opts ?? '');
 		}
 		catch (e) {
 			result = null;
 		}
 		return result;
 	}
-	function getCS (s) {
-		if (app.config.vars.smartcase && /[A-Z]/.test(s)) {
+
+	/**
+	 * @param {string} s
+	 * @returns {string}
+	 */
+	getCS(s) {
+		if (this.#app.config.vars.smartcase && /[A-Z]/.test(s)) {
 			return 'i';
 		}
-		return app.config.vars.ignorecase ? 'i' : '';
+		return this.#app.config.vars.ignorecase ? 'i' : '';
 	}
-	function getDefaultOption () {
+
+	/** @returns {{ wrapscan: boolean }} */
+	getDefaultOption() {
 		return {
-			wrapscan: app.config.vars.wrapscan
+			wrapscan: this.#app.config.vars.wrapscan
 		};
 	}
 
-	publish(
-		this,
-		fixup,
-		toJsRegexString, toJsRegex, toLiteralString,
-		getCS, getDefaultOption,
-		{
-			SPECIAL_SPACE: () => SPECIAL_SPACE,
-			SPECIAL_NONSPACE: () => SPECIAL_NONSPACE
-		}
-	);
+	/** @returns {string} */
+	get SPECIAL_SPACE() {
+		return RegexConverter.#SPECIAL_SPACE;
+	}
+
+	/** @returns {string} */
+	get SPECIAL_NONSPACE() {
+		return RegexConverter.#SPECIAL_NONSPACE;
+	}
 };
 
 Wasavi.PrefixInput = function () {

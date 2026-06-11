@@ -338,7 +338,7 @@ interface WasaviRegexConverter {
   toJsRegex(s: string | RegExp, opts?: string): RegExp | null;
   toLiteralString(s: string): string;
   getCS(s: string): string;
-  getDefaultOption(): { wrapscan: unknown };
+  getDefaultOption(): { wrapscan: boolean };
   readonly SPECIAL_SPACE: string;
   readonly SPECIAL_NONSPACE: string;
 }
