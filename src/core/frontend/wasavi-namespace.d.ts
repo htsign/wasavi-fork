@@ -369,8 +369,22 @@ interface WasaviPrefixInput {
 }
 
 /** State of an in-progress search (classes.js). */
+interface WasaviRegexFinderPushArg {
+  head?: string;
+  direction?: number;
+  offset?: number;
+  scrollTop?: number;
+  scrollLeft?: number;
+  updateBound?: string | false;
+}
+
+interface WasaviRegexFinderInternalRegex {
+  pattern: string;
+  regex: RegExp;
+}
+
 interface WasaviRegexFinderInfo {
-  push(o: Record<string, unknown>): void;
+  push(o: WasaviRegexFinderPushArg): void;
   setPattern(p: string, withOffset?: boolean): void;
   readonly head: string;
   readonly direction: number;
@@ -379,9 +393,9 @@ interface WasaviRegexFinderInfo {
   readonly scrollLeft: number;
   readonly pattern: string;
   verticalOffset: number | undefined;
-  text: string | undefined;
-  readonly updateBound: boolean;
-  internalRegex: RegExp | undefined;
+  text: string | null | undefined;
+  readonly updateBound: string | false;
+  internalRegex: WasaviRegexFinderInternalRegex | undefined;
 }
 
 /** Command/search line input history (classes.js). */

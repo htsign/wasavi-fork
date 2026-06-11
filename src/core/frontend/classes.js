@@ -1022,18 +1022,36 @@ Wasavi.PrefixInput = function () {
 	init.apply(null, arguments);
 };
 
-Wasavi.RegexFinderInfo = function () {
-	let head;
-	let direction;
-	let offset;
-	let scrollTop;
-	let scrollLeft;
-	let pattern;
-	let text;
-	let updateBound;
-	let internalRegex;
+Wasavi.RegexFinderInfo = class {
+	/** @type {string} */
+	#head = '';
+	/** @type {number} */
+	#direction = 0;
+	/** @type {number} */
+	#offset = 0;
+	/** @type {number} */
+	#scrollTop = 0;
+	/** @type {number} */
+	#scrollLeft = 0;
+	/** @type {string} */
+	#pattern = '';
+	/** @type {string | false} */
+	#updateBound = false;
 
-	function parseFindString (s, delimiter) {
+	/** @type {number | undefined} */
+	verticalOffset;
+	/** @type {string | null | undefined} */
+	text;
+	/** @type {WasaviRegexFinderInternalRegex | undefined} */
+	internalRegex;
+
+	/**
+	 * @param {string} s
+	 * @param {string} delimiter
+	 * @returns {{ pattern: string, offset: number | undefined }}
+	 */
+	#parseFindString(s, delimiter) {
+		/** @type {{ pattern: string, offset: number | undefined }} */
 		let result = {
 			pattern: s,
 			offset: undefined
@@ -1057,42 +1075,51 @@ Wasavi.RegexFinderInfo = function () {
 		}
 		return result;
 	}
-	function push (o) {
-		head = o.head || '';
-		direction = o.direction || 0;
-		offset = o.offset || 0;
-		scrollTop = o.scrollTop || 0;
-		scrollLeft = o.scrollLeft || 0;
-		updateBound = o.updateBound || false;
-		internalRegex = undefined;
+
+	/**
+	 * @param {WasaviRegexFinderPushArg} o
+	 * @returns {void}
+	 */
+	push(o) {
+		this.#head = o.head || '';
+		this.#direction = o.direction || 0;
+		this.#offset = o.offset || 0;
+		this.#scrollTop = o.scrollTop || 0;
+		this.#scrollLeft = o.scrollLeft || 0;
+		this.#updateBound = o.updateBound || false;
+		this.internalRegex = undefined;
 	}
-	function setPattern (p, withOffset) {
-		pattern = p;
+
+	/**
+	 * @param {string} p
+	 * @param {boolean} [withOffset]
+	 * @returns {void}
+	 */
+	setPattern(p, withOffset) {
+		this.#pattern = p;
 		this.verticalOffset = undefined;
 
 		if (withOffset) {
-			let parsed = parseFindString(p, head);
-			pattern = parsed.pattern;
+			let parsed = this.#parseFindString(p, this.#head);
+			this.#pattern = parsed.pattern;
 			this.verticalOffset = parsed.offset;
 		}
 	}
 
-	this.verticalOffset = undefined;
-
-	publish(this,
-		push, setPattern,
-		{
-			head: () => head,
-			direction: () => direction,
-			offset: () => offset,
-			scrollTop: () => scrollTop,
-			scrollLeft: () => scrollLeft,
-			pattern: () => pattern,
-			text: [() => text, (v) => text = v],
-			updateBound: () => updateBound,
-			internalRegex: [() => internalRegex, (v) => internalRegex = v]
-		}
-	);
+	/** @returns {string} */
+	get head() {return this.#head}
+	/** @returns {number} */
+	get direction() {return this.#direction}
+	/** @returns {number} */
+	get offset() {return this.#offset}
+	/** @returns {number} */
+	get scrollTop() {return this.#scrollTop}
+	/** @returns {number} */
+	get scrollLeft() {return this.#scrollLeft}
+	/** @returns {string} */
+	get pattern() {return this.#pattern}
+	/** @returns {string | false} */
+	get updateBound() {return this.#updateBound}
 };
 
 Wasavi.LineInputHistories = function (app, maxSize, names, value) {
