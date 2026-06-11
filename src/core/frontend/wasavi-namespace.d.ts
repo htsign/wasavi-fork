@@ -410,13 +410,19 @@ interface WasaviRegexFinderInfo {
   internalRegex: WasaviRegexFinderInternalRegex | undefined;
 }
 
+/** A single named history slot stored by `WasaviLineInputHistories`. */
+interface WasaviLineInputHistoryEntry {
+  lines: string[];
+  current: number;
+}
+
 /** Command/search line input history (classes.js). */
 interface WasaviLineInputHistories {
-  push(line: string): unknown;
-  prev(): unknown;
-  next(): unknown;
-  save(): unknown;
-  load(value?: unknown): unknown;
+  push(line?: string): void;
+  prev(): string | null;
+  next(): string | null;
+  save(): void;
+  load(value?: unknown): void;
   isInitial: boolean;
   defaultName: string;
   readonly storageKey: string;
@@ -1027,7 +1033,7 @@ declare var Wasavi: {
   LineInputHistories: new (
     app: WasaviApp,
     maxSize: number,
-    names: unknown,
+    names: readonly string[],
     value?: unknown
   ) => WasaviLineInputHistories;
   MapManager: new (app: WasaviApp, opts?: Record<string, unknown>) => WasaviMapManager;

@@ -1197,101 +1197,150 @@ Wasavi.RegexFinderInfo = class {
 	get updateBound() {return this.#updateBound}
 };
 
-Wasavi.LineInputHistories = function (app, maxSize, names, value) {
-	const storageKey = 'wasavi_lineinput_histories';
-	var s;
-	var name;
-	var isLatest = false;
+Wasavi.LineInputHistories = class LineInputHistories {
+	static #STORAGE_KEY = /** @type {const} */ ('wasavi_lineinput_histories');
 
-	function serialize () {
-		return {s:s};
+	/** @type {WasaviApp} */
+	#app;
+	/** @type {number} */
+	#maxSize;
+	/** @type {readonly string[]} */
+	#names;
+	/** @type {Record<string, WasaviLineInputHistoryEntry>} */
+	#s = {};
+	/** @type {string} */
+	#name = '';
+	#isLatest = false;
+
+	/**
+	 * @param {WasaviApp} app
+	 * @param {number} maxSize
+	 * @param {readonly string[]} names
+	 * @param {unknown} [value]
+	 */
+	constructor(app, maxSize, names, value) {
+		this.#app = app;
+		this.#maxSize = maxSize;
+		this.#names = names;
+		this.load(value);
 	}
-	function restore (src) {
+
+	/** @returns {{ s: Record<string, WasaviLineInputHistoryEntry> }} */
+	#serialize() {
+		return {s:this.#s};
+	}
+
+	/**
+	 * @param {unknown} src
+	 * @returns {void}
+	 */
+	#restore(src) {
 		if (!isObject(src)) return;
 
+		/** @type {Record<string, WasaviLineInputHistoryEntry>} */
 		var tmp = {};
 		if (isObject(src.s)) {
-			src = src.s;
-			for (var na in src) {
-				if (!isObject(src[na])) continue;
-				if (!isArray(src[na].lines)) continue;
-				if (!isNumber(src[na].current)) continue;
+			var root = src.s;
+			for (var na in root) {
+				var entry = root[na];
+				if (!isObject(entry)) continue;
+				if (!isArray(entry.lines)) continue;
+				if (!isNumber(entry.current)) continue;
 
-				tmp[na] = {};
-				tmp[na].lines = src[na].lines.filter(isString).slice(-maxSize);
-				tmp[na].current = minmax(-1, Math.floor(src[na].current), tmp[na].lines.length - 1);
+				var lines = entry.lines.filter(isString).slice(-this.#maxSize);
+				tmp[na] = {
+					lines: lines,
+					current: minmax(-1, Math.floor(entry.current), lines.length - 1)
+				};
 			}
 		}
-		s = extend(s, tmp);
+		this.#s = extend(this.#s, tmp);
 	}
-	function save () {
-		app.low.setLocalStorage(storageKey, serialize());
-		isLatest = true;
+
+	/** @returns {void} */
+	save() {
+		this.#app.low.setLocalStorage(LineInputHistories.#STORAGE_KEY, this.#serialize());
+		this.#isLatest = true;
 	}
-	function load (value) {
-		if (isLatest) {
-			isLatest = false;
+
+	/**
+	 * @param {unknown} [value]
+	 * @returns {void}
+	 */
+	load(value) {
+		if (this.#isLatest) {
+			this.#isLatest = false;
 			return;
 		}
 
-		s = {};
-		names.forEach(function (na) {s[na] = {lines:[], current:-1}});
-		restore(value || '');
+		this.#s = {};
+		this.#names.forEach(na => {this.#s[na] = {lines:[], current:-1}});
+		this.#restore(value || '');
 	}
-	function push (line) {
+
+	/**
+	 * @param {string} [line]
+	 * @returns {void}
+	 */
+	push(line) {
 		line || (line = '');
 		if (line != '') {
-			s[name].lines = s[name].lines.filter(function (s) {
-				return s != line;
-			});
-			s[name].lines.push(line);
-			while (s[name].lines.length > maxSize) {
-				s[name].lines.shift();
+			var entry = this.#s[this.#name];
+			entry.lines = entry.lines.filter(s => s != line);
+			entry.lines.push(line);
+			while (entry.lines.length > this.#maxSize) {
+				entry.lines.shift();
 			}
-			s[name].current = s[name].lines.length - 1;
-			save();
+			entry.current = entry.lines.length - 1;
+			this.save();
 		}
 	}
-	function prev () {
-		if (s[name].current > 0) {
-			return s[name].lines[--s[name].current];
+
+	/** @returns {string | null} */
+	prev() {
+		var entry = this.#s[this.#name];
+		if (entry.current > 0) {
+			return entry.lines[--entry.current];
 		}
 		return null;
 	}
-	function next () {
-		if (s[name].current < s[name].lines.length) {
-			++s[name].current;
-			if (s[name].current < s[name].lines.length) {
-				return s[name].lines[s[name].current];
+
+	/** @returns {string | null} */
+	next() {
+		var entry = this.#s[this.#name];
+		if (entry.current < entry.lines.length) {
+			++entry.current;
+			if (entry.current < entry.lines.length) {
+				return entry.lines[entry.current];
 			}
 		}
 		return null;
 	}
 
-	publish(this,
-		push, prev, next, save, load,
-		{
-			isInitial:[
-				function () {return s[name].current == s[name].lines.length},
-				function (v) {s[name].current = s[name].lines.length}
-			],
-			defaultName:[
-				function () {return name},
-				function (v) {
-					if (v in s) {
-						name = v;
-						s[name].current = s[name].lines.length;
-					}
-					else {
-						throw new TypeError('LineInputHistories: unregistered name: ' + name);
-					}
-				}
-			],
-			storageKey:function () {return storageKey}
+	/** @returns {boolean} */
+	get isInitial() {
+		var entry = this.#s[this.#name];
+		return entry.current == entry.lines.length;
+	}
+	set isInitial(v) {
+		var entry = this.#s[this.#name];
+		entry.current = entry.lines.length;
+	}
+
+	/** @returns {string} */
+	get defaultName() {return this.#name}
+	set defaultName(v) {
+		if (v in this.#s) {
+			this.#name = v;
+			this.#s[this.#name].current = this.#s[this.#name].lines.length;
 		}
-	);
-	load(value);
-	value = null;
+		else {
+			throw new TypeError('LineInputHistories: unregistered name: ' + this.#name);
+		}
+	}
+
+	/** @returns {string} */
+	get storageKey() {return LineInputHistories.#STORAGE_KEY}
 };
 
 Wasavi.MapManager = function MapManager (app, opts) {
