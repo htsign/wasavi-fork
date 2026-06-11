@@ -604,7 +604,6 @@ interface WasaviStrokeRecorder {
   items(key: string): ({ strokes: string } & Record<string, unknown>) | null;
   appendStroke(stroke: string): void;
   dump(): string;
-  dispose(): void;
 }
 
 /** vim-surround style operations (classes.js). */

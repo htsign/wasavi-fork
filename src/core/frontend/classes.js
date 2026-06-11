@@ -4064,38 +4064,51 @@ Wasavi.Completer = function (appProxy, alist) {
 	init(alist);
 };
 
-Wasavi.StrokeRecorder = function () {
-	var storage = {};
+/** @typedef {{ strokes: string } & Record<string, unknown>} StrokeItem */
 
-	function add (key, opts) {
-		return storage[key] = extend({strokes:''}, opts || {});
+Wasavi.StrokeRecorder = class {
+	/** @type {Record<string, StrokeItem>} */
+	#storage = {};
+
+	/**
+	 * @param {string} key
+	 * @param {Record<string, unknown>} [opts]
+	 * @returns {StrokeItem}
+	 */
+	add(key, opts) {
+		return this.#storage[key] = extend({strokes:''}, opts ?? {});
 	}
 
-	function remove (key) {
-		delete storage[key];
+	/**
+	 * @param {string} key
+	 * @returns {void}
+	 */
+	remove(key) {
+		delete this.#storage[key];
 	}
 
-	function items (key) {
-		return key in storage ? storage[key] : null;
+	/**
+	 * @param {string} key
+	 * @returns {StrokeItem | null}
+	 */
+	items(key) {
+		return key in this.#storage ? this.#storage[key] : null;
 	}
 
-	function appendStroke (stroke) {
-		for (var i in storage) {
-			storage[i].strokes += stroke;
+	/**
+	 * @param {string} stroke
+	 * @returns {void}
+	 */
+	appendStroke(stroke) {
+		for (var i in this.#storage) {
+			this.#storage[i].strokes += stroke;
 		}
 	}
 
-	function dump () {
-		return JSON.stringify(storage, null, ' ');
+	/** @returns {string} */
+	dump() {
+		return JSON.stringify(this.#storage, null, ' ');
 	}
-
-	function dispose () {
-		storage = null;
-	}
-
-	publish(this,
-		add, remove, items, appendStroke, dump, dispose
-	);
 };
 
 Wasavi.Surrounding = function (app) {
