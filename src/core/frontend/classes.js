@@ -5040,6 +5040,6 @@ Wasavi.SortWorker = class {
 	}
 };
 
-})(typeof global == 'object' ? global : window);
+})(typeof globalThis == 'object' ? globalThis : window);
 
 // vim:set ts=4 sw=4 fenc=UTF-8 ff=unix ft=javascript fdm=marker :
