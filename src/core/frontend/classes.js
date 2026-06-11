@@ -107,94 +107,133 @@ Wasavi.Position = class {
 	}
 };
 
-Wasavi.L10n = function (app, catalog) {
-	var pluralFunctions;
+Wasavi.L10n = class {
+	/** @type {WasaviApp} */
+	#app;
+	/** @type {WasaviMessageCatalog | undefined} */
+	#catalog;
+	/** @type {{ name: string, value: string }[]} */
+	#pluralFunctions = [];
 
-	function getId (m) {
+	/**
+	 * @param {WasaviApp} app
+	 * @param {WasaviMessageCatalog} [catalog]
+	 */
+	constructor(app, catalog) {
+		this.#app = app;
+		this.#catalog = catalog;
+		this.#init();
+	}
+
+	/**
+	 * @param {string} m
+	 * @returns {string}
+	 */
+	#getId(m) {
 		return m.toLowerCase()
 			.replace(/\{(\d+)\}/g, '@$1')
 			.replace(/\{(\w+):\d+\}/g, '$1')
 			.replace(/[^A-Za-z0-9_@ ]/g, '')
 			.replace(/ +/g, '_');
 	}
-	function compile (expr) {
-		pluralFunctions = [];
+
+	/**
+	 * @param {string} [expr]
+	 * @returns {void}
+	 */
+	#compile(expr) {
+		this.#pluralFunctions = [];
 
 		var nodes = (expr || '').split(/\s*,\s*/);
 		for (var i = 0, goal = nodes.length; i < goal; i++) {
 			var re = /^(\w+)\(([^)]+)\)$/.exec(nodes[i]);
 			if (!re) continue;
-			pluralFunctions.push({name:re[1], value:re[2]});
+			this.#pluralFunctions.push({name:re[1], value:re[2]});
 		}
 	}
-	function getPluralSuffix (n) {
-		for (var i = 0, goal = pluralFunctions.length; i < goal; i++) {
-			switch (pluralFunctions[i].name) {
+
+	/**
+	 * @param {number} n
+	 * @returns {string}
+	 */
+	#getPluralSuffix(n) {
+		for (var i = 0, goal = this.#pluralFunctions.length; i < goal; i++) {
+			switch (this.#pluralFunctions[i].name) {
 			case 'isone':
-				if (n == 1) return pluralFunctions[i].value;
+				if (n == 1) return this.#pluralFunctions[i].value;
 				break;
 			}
 		}
 		return '';
 	}
-	function getPluralNoun (word, n) {
-		var suffix = getPluralSuffix(n - 0);
+
+	/**
+	 * @param {string} word
+	 * @param {number} n
+	 * @returns {string}
+	 */
+	#getPluralNoun(word, n) {
+		var suffix = this.#getPluralSuffix(n - 0);
 		var id = '_plural_' + word + (suffix == '' ? '' : ('@' + suffix));
-		if (catalog) {
-			return id in catalog ? catalog[id].message : word;
+		if (this.#catalog) {
+			return id in this.#catalog ? this.#catalog[id].message : word;
 		}
-		else if (app.extensionChannel) {
-			return app.extensionChannel.getMessage(id) || word;
+		else if (this.#app.extensionChannel) {
+			return this.#app.extensionChannel.getMessage(id) || word;
 		}
 		return word;
 	}
-	function getMessage (messageId) {
-		if (catalog) {
-			if (messageId in catalog) {
-				return catalog[messageId].message;
+
+	/**
+	 * @param {string} messageId
+	 * @returns {string}
+	 */
+	getMessage(messageId) {
+		if (this.#catalog) {
+			if (messageId in this.#catalog) {
+				return this.#catalog[messageId].message;
 			}
-			var id = getId(messageId);
-			if (id in catalog) {
-				catalog[messageId] = catalog[id];
-				delete catalog[id];
-				return catalog[messageId].message;
+			var id = this.#getId(messageId);
+			if (id in this.#catalog) {
+				this.#catalog[messageId] = this.#catalog[id];
+				delete this.#catalog[id];
+				return this.#catalog[messageId].message;
 			}
 		}
-		else if (app.extensionChannel) {
-			return app.extensionChannel.getMessage(getId(messageId)) || messageId;
+		else if (this.#app.extensionChannel) {
+			return this.#app.extensionChannel.getMessage(this.#getId(messageId)) || messageId;
 		}
 		return messageId;
 	}
-	function getTranslator () {
-		return function () {
-			var args = toArray(arguments);
-			var format = getMessage(args.shift());
-			return format.replace(/\{(?:([a-z]+):)?(\d+)\}/ig, function ($0, $1, $2) {
+
+	/**
+	 * @returns {(...args: unknown[]) => string}
+	 */
+	getTranslator() {
+		return (...args) => {
+			var format = this.getMessage(/** @type {string} */ (args.shift()));
+			return format.replace(/\{(?:([a-z]+):)?(\d+)\}/ig, ($0, $1, $2) => {
 				return $1 == undefined || $1 == '' ?
-					toVisibleString(args[$2]) : getPluralNoun($1, args[$2]);
+					toVisibleString(args[Number($2)]) : this.#getPluralNoun($1, Number(args[Number($2)]));
 			});
 		};
 	}
-	function init () {
+
+	/** @returns {void} */
+	#init() {
 		const PLURAL_FUNCTION_SIGNATURE = '_plural_rule@function';
 		var expressionString;
 
-		if (catalog && PLURAL_FUNCTION_SIGNATURE in catalog) {
-			expressionString = catalog[PLURAL_FUNCTION_SIGNATURE].message;
+		if (this.#catalog && PLURAL_FUNCTION_SIGNATURE in this.#catalog) {
+			expressionString = this.#catalog[PLURAL_FUNCTION_SIGNATURE].message;
 		}
-		if (!expressionString && app.extensionChannel) {
-			expressionString = app.extensionChannel.getMessage(PLURAL_FUNCTION_SIGNATURE);
+		if (!expressionString && this.#app.extensionChannel) {
+			expressionString = this.#app.extensionChannel.getMessage(PLURAL_FUNCTION_SIGNATURE);
 		}
 
-		compile(expressionString);
+		this.#compile(expressionString);
 	}
-	function dispose () {
-		app = null;
-	}
-
-	publish(this, getMessage, getTranslator, dispose);
-	init();
-}
+};
 
 Wasavi.Configurator = function (app, internals, abbrevs) {
 	function VariableItem (name, type, defaultValue, subSetter, opts) {

@@ -1495,7 +1495,7 @@ function uninstall (implicit) {
 	cursor = cursor.dispose();
 	scroller = scroller.dispose();
 	editLogger = editLogger.dispose();
-	l10n = l10n.dispose();
+	l10n = undefined;
 	recordedStrokes = undefined;
 	surrounding = surrounding.dispose();
 	executingMacroInfo = undefined;

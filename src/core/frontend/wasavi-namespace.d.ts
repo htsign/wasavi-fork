@@ -214,11 +214,13 @@ interface WasaviAppKeyManager {
   };
 }
 
+/** A WebExtension message catalog (messages.json shape), keyed by message id. */
+type WasaviMessageCatalog = Record<string, { message: string }>;
+
 /** Localization helper (classes.js). */
 interface WasaviL10n {
   getMessage(messageId: string): string;
-  getTranslator(): (...args: readonly unknown[]) => string;
-  dispose(): void;
+  getTranslator(): (...args: unknown[]) => string;
 }
 
 /**
@@ -991,7 +993,7 @@ declare var Wasavi: {
 
   // --- classes (classes.js) ---
   Position: new (row: number, col: number) => WasaviPosition;
-  L10n: new (app: WasaviApp, catalog?: unknown) => WasaviL10n;
+  L10n: new (app: WasaviApp, catalog?: WasaviMessageCatalog) => WasaviL10n;
   Configurator: new (app: WasaviApp, internals?: unknown, abbrevs?: unknown) => WasaviConfigurator;
   RegexConverter: new (app: WasaviApp) => WasaviRegexConverter;
   PrefixInput: new (init?: string | Record<string, unknown>) => WasaviPrefixInput;

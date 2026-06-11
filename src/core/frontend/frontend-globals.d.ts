@@ -91,7 +91,7 @@ declare function getLiteralRegexp(s: string): string;
 // === a bit complicated functions (utils.js) ==============================
 
 /** gettext-style formatter: first arg is the format, rest fill `{n}` slots. */
-declare function _(format: string, ...args: readonly unknown[]): string;
+declare function _(format: string, ...args: unknown[]): string;
 
 /** Define enumerable, read-only members on `target` from functions/objects. */
 declare function publish(target: object, ...sources: readonly unknown[]): void;
