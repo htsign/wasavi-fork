@@ -1503,7 +1503,6 @@ function uninstall (implicit) {
 	keyManager.dispose();
 	theme.dispose();
 	completer.dispose();
-	config.dispose();
 
 	extensionChannel.postMessage({
 		type:'terminated',

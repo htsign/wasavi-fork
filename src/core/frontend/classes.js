@@ -235,9 +235,45 @@ Wasavi.L10n = class {
 	}
 };
 
-Wasavi.Configurator = function (app, internals, abbrevs) {
-	function VariableItem (name, type, defaultValue, subSetter, opts) {
+class VariableItem {
+	static #ASSIGN_STATE_INITIAL = /** @type {const} */ (0);
+	static #ASSIGN_STATE_WARNED = /** @type {const} */ (1);
+	static #ASSIGN_STATE_ERRORED = /** @type {const} */ (2);
+
+	/** @type {WasaviApp} */
+	#app;
+	/** @type {string} */
+	name;
+	/** @type {WasaviConfigType} */
+	type;
+	/** @type {boolean} */
+	isLateBind;
+	/** @type {boolean} */
+	isDynamic;
+	/** @type {boolean} */
+	isAsync;
+	/** @type {unknown} */
+	defaultValue;
+	/** @type {WasaviConfigSubSetter | null | undefined} */
+	subSetter;
+	/** @type {unknown} */
+	nativeValue;
+	/** @type {Record<string, unknown> | undefined} */
+	#snapshots = undefined;
+	/** @type {0 | 1 | 2} */
+	#assignState = VariableItem.#ASSIGN_STATE_INITIAL;
+
+	/**
+	 * @param {WasaviApp} app
+	 * @param {string} name
+	 * @param {WasaviConfigType} type
+	 * @param {unknown} defaultValue
+	 * @param {WasaviConfigSubSetter | null} [subSetter]
+	 * @param {WasaviConfigOptions} [opts]
+	 */
+	constructor(app, name, type, defaultValue, subSetter, opts) {
 		opts || (opts = {});
+		this.#app = app;
 		this.name = name;
 		this.type = type;
 		this.isLateBind = type == 'r';
@@ -246,156 +282,197 @@ Wasavi.Configurator = function (app, internals, abbrevs) {
 		this.defaultValue = defaultValue;
 		this.subSetter = subSetter;
 		this.nativeValue = defaultValue;
-		this.snapshots = undefined;
-		this.assignState = 0;
 	}
-	VariableItem.prototype = {
-		ASSIGN_STATE_INITIAL: 0,
-		ASSIGN_STATE_WARNED: 1,
-		ASSIGN_STATE_ERRORED: 2,
 
-		get value () {
-			return this.nativeValue;
-		},
-		get visibleString () {
+	/** @returns {unknown} */
+	get value() {
+		return this.nativeValue;
+	}
+
+	/** @returns {string} */
+	get visibleString() {
+		switch (this.type) {
+		case 'b':
+			return (this.nativeValue ? '  ' : 'no') + this.name;
+		case 'i': case 'I': case 's': case 'r':
+			var value = String(this.nativeValue ?? '');
+			if (/[\s"']/.test(value)) {
+				value = "'" + value.replace(/["']/g, '\\$&') + "'";
+			}
+			return '  ' + this.name + '=' + value;
+		default:
+			throw new TypeError('*invalid type for visibleString: ' + this.type + ' *');
+		}
+	}
+
+	/** @returns {WasaviConfigInfo} */
+	getInfo() {
+		var that = this;
+		return {
+			get name() {return that.name},
+			get type() {return that.type},
+			get isLateBind() {return that.isLateBind},
+			get isDynamic() {return that.isDynamic},
+			get isAsync() {return that.#assignState ? false : that.isAsync},
+			get defaultValue() {return that.defaultValue}
+		};
+	}
+
+	/**
+	 * @param {unknown} v
+	 * @returns {unknown}
+	 */
+	setValue(v) {
+		try {
+			this.#assignState = VariableItem.#ASSIGN_STATE_INITIAL;
+
 			switch (this.type) {
 			case 'b':
-				return (this.nativeValue ? '  ' : 'no') + this.name;
-			case 'i': case 'I': case 's': case 'r':
-				var value = this.nativeValue.toString();
-				if (/[\s"']/.test(value)) {
-					value = "'" + value.replace(/["']/g, '\\$&') + "'";
+				v = Boolean(v);
+				if (typeof v != 'boolean') throw new TypeError(_('Invalid boolean value'));
+				break;
+			case 'i':
+				if (typeof v == 'string' && !/^[0-9]+$/.test(v)) {
+					throw new TypeError(_('Invalid integer value'));
 				}
-				return '  ' + this.name + '=' + value;
+				v = parseInt(String(v), 10);
+				if (typeof v != 'number' || isNaN(v)) {
+					throw new TypeError(_('Invalid integer value'));
+				}
+				break;
+			case 'I':
+				if (!/^[-+]?[0-9]+$/.test(String(v))) {
+					throw new TypeError(_('Invalid integer value'));
+				}
+				v = parseInt(String(v), 10);
+				if (typeof v != 'number' || isNaN(v)) {
+					throw new TypeError(_('Invalid integer value'));
+				}
+				break;
+			case 's':
+				v = String(v);
+				if (typeof v != 'string') throw new TypeError(_('Invalid string value'));
+				break;
+			case 'r':
+				if (typeof v != 'string') throw new TypeError(_('Invalid regex source string value'));
+				break;
 			default:
-				throw new TypeError('*invalid type for visibleString: ' + this.type + ' *');
+				throw new TypeError('*Invalid type for value getter: ' + this.type + ' *');
 			}
-		},
-		getInfo: function () {
-			var that = this;
-			return {
-				get name () {return that.name},
-				get type () {return that.type},
-				get isLateBind () {return that.isLateBind},
-				get isDynamic () {return that.isDynamic},
-				get isAsync () {return that.assignState ? false : that.isAsync},
-				get defaultValue () {return that.defaultValue}
-			};
-		},
-		setValue: function (v) {
-			try {
-				this.assignState = this.ASSIGN_STATE_INITIAL;
 
-				switch (this.type) {
-				case 'b':
-					v = Boolean(v);
-					if (typeof v != 'boolean') throw new TypeError(_('Invalid boolean value'));
-					break;
-				case 'i':
-					if (typeof v == 'string' && !/^[0-9]+$/.test(v)) {
-						throw new TypeError(_('Invalid integer value'));
-					}
-					v = parseInt(v, 10);
-					if (typeof v != 'number' || isNaN(v)) {
-						throw new TypeError(_('Invalid integer value'));
-					}
-					break;
-				case 'I':
-					if (!/^[-+]?[0-9]+$/.test(v)) {
-						throw new TypeError(_('Invalid integer value'));
-					}
-					v = parseInt(v, 10);
-					if (typeof v != 'number' || isNaN(v)) {
-						throw new TypeError(_('Invalid integer value'));
-					}
-					break;
-				case 's':
-					v = String(v);
-					if (typeof v != 'string') throw new TypeError(_('Invalid string value'));
-					break;
-				case 'r':
-					if (typeof v != 'string') throw new TypeError(_('Invalid regex source string value'));
-					break;
-				default:
-					throw new TypeError('*Invalid type for value getter: ' + this.type + ' *');
+			if (this.subSetter) {
+				v = this.subSetter(v);
+				if (v == undefined) {
+					this.#assignState = VariableItem.#ASSIGN_STATE_WARNED;
+					return v;
 				}
+			}
 
-				if (this.subSetter) {
-					v = this.subSetter(v);
-					if (v == undefined) {
-						this.assignState = this.ASSIGN_STATE_WARNED;
-						return v;
-					}
-				}
+			if (v instanceof Promise) {
+				return v.then(v => {
+					this.nativeValue = v;
+					return this;
+				});
+			}
 
-				if (v instanceof Promise) {
-					return v.then(v => {
-						this.nativeValue = v;
-						return this;
+			return this.nativeValue = v;
+		}
+		catch (e) {
+			this.#assignState = VariableItem.#ASSIGN_STATE_ERRORED;
+			throw e;
+		}
+	}
+
+	/** @returns {() => RegExp | null} */
+	getBinder() {
+		switch (this.type) {
+		case 'r':
+			return (v => {
+				return () => {
+					return this.#app.low.getFindRegex({
+						pattern: v.nativeValue,
+						csOverride: '',
+						globalOverride: '',
+						multilineOverride: ''
 					});
 				}
-
-				return this.nativeValue = v;
-			}
-			catch (e) {
-				this.assignState = this.ASSIGN_STATE_ERRORED;
-				throw e;
-			}
-		},
-		getBinder: function () {
-			switch (this.type) {
-			case 'r':
-				return (function (v) {
-					return function () {
-						return app.low.getFindRegex({
-							pattern: v.nativeValue,
-							csOverride: '',
-							globalOverride: '',
-							multilineOverride: ''
-						});
-					}
-				})(this);
-			default:
-				throw new TypeError('*invalid type for getBinder: ' + this.type + ' *');
-			}
-		},
-		reset: function () {
-			if (this.isDynamic) return;
-			this.nativeValue = this.defaultValue;
-		},
-		saveSnapshot: function (name) {
-			if (this.isDynamic) return;
-
-			if (!this.snapshots) {
-				this.snapshots = {};
-			}
-
-			this.snapshots[name] = this.value;
-		},
-		loadSnapshot: function (name) {
-			if (this.isDynamic) return;
-			if (!this.snapshots) return;
-			if (!(name in this.snapshots)) return;
-
-			this.nativeValue = this.snapshots[name];
+			})(this);
+		default:
+			throw new TypeError('*invalid type for getBinder: ' + this.type + ' *');
 		}
-	};
+	}
 
-	var vars = {};
-	var names = {};
-	function init () {
-		internals = internals.sort(function (a, b) {
+	/** @returns {void} */
+	reset() {
+		if (this.isDynamic) return;
+		this.nativeValue = this.defaultValue;
+	}
+
+	/**
+	 * @param {string} name
+	 * @returns {void}
+	 */
+	saveSnapshot(name) {
+		if (this.isDynamic) return;
+
+		if (!this.#snapshots) {
+			this.#snapshots = {};
+		}
+
+		this.#snapshots[name] = this.value;
+	}
+
+	/**
+	 * @param {string} name
+	 * @returns {void}
+	 */
+	loadSnapshot(name) {
+		if (this.isDynamic) return;
+		if (!this.#snapshots) return;
+		if (!(name in this.#snapshots)) return;
+
+		this.nativeValue = this.#snapshots[name];
+	}
+}
+
+Wasavi.Configurator = class {
+	/** @type {WasaviApp} */
+	#app;
+	/** @type {VariableItem[]} */
+	#internals = [];
+	/** @type {Record<string, string>} */
+	#abbrevs;
+	/** @type {WasaviConfigVars & Record<string, unknown>} */
+	#vars;
+	/** @type {Record<string, number>} */
+	#names = {};
+
+	/**
+	 * @param {WasaviApp} app
+	 * @param {readonly WasaviConfigInternal[]} internals
+	 * @param {Record<string, string>} abbrevs
+	 */
+	constructor(app, internals, abbrevs) {
+		this.#app = app;
+		this.#abbrevs = abbrevs;
+		this.#vars = /** @type {WasaviConfigVars & Record<string, unknown>} */ ({});
+		this.#init(internals);
+	}
+
+	/**
+	 * @param {readonly WasaviConfigInternal[]} internals
+	 * @returns {void}
+	 */
+	#init(internals) {
+		this.#internals = internals.slice().sort(function (a, b) {
 			return a[0].localeCompare(b[0]);
 		})
-		.map(function (value, i) {
-			for (var j = value.length; j < 5; j++) {
-				value.push(undefined);
-			}
-			var v = new VariableItem(value[0], value[1], value[2], value[3], value[4]);
-			names[v.name] = i;
+		.map(([name, type, defaultValue, subSetter, opts], i) => {
+			var v = new VariableItem(this.#app, name, type, defaultValue, subSetter, opts);
+			this.#names[v.name] = i;
 			if (v.isLateBind) {
 				v.setValue(v.nativeValue);
-				Object.defineProperty(vars, v.name, {
+				Object.defineProperty(this.#vars, v.name, {
 					get:v.getBinder(),
 					configurable:false,
 					enumerable:true
@@ -403,29 +480,62 @@ Wasavi.Configurator = function (app, internals, abbrevs) {
 			}
 			else {
 				try {v.setValue(v.nativeValue)} catch (e) {}
-				vars[v.name] = v.value;
+				this.#vars[v.name] = v.value;
 			}
 			return v;
 		});
 	}
-	function getItem (name) {
+
+	/**
+	 * @param {string} name
+	 * @returns {VariableItem | null}
+	 */
+	#getItem(name) {
 		name = name.replace(/^(?:no|inv)/, '');
-		if (name in abbrevs) {
-			name = abbrevs[name];
+		if (name in this.#abbrevs) {
+			name = this.#abbrevs[name];
 		}
-		return name in names ? internals[names[name]] : null;
+		return name in this.#names ? this.#internals[this.#names[name]] : null;
 	}
 
-	//
-	function getInfo (name) {
-		var item = getItem(name);
+	/**
+	 * @param {string} name
+	 * @returns {WasaviConfigInfo | null}
+	 */
+	getInfo(name) {
+		var item = this.#getItem(name);
 		return item ? item.getInfo() : null;
 	}
-	function getData (name, reformat) {
-		var item = getItem(name);
+
+	/**
+	 * @overload
+	 * @param {string} name
+	 * @param {true} reformat
+	 * @returns {string}
+	 */
+	/**
+	 * @overload
+	 * @param {string} name
+	 * @param {boolean} [reformat]
+	 * @returns {unknown}
+	 */
+	/**
+	 * @param {string} name
+	 * @param {boolean} [reformat]
+	 * @returns {unknown}
+	 */
+	getData(name, reformat) {
+		var item = this.#getItem(name);
 		return item ? (reformat ? item.visibleString : item.value) : null;
 	}
-	function setData (name, value, skipSubSetter) {
+
+	/**
+	 * @param {string} name
+	 * @param {unknown} [value]
+	 * @param {boolean} [skipSubSetter]
+	 * @returns {unknown}
+	 */
+	setData(name, value, skipSubSetter) {
 		var result;
 		var off = false;
 		var invert = false;
@@ -437,7 +547,7 @@ Wasavi.Configurator = function (app, internals, abbrevs) {
 			name = name.substring(3);
 			invert = off = true;
 		}
-		var item = getItem(name);
+		var item = this.#getItem(name);
 		if (!item) {
 			return _('Unknown option: {0}', name);
 		}
@@ -466,7 +576,7 @@ Wasavi.Configurator = function (app, internals, abbrevs) {
 				result = item.setValue(value);
 			}
 			catch (e) {
-				return e.message;
+				return e instanceof Error ? e.message : String(e);
 			}
 			finally {
 				if (subSetter) {
@@ -477,23 +587,30 @@ Wasavi.Configurator = function (app, internals, abbrevs) {
 
 		if (result instanceof Promise) {
 			return result.then(item => {
-				return vars[item.name] = item.value;
+				return this.#vars[item.name] = item.value;
 			});
 		}
 		else {
-			vars[item.name] = item.value;
+			this.#vars[item.name] = item.value;
 			return null;
 		}
 	}
-	function dump (cols, all) {
+
+	/**
+	 * @param {number} cols
+	 * @param {boolean} [all]
+	 * @returns {string[]}
+	 */
+	dump(cols, all) {
 		const phaseThreshold = 20;
 		const gap = 1;
 		var result = [_('*** options ***')];
 		for (var i = 0; i < 2; i++) {
 			var maxLength = 0;
+			/** @type {string[]} */
 			var tmp = [];
-			for (var j = 0; j < internals.length; j++) {
-				var item = internals[j];
+			for (var j = 0; j < this.#internals.length; j++) {
+				var item = this.#internals[j];
 				var line = item.visibleString;
 				if (!all && item.value == item.defaultValue) continue;
 				if (i == 0 && line.length <= phaseThreshold - gap
@@ -528,13 +645,17 @@ Wasavi.Configurator = function (app, internals, abbrevs) {
 		}
 		return result;
 	}
-	function dumpData () {
+
+	/** @returns {string} */
+	dumpData() {
+		/** @type {string[]} */
 		var index = [];
+		/** @type {string[]} */
 		var content = [];
-		var ab = reverseObject(abbrevs);
-		index.push('** version: ' + app.version + '**', '', '');
-		for (var i = 0, goal = internals.length; i < goal; i++) {
-			var v = internals[i];
+		var ab = reverseObject(this.#abbrevs);
+		index.push('** version: ' + this.#app.version + '**', '', '');
+		for (var i = 0, goal = this.#internals.length; i < goal; i++) {
+			var v = this.#internals[i];
 			index.push('* <a href="#wasavi-option-' + v.name + '">' + v.name + '</a>');
 			content.push('<a href="#" name="wasavi-option-' + v.name + '">#</a> ' + v.name);
 			content.push('--------');
@@ -551,58 +672,77 @@ Wasavi.Configurator = function (app, internals, abbrevs) {
 			content.push('');
 		}
 		index.push('');
-		return [].concat(index, content).join('\n');
+		return index.concat(content).join('\n');
 	}
-	function dumpScript (modifiedOnly) {
+
+	/**
+	 * @param {boolean} [modifiedOnly]
+	 * @returns {string[]}
+	 */
+	dumpScript(modifiedOnly) {
+		/** @type {string[]} */
 		var result = [];
-		for (var i = 0, goal = internals.length; i < goal; i++) {
-			var v = internals[i];
+		for (var i = 0, goal = this.#internals.length; i < goal; i++) {
+			var v = this.#internals[i];
 			if (modifiedOnly && v.value == v.defaultValue) continue;
 			if (v.isDynamic) continue;
 			result.push('set ' + v.visibleString);
 		}
 		return result;
 	}
-	function reset (name) {
+
+	/**
+	 * @param {string} [name]
+	 * @returns {void}
+	 */
+	reset(name) {
 		if (name == undefined) {
-			for (var i = 0, goal = internals.length; i < goal; i++) {
-				internals[i].reset();
+			for (var i = 0, goal = this.#internals.length; i < goal; i++) {
+				this.#internals[i].reset();
 			}
 		}
 		else {
-			var item = getItem(name);
+			var item = this.#getItem(name);
 			item && item.reset();
 		}
 	}
-	function saveSnapshot (snapshot) {
-		for (var i = 0, goal = internals.length; i < goal; i++) {
-			internals[i].saveSnapshot(snapshot);
+
+	/**
+	 * @param {string} snapshot
+	 * @returns {void}
+	 */
+	saveSnapshot(snapshot) {
+		for (var i = 0, goal = this.#internals.length; i < goal; i++) {
+			this.#internals[i].saveSnapshot(snapshot);
 		}
 	}
-	function loadSnapshot (snapshot, name) {
+
+	/**
+	 * @param {string} snapshot
+	 * @param {string} [name]
+	 * @returns {void}
+	 */
+	loadSnapshot(snapshot, name) {
 		if (name == undefined) {
-			for (var i = 0, goal = internals.length; i < goal; i++) {
-				internals[i].loadSnapshot(snapshot);
+			for (var i = 0, goal = this.#internals.length; i < goal; i++) {
+				this.#internals[i].loadSnapshot(snapshot);
 			}
 		}
 		else {
-			var item = getItem(name);
+			var item = this.#getItem(name);
 			item && item.loadSnapshot(snapshot);
 		}
 	}
-	function dispose () {
-		app = internals = abbrevs = vars = names = null;
+
+	/** @returns {WasaviConfigVars} */
+	get vars() {
+		return this.#vars;
 	}
 
-	publish(this,
-		getInfo, getData, setData, dump, dumpData, dumpScript,
-		reset, saveSnapshot, loadSnapshot, dispose,
-		{
-			vars:function () {return vars},
-			abbrevs:function () {return abbrevs}
-		}
-	);
-	init();
+	/** @returns {Record<string, string>} */
+	get abbrevs() {
+		return this.#abbrevs;
+	}
 };
 
 Wasavi.RegexConverter = class RegexConverter {

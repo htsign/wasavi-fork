@@ -312,6 +312,35 @@ interface WasaviConfigVars {
   iskeyword: RegExp;
 }
 
+/** vi/wasavi option value type code (classes.js VariableItem). */
+type WasaviConfigType = 'b' | 'i' | 'I' | 's' | 'r';
+
+/**
+ * Per-option setter hook run when an option is assigned (classes.js).
+ * The argument is the already-coerced value, whose concrete type
+ * (boolean / number / string) depends on the option's `WasaviConfigType`
+ * and is only known at runtime; each subSetter narrows it as needed.
+ */
+type WasaviConfigSubSetter = (v: unknown) => unknown;
+
+/** Per-option flags passed in the trailing element of a config tuple (classes.js). */
+interface WasaviConfigOptions {
+  isDynamic?: boolean;
+  isAsync?: boolean;
+}
+
+/**
+ * A single option definition tuple supplied to `Wasavi.Configurator`
+ * (wasavi.js configuration object): `[name, type, defaultValue, subSetter?, opts?]`.
+ */
+type WasaviConfigInternal = [
+  name: string,
+  type: WasaviConfigType,
+  defaultValue: unknown,
+  subSetter?: WasaviConfigSubSetter | null,
+  opts?: WasaviConfigOptions,
+];
+
 /** Option / variable configurator (classes.js). */
 interface WasaviConfigurator {
   getInfo(name: string): WasaviConfigInfo | null;
@@ -322,13 +351,12 @@ interface WasaviConfigurator {
   setData(name: string, value?: unknown, skipSubSetter?: boolean): unknown;
   dump(cols: number, all?: boolean): string[];
   dumpData(): string;
-  dumpScript(modifiedOnly?: boolean): unknown;
-  reset(name?: string): unknown;
-  saveSnapshot(name: string): unknown;
-  loadSnapshot(name: string, optionName?: string): unknown;
-  dispose(): void;
+  dumpScript(modifiedOnly?: boolean): string[];
+  reset(name?: string): void;
+  saveSnapshot(name: string): void;
+  loadSnapshot(name: string, optionName?: string): void;
   readonly vars: WasaviConfigVars;
-  readonly abbrevs: unknown;
+  readonly abbrevs: Record<string, string>;
 }
 
 /** vi-to-JS regex converter (classes.js). */
@@ -1062,7 +1090,7 @@ declare var Wasavi: {
   // --- classes (classes.js) ---
   Position: new (row: number, col: number) => WasaviPosition;
   L10n: new (app: WasaviApp, catalog?: WasaviMessageCatalog) => WasaviL10n;
-  Configurator: new (app: WasaviApp, internals?: unknown, abbrevs?: unknown) => WasaviConfigurator;
+  Configurator: new (app: WasaviApp, internals: readonly WasaviConfigInternal[], abbrevs: Record<string, string>) => WasaviConfigurator;
   RegexConverter: new (app: WasaviApp) => WasaviRegexConverter;
   PrefixInput: new (init?: string | WasaviPrefixInputInit) => WasaviPrefixInput;
   RegexFinderInfo: new () => WasaviRegexFinderInfo;
