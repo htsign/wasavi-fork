@@ -627,11 +627,46 @@ interface WasaviIncDec {
 }
 
 /** `:sort` worker (classes.js, ES class). */
+/**
+ * Flags parsed from an ex command's argument syntax (the `result.flags` bag
+ * built by parseArgs).
+ */
+type WasaviExCommandArgFlags = {
+  force: boolean;
+  hash: boolean;
+  list: boolean;
+  print: boolean;
+  dash: boolean;
+  dot: boolean;
+  plus: boolean;
+  carat: boolean;
+  equal: boolean;
+  register: boolean;
+  count: boolean;
+};
+
+/**
+ * Parsed argument object handed to each ex command handler (the `result` object
+ * assembled by parseArgs, with extra properties stamped on by callers).
+ */
+type WasaviExCommandArg = {
+  range: number[];
+  flagoff: number;
+  flags: WasaviExCommandArgFlags;
+  argv: string[];
+  args?: string;
+  register?: string;
+  count?: number;
+  lineNumber?: number;
+  initCommand?: string;
+  isBuffered?: boolean;
+};
+
 interface WasaviSortWorker {
   app: unknown;
   t: WasaviEditor;
-  a: unknown;
-  content: string | null;
+  a: WasaviExCommandArg;
+  content: string[] | null;
   opts: Record<string, unknown> | null;
   terminalType: number;
   /** Number of rows in the sort range (set by buildContent). */
@@ -978,7 +1013,7 @@ declare var Wasavi: {
   StrokeRecorder: new () => WasaviStrokeRecorder;
   Surrounding: new (app: WasaviApp) => WasaviSurrounding;
   IncDec: new (app: WasaviApp, defaultOpts?: Record<string, unknown>) => WasaviIncDec;
-  SortWorker: new (app: WasaviApp, t: WasaviEditor, a: unknown) => WasaviSortWorker;
+  SortWorker: new (app: WasaviApp, t: WasaviEditor, a: WasaviExCommandArg) => WasaviSortWorker;
 
   // --- classes (other files) ---
   SearchUtils: new (app: WasaviApp) => WasaviSearchUtils;

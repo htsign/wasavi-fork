@@ -28,46 +28,11 @@
 const Wasavi = g.Wasavi;
 
 /**
- * Flags parsed from an ex command's argument syntax (the `result.flags` bag
- * built by parseArgs).
- *
- * @typedef {object} ExCommandArgFlags
- * @property {boolean} force
- * @property {boolean} hash
- * @property {boolean} list
- * @property {boolean} print
- * @property {boolean} dash
- * @property {boolean} dot
- * @property {boolean} plus
- * @property {boolean} carat
- * @property {boolean} equal
- * @property {boolean} register
- * @property {boolean} count
- */
-
-/**
- * Parsed argument object handed to each command handler (the `result` object
- * assembled by parseArgs, with extra properties stamped on by callers).
- *
- * @typedef {object} ExCommandArg
- * @property {number[]} range
- * @property {number} flagoff
- * @property {ExCommandArgFlags} flags
- * @property {string[]} argv
- * @property {string} [args]
- * @property {string} [register]
- * @property {number} [count]
- * @property {number} [lineNumber]
- * @property {string} [initCommand]
- * @property {boolean} [isBuffered]
- */
-
-/**
  * A command handler. Receives the application, its buffer and the parsed
  * arguments, with `this` bound to the owning ExCommand. Returns an error
  * message string, a Promise, or undefined; the `set` command is a generator.
  *
- * @typedef {(this: ExCommand, app: WasaviApp, t: WasaviEditor, a: ExCommandArg) =>
+ * @typedef {(this: ExCommand, app: WasaviApp, t: WasaviEditor, a: WasaviExCommandArg) =>
  *   string | Promise<unknown> | void | Generator<unknown, void, unknown>} ExCommandHandler
  */
 
@@ -201,7 +166,7 @@ class ExCommand {
 	 * @param {number[]} range
 	 * @param {string} line
 	 * @param {string} [syntax]
-	 * @returns {ExCommandArg | string}
+	 * @returns {WasaviExCommandArg | string}
 	 */
 	parseArgs(app, range, line, syntax) {
 		/**
@@ -326,7 +291,7 @@ class ExCommand {
 		}
 
 		var t = app.buffer;
-		var result = /** @type {ExCommandArg} */ ({});
+		var result = /** @type {WasaviExCommandArg} */ ({});
 		var needCheckRest = true;
 		syntax || (syntax = this.syntax);
 		result.range = range;
@@ -565,7 +530,7 @@ flag23_loop:
 	 * @param {string[]} [argv]
 	 * @param {string} [args]
 	 * @param {string} [syntax]
-	 * @returns {ExCommandArg | string}
+	 * @returns {WasaviExCommandArg | string}
 	 */
 	buildArgs(app, range, commandNameOption, argv, args, syntax) {
 		var result = this.parseArgs(app, range, commandNameOption, syntax);
@@ -604,8 +569,8 @@ flag23_loop:
 
 	/**
 	 * @param {WasaviApp} app
-	 * @param {ExCommandArg} args
-	 * @returns {string | {flags: ExCommandArgFlags, offset: number, value: unknown}}
+	 * @param {WasaviExCommandArg} args
+	 * @returns {string | {flags: WasaviExCommandArgFlags, offset: number, value: unknown}}
 	 */
 	run(app, args) {
 		/** @type {unknown} */
@@ -635,7 +600,7 @@ flag23_loop:
 /**
  * @param {WasaviApp} app
  * @param {WasaviEditor} t
- * @param {ExCommandArg} a
+ * @param {WasaviExCommandArg} a
  * @param {string} caller
  * @returns {WriteArg}
  */
@@ -673,7 +638,7 @@ function parseWriteArg(app, t, a, caller) {
 /**
  * @param {WasaviApp} app
  * @param {WasaviEditor} t
- * @param {ExCommandArg} a
+ * @param {WasaviExCommandArg} a
  * @param {WriteArg} pa
  * @returns {string | Promise<unknown> | undefined}
  */
@@ -840,7 +805,7 @@ function writeCore(app, t, a, pa) {
 /**
  * @param {WasaviApp} app
  * @param {WasaviEditor} t
- * @param {ExCommandArg} a
+ * @param {WasaviExCommandArg} a
  * @returns {unknown}
  */
 function globalLatterHead(app, t, a) {
@@ -878,7 +843,7 @@ function globalLatterHead(app, t, a) {
 /**
  * @param {WasaviApp} app
  * @param {WasaviEditor} t
- * @param {ExCommandArg} a
+ * @param {WasaviExCommandArg} a
  * @returns {void}
  */
 function globalLatterBottom(app, t, a) {
@@ -889,7 +854,7 @@ function globalLatterBottom(app, t, a) {
 /**
  * @param {WasaviApp} app
  * @param {WasaviEditor} t
- * @param {ExCommandArg} a
+ * @param {WasaviExCommandArg} a
  * @param {unknown} content
  * @param {{path: string}} meta
  * @param {number} status
@@ -916,7 +881,7 @@ function readCore(app, t, a, content, meta, status) {
 /**
  * @param {WasaviApp} app
  * @param {WasaviEditor} t
- * @param {ExCommandArg} a
+ * @param {WasaviExCommandArg} a
  * @param {string} content
  * @param {{path: string}} meta
  * @param {number} status
@@ -952,7 +917,7 @@ function editCore(app, t, a, content, meta, status) {
 		if (typeof compileResult == 'string') {
 			return compileResult;
 		}
-		var locator = ex.inst.add(/** @param {WasaviApp} app @param {WasaviEditor} t @param {ExCommandArg} a */ function (app, t, a) {
+		var locator = ex.inst.add(/** @param {WasaviApp} app @param {WasaviEditor} t @param {WasaviExCommandArg} a */ function (app, t, a) {
 			t.setSelectionRange(t.getLineTopOffset2(t.rowLength - 1, 0));
 		});
 
@@ -971,7 +936,7 @@ function editCore(app, t, a, content, meta, status) {
  * @this {ExCommand}
  * @param {WasaviApp} app
  * @param {WasaviEditor} t
- * @param {ExCommandArg} a
+ * @param {WasaviExCommandArg} a
  * @param {Record<string, unknown> | undefined} data
  * @returns {string | undefined}
  */
@@ -1037,7 +1002,7 @@ function parseMapAttributes(app, attributes, options, maps) {
 
 /**
  * @param {WasaviApp} app
- * @param {ExCommandArg} a
+ * @param {WasaviExCommandArg} a
  * @param {Record<string, unknown>} maps
  * @returns {void}
  */
