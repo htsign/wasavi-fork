@@ -343,11 +343,23 @@ interface WasaviRegexConverter {
   readonly SPECIAL_NONSPACE: string;
 }
 
+/** Initializer accepted by `new Wasavi.PrefixInput(init)` / `assign` (classes.js). */
+interface WasaviPrefixInputInit {
+  register?: string;
+  operation?: string;
+  motion?: string;
+  count1?: string | number;
+  count2?: string | number;
+  trailer?: string;
+  isEmpty?: boolean;
+  isLocked?: boolean;
+}
+
 /** Parsed prefix command input (classes.js). */
 interface WasaviPrefixInput {
-  reset(): void;
+  reset(...keys: (keyof WasaviPrefixInputInit)[]): void;
   clone(): WasaviPrefixInput;
-  assign(pi: WasaviPrefixInput | Record<string, unknown>): void;
+  assign(pi: WasaviPrefixInput | WasaviPrefixInputInit): void;
   toString(): string;
   toVisibleString(): string;
   appendCount(v: string | number): void;
@@ -1010,7 +1022,7 @@ declare var Wasavi: {
   L10n: new (app: WasaviApp, catalog?: WasaviMessageCatalog) => WasaviL10n;
   Configurator: new (app: WasaviApp, internals?: unknown, abbrevs?: unknown) => WasaviConfigurator;
   RegexConverter: new (app: WasaviApp) => WasaviRegexConverter;
-  PrefixInput: new (init?: string | Record<string, unknown>) => WasaviPrefixInput;
+  PrefixInput: new (init?: string | WasaviPrefixInputInit) => WasaviPrefixInput;
   RegexFinderInfo: new () => WasaviRegexFinderInfo;
   LineInputHistories: new (
     app: WasaviApp,

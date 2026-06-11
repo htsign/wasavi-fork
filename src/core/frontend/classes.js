@@ -802,48 +802,67 @@ Wasavi.RegexConverter = class RegexConverter {
 	}
 };
 
-Wasavi.PrefixInput = function () {
-	var register;
-	var operation;
-	var motion;
-	var count1;
-	var count2;
-	var trailer;
-	var isEmpty;
-	var isLocked;
+Wasavi.PrefixInput = class {
+	/** @type {string} */
+	#register = '';
+	/** @type {string} */
+	#operation = '';
+	/** @type {string} */
+	#motion = '';
+	/** @type {string} */
+	#count1 = '';
+	/** @type {string} */
+	#count2 = '';
+	/** @type {string} */
+	#trailer = '';
+	/** @type {boolean} */
+	#isEmpty = true;
 
-	function init () {
-		if (arguments.length && typeof arguments[0] == 'string') {
-			register = '';
-			operation = '';
-			motion = '';
-			count1 = '';
-			count2 = '';
-			trailer = '';
-			isEmpty = true;
-			isLocked = false;
+	/** @type {boolean} */
+	isLocked = false;
+
+	/**
+	 * @param {string | WasaviPrefixInputInit} [init]
+	 */
+	constructor(init) {
+		this.#init(init);
+	}
+
+	/**
+	 * @param {string | WasaviPrefixInputInit} [arg]
+	 * @returns {void}
+	 */
+	#init(arg) {
+		if (typeof arg == 'string') {
+			this.#register = '';
+			this.#operation = '';
+			this.#motion = '';
+			this.#count1 = '';
+			this.#count2 = '';
+			this.#trailer = '';
+			this.#isEmpty = true;
+			this.isLocked = false;
 
 			do {
-				var arg = arguments[0];
 				var re = /^("(?:=[^\n]*|.))?([1-9][0-9]*)?(g?.)([1-9][0-9]*)?(g?.)(.*)$/.exec(arg);
 				if (re) {
 					if (typeof re[1] == 'string' && re[1] != '') {
-						register = re[1];
+						this.#register = re[1];
 					}
 					if (typeof re[2] == 'string' && re[2] != '') {
-						count1 = re[2];
+						this.#count1 = re[2];
 					}
 					if (typeof re[3] == 'string' && re[3] != '') {
-						operation = re[3];
+						this.#operation = re[3];
 					}
 					if (typeof re[4] == 'string' && re[4] != '') {
-						count2 = re[4];
+						this.#count2 = re[4];
 					}
 					if (typeof re[5] == 'string' && re[5] != '') {
-						motion = re[5];
+						this.#motion = re[5];
 					}
 					if (typeof re[6] == 'string' && re[6] != '') {
-						trailer = re[6];
+						this.#trailer = re[6];
 					}
 					break;
 				}
@@ -851,16 +870,16 @@ Wasavi.PrefixInput = function () {
 				var re = /^("(?:=[^\n]*|.))?([1-9][0-9]*)?(g?.)(.*)$/.exec(arg);
 				if (re) {
 					if (typeof re[1] == 'string' && re[1] != '') {
-						register = re[1];
+						this.#register = re[1];
 					}
 					if (typeof re[2] == 'string' && re[2] != '') {
-						count2 = re[2];
+						this.#count2 = re[2];
 					}
 					if (typeof re[3] == 'string' && re[3] != '') {
-						motion = re[3];
+						this.#motion = re[3];
 					}
 					if (typeof re[4] == 'string' && re[4] != '') {
-						trailer = re[4];
+						this.#trailer = re[4];
 					}
 					break;
 				}
@@ -870,20 +889,26 @@ Wasavi.PrefixInput = function () {
 			} while (false);
 		}
 		else {
-			var opts = arguments[0] || {};
-			register = opts.register || '';
-			operation = opts.operation || '';
-			motion = opts.motion || '';
-			count1 = opts.count1 || '';
-			count2 = opts.count2 || '';
-			trailer = opts.trailer || '';
-			isEmpty = !!opts.isEmpty || true;
-			isLocked = !!opts.isLocked || false;
+			var opts = arg || {};
+			this.#register = opts.register || '';
+			this.#operation = opts.operation || '';
+			this.#motion = opts.motion || '';
+			this.#count1 = String(opts.count1 || '');
+			this.#count2 = String(opts.count2 || '');
+			this.#trailer = opts.trailer || '';
+			this.#isEmpty = !!opts.isEmpty || true;
+			this.isLocked = !!opts.isLocked || false;
 		}
 	}
-	function reset () {
-		if (isLocked) return;
 
+	/**
+	 * @param {(keyof WasaviPrefixInputInit)[]} keys
+	 * @returns {void}
+	 */
+	reset(...keys) {
+		if (this.isLocked) return;
+
+		/** @type {Record<keyof WasaviPrefixInputInit, number>} */
 		var list = {
 			register:0,
 			operation:0,
@@ -895,36 +920,43 @@ Wasavi.PrefixInput = function () {
 			isLocked:0
 		};
 
-		if (arguments.length) {
-			Array.prototype.forEach.call(arguments, function (a) {(a in list) && list[a]++;});
+		if (keys.length) {
+			keys.forEach(key => (key in list) && list[key]++);
 		}
 		else {
-			for (var a in list) {list[a]++;}
+			for (var a in list) {list[/** @type {keyof WasaviPrefixInputInit} */ (a)]++;}
 		}
 
-		list['register']  && (register = '');
-		list['operation'] && (operation = '');
-		list['motion']    && (motion = '');
-		list['count1']    && (count1 = '');
-		list['count2']    && (count2 = '');
-		list['trailer']   && (trailer = '');
-		list['isEmpty']   && (isEmpty = true);
-		list['isLocked']  && (isLocked = false);
+		list['register']  && (this.#register = '');
+		list['operation'] && (this.#operation = '');
+		list['motion']    && (this.#motion = '');
+		list['count1']    && (this.#count1 = '');
+		list['count2']    && (this.#count2 = '');
+		list['trailer']   && (this.#trailer = '');
+		list['isEmpty']   && (this.#isEmpty = true);
+		list['isLocked']  && (this.isLocked = false);
 	}
-	function clone () {
+
+	/** @returns {WasaviPrefixInput} */
+	clone() {
 		return new Wasavi.PrefixInput({
-			register:register,
-			operation:operation,
-			motion:motion,
-			count1:count1,
-			count2:count2,
-			trailer:trailer,
-			isEmpty:isEmpty,
-			isLocked:isLocked
+			register:this.#register,
+			operation:this.#operation,
+			motion:this.#motion,
+			count1:this.#count1,
+			count2:this.#count2,
+			trailer:this.#trailer,
+			isEmpty:this.#isEmpty,
+			isLocked:this.isLocked
 		});
 	}
-	function assign (pi) {
-		init({
+
+	/**
+	 * @param {WasaviPrefixInput | WasaviPrefixInputInit} pi
+	 * @returns {void}
+	 */
+	assign(pi) {
+		this.#init({
 			register:pi.register,
 			operation:pi.operation,
 			motion:pi.motion,
@@ -935,91 +967,134 @@ Wasavi.PrefixInput = function () {
 			isLocked:pi.isLocked
 		});
 	}
-	function toString () {
-		return register + count1 + operation + count2 + motion + trailer;
+
+	/** @returns {string} */
+	toString() {
+		return this.#register + this.#count1 + this.#operation + this.#count2 + this.#motion + this.#trailer;
 	}
-	function toVisibleString () {
-		return [register, count1, operation, count2, motion, trailer]
+
+	/** @returns {string} */
+	toVisibleString() {
+		return [this.#register, this.#count1, this.#operation, this.#count2, this.#motion, this.#trailer]
 			.map(function (s) {return window.toVisibleString(s);})
 			.join('');
 	}
 
-	function appendRegister (v) {
-		if (isLocked || v == '') return;
-		register += v;
-		isEmpty = false;
+	/**
+	 * @param {string} v
+	 * @returns {void}
+	 */
+	appendRegister(v) {
+		if (this.isLocked || v == '') return;
+		this.#register += v;
+		this.#isEmpty = false;
 	}
-	function appendOperation (v) {
-		if (isLocked || v == '') return;
-		operation += v;
-		isEmpty = false;
+
+	/**
+	 * @param {string} v
+	 * @returns {void}
+	 */
+	appendOperation(v) {
+		if (this.isLocked || v == '') return;
+		this.#operation += v;
+		this.#isEmpty = false;
 	}
-	function appendMotion (v) {
-		if (isLocked || v == '') return;
-		motion += v;
-		isEmpty = false;
+
+	/**
+	 * @param {string} v
+	 * @returns {void}
+	 */
+	appendMotion(v) {
+		if (this.isLocked || v == '') return;
+		this.#motion += v;
+		this.#isEmpty = false;
 	}
-	function appendTrailer (v) {
-		if (isLocked || v == '') return;
-		trailer += v;
-		isEmpty = false;
+
+	/**
+	 * @param {string} v
+	 * @returns {void}
+	 */
+	appendTrailer(v) {
+		if (this.isLocked || v == '') return;
+		this.#trailer += v;
+		this.#isEmpty = false;
 	}
-	function appendCount (v) {
-		if (isLocked || v == '') return;
-		if (operation == '') {
-			if (count1 == '' && !/^[1-9]$/.test(v)) return;
-			if (count1 != '' && !/^[0-9]$/.test(v)) return;
-			count1 += (v + '');
+
+	/**
+	 * @param {string | number} v
+	 * @returns {void}
+	 */
+	appendCount(v) {
+		if (this.isLocked || v == '') return;
+		var sv = v + '';
+		if (this.#operation == '') {
+			if (this.#count1 == '' && !/^[1-9]$/.test(sv)) return;
+			if (this.#count1 != '' && !/^[0-9]$/.test(sv)) return;
+			this.#count1 += sv;
 		}
 		else {
-			if (!/^[0-9]$/.test(v)) return;
-			count2 += (v + '');
+			if (!/^[0-9]$/.test(sv)) return;
+			this.#count2 += sv;
 		}
-		isEmpty = false;
+		this.#isEmpty = false;
 	}
 
-	function setRegister (v) {
-		if (isLocked || v == '' || register != '') return;
-		register = v;
-		isEmpty = false;
-	}
-	function setOperation (v) {
-		if (isLocked || v == '' || operation != '') return;
-		operation = v;
-		isEmpty = false;
-	}
-	function setMotion (v) {
-		if (isLocked || v == '' || motion != '') return;
-		motion = v;
-		isEmpty = false;
-	}
-	function setTrailer (v) {
-		if (isLocked || v == '' || trailer != '') return;
-		trailer = v;
-		isEmpty = false;
-	}
-	function setLocked (v) {
-		isLocked = v;
+	/** @returns {string} */
+	get register() {return this.#register.substring(1) || ''}
+	/**
+	 * @param {string} v
+	 */
+	set register(v) {
+		if (this.isLocked || v == '' || this.#register != '') return;
+		this.#register = v;
+		this.#isEmpty = false;
 	}
 
-	publish(this,
-		reset, clone, assign, toString, toVisibleString,
-		appendCount, appendRegister, appendOperation, appendMotion, appendTrailer,
-		{
-			register: [function () {return register.substring(1) || ''}, setRegister],
-			operation: [function () {return operation}, setOperation],
-			motion: [function () {return motion}, setMotion],
-			count1: function () {return count1 || 0},
-			count2: function () {return count2 || 0},
-			count: function () {return (count1 || 1) * (count2 || 1)},
-			trailer: [function () {return trailer}, setTrailer],
-			isEmpty: function () {return isEmpty},
-			isEmptyOperation: function () {return operation == ''},
-			isCountSpecified: function () {return !!(count1 || count2)},
-			isLocked: [function () {return isLocked}, setLocked],
-		}
-	);
-	init.apply(null, arguments);
+	/** @returns {string} */
+	get operation() {return this.#operation}
+	/**
+	 * @param {string} v
+	 */
+	set operation(v) {
+		if (this.isLocked || v == '' || this.#operation != '') return;
+		this.#operation = v;
+		this.#isEmpty = false;
+	}
+
+	/** @returns {string} */
+	get motion() {return this.#motion}
+	/**
+	 * @param {string} v
+	 */
+	set motion(v) {
+		if (this.isLocked || v == '' || this.#motion != '') return;
+		this.#motion = v;
+		this.#isEmpty = false;
+	}
+
+	/** @returns {string} */
+	get trailer() {return this.#trailer}
+	/**
+	 * @param {string} v
+	 */
+	set trailer(v) {
+		if (this.isLocked || v == '' || this.#trailer != '') return;
+		this.#trailer = v;
+		this.#isEmpty = false;
+	}
+
+	/** @returns {string | number} */
+	get count1() {return this.#count1 || 0}
+	/** @returns {string | number} */
+	get count2() {return this.#count2 || 0}
+	/** @returns {number} */
+	get count() {return (Number(this.#count1) || 1) * (Number(this.#count2) || 1)}
+	/** @returns {boolean} */
+	get isEmpty() {return this.#isEmpty}
+	/** @returns {boolean} */
+	get isEmptyOperation() {return this.#operation == ''}
+	/** @returns {boolean} */
+	get isCountSpecified() {return !!(this.#count1 || this.#count2)}
 };
 
 Wasavi.RegexFinderInfo = class {
