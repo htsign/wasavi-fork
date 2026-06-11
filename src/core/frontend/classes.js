@@ -4802,59 +4802,86 @@ Wasavi.IncDec = function IncDec (app, defaultOpts) {
 	);
 };
 
+/**
+ * @typedef {object} SortOpts
+ * @property {boolean} force
+ * @property {boolean} ignoreCase
+ * @property {boolean} reuse
+ * @property {boolean} column
+ * @property {number} columnNumber
+ * @property {string | null} pattern
+ */
+
 Wasavi.SortWorker = class {
+	/** @type {string[] | null} */
+	content = null;
+	/** @type {SortOpts | null} */
+	opts = null;
+	/**
+	 * @param {WasaviApp} app
+	 * @param {WasaviEditor} t
+	 * @param {WasaviExCommandArg} a
+	 */
 	constructor(app, t, a) {
 		this.app = app;
 		this.t = t;
 		this.a = a;
-		this.content = this.opts = null;
 		this.terminalType = 0;
+		this.rows = 0;
 	}
+	/**
+	 * @param {string[]} content
+	 * @param {string} key
+	 * @param {RegExp | null | undefined} regex
+	 * @param {SortOpts} opts
+	 * @returns {string[]}
+	 */
 	dosort(content, key, regex, opts) {
+		/** @type {Record<string, (a: string, b: string) => number>} */
 		var callbacks = {
 			i(a, b) {
 				return a.toLowerCase().localeCompare(b.toLowerCase());
 			},
 
 			p(a, b) {
-				var re = regex.exec(a);
+				var re = regex?.exec(a);
 				if (re) {
 					a = a.substring(re.index + re[0].length);
 				}
-				var re = regex.exec(b);
+				var re = regex?.exec(b);
 				if (re) {
 					b = b.substring(re.index + re[0].length);
 				}
 				return a.localeCompare(b);
 			},
 			pr(a, b) {
-				var re = regex.exec(a);
+				var re = regex?.exec(a);
 				if (re) {
 					a = re[0];
 				}
-				var re = regex.exec(b);
+				var re = regex?.exec(b);
 				if (re) {
 					b = re[0];
 				}
 				return a.localeCompare(b);
 			},
 			pi(a, b) {
-				var re = regex.exec(a);
+				var re = regex?.exec(a);
 				if (re) {
 					a = a.substring(re.index + re[0].length);
 				}
-				var re = regex.exec(b);
+				var re = regex?.exec(b);
 				if (re) {
 					b = b.substring(re.index + re[0].length);
 				}
 				return a.toLowerCase().localeCompare(b.toLowerCase());
 			},
 			pri(a, b) {
-				var re = regex.exec(a);
+				var re = regex?.exec(a);
 				if (re) {
 					a = re[0];
 				}
-				var re = regex.exec(b);
+				var re = regex?.exec(b);
 				if (re) {
 					b = re[0];
 				}
@@ -4875,14 +4902,21 @@ Wasavi.SortWorker = class {
 		};
 		return content.sort(callbacks[key]);
 	}
+	/**
+	 * @param {number} type
+	 * @param {string} content
+	 * @returns {string}
+	 */
 	preSort(type, content) {
 		switch (type) {
 		case 1:
 			content = content.replace(/\\\n/g, '\n');
 
+			/** @type {Record<string, number>} */
 			var spaces = {'\t':0, ' ':0};
-			content.replace(spc('(S)\\n', 'g'), function ($0, s) {
+			content.replace(spc('(S)\\n', 'g'), function (/** @type {string} */ $0, /** @type {string} */ s) {
 				spaces[s]++;
+				return $0;
 			});
 
 			var maxValueKey = Object.keys(spaces).reduce(function (v, key) {
@@ -4900,6 +4934,11 @@ Wasavi.SortWorker = class {
 		}
 		return content;
 	}
+	/**
+	 * @param {number} type
+	 * @param {string} content
+	 * @returns {string}
+	 */
 	postSort(type, content) {
 		switch (type) {
 		case 1:
@@ -4914,9 +4953,14 @@ Wasavi.SortWorker = class {
 		return content;
 	}
 
+	/**
+	 * @param {string} [arg]
+	 * @returns {string | true}
+	 */
 	parseArgs(arg) {
 		var re;
 		var s = arg != undefined ? arg : this.a.argv[0];
+		/** @type {SortOpts} */
 		var opts = {
 			force:!!this.a.flags.force,
 			ignoreCase:false,
@@ -4942,11 +4986,11 @@ Wasavi.SortWorker = class {
 			else if (/^[^a-zA-Z0-9"\n\\|]/.test(s)) {
 				var d = s.charAt(0);
 				s = s.substring(1);
-				re = (new RegExp('(?:\\\\.|[^' + d + '])*')).exec(s);
+				re = /** @type {RegExpExecArray} */ ((new RegExp('(?:\\\\.|[^' + d + '])*')).exec(s));
 				opts.pattern = re[0].replace(new RegExp('\\\\' + d, 'g'), d);
 				s = s.substring(re[0].length + 1);
 				if (opts.pattern == '') {
-					if ((opts.pattern = app.lastRegexFindCommand.pattern || '') == '') {
+					if ((opts.pattern = this.app.lastRegexFindCommand.pattern || '') == '') {
 						return _('No previous search pattern.');
 					}
 				}
@@ -4958,6 +5002,10 @@ Wasavi.SortWorker = class {
 		this.opts = opts;
 		return true;
 	}
+	/**
+	 * @param {string} [content]
+	 * @returns {string | true}
+	 */
 	buildContent(content) {
 		if (!content) {
 			content = this.t.getValue(this.a.range[0], this.a.range[1], '\n');
@@ -4983,12 +5031,18 @@ Wasavi.SortWorker = class {
 		this.content = this.preSort(this.terminalType, content).split('\n');
 		return true;
 	}
+	/** @returns {string | true} */
 	sort() {
-		var opts = this.opts;
+		var opts = /** @type {SortOpts} */ (this.opts);
+		/** @type {string[]} */
 		var front = [];
+		/** @type {string[]} */
+		var content = this.content ?? [];
 
 		if (opts.pattern || opts.reuse || opts.ignoreCase || opts.column) {
-			var regex, key = '', end = [];
+			/** @type {RegExp | null | undefined} */
+			var regex;
+			var key = '', end = /** @type {string[]} */ ([]);
 			if (opts.pattern) {
 				regex = this.app.low.getFindRegex({
 					pattern:opts.pattern,
@@ -5003,11 +5057,11 @@ Wasavi.SortWorker = class {
 				if (opts.reuse) {
 					key += 'r';
 				}
-				while (this.content.length) {
-					var line = this.content.shift();
+				while (content.length) {
+					var line = content.shift() ?? '';
 					(regex.test(line) ? end : front).push(line);
 				}
-				this.content = end;
+				content = end;
 			}
 			else if (opts.column) {
 				key += 'c';
@@ -5017,23 +5071,25 @@ Wasavi.SortWorker = class {
 				key += 'i';
 			}
 
-			this.content = this.dosort(this.content, key, regex, opts);
+			content = this.dosort(content, key, regex, opts);
 		}
 		else {
-			this.content = this.content.sort();
+			content = content.sort();
 		}
 
 		if (front.length) {
-			this.content = front.concat(this.content);
+			content = front.concat(content);
 		}
 		if (opts.force) {
-			this.content = this.content.reverse();
+			content = content.reverse();
 		}
 
+		this.content = content;
 		return true;
 	}
+	/** @returns {string} */
 	getContent() {
-		var result = this.content.join('\n');
+		var result = this.content?.join('\n') ?? '';
 		this.content = null;
 		result = this.postSort(this.terminalType, result) + '\n';
 		return result;

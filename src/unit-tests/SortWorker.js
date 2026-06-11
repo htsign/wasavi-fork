@@ -18,7 +18,8 @@ describe('class SortWorker', function () {
 				getFindRegex: function (src) {
 					return new RegExp(src.pattern);
 				}
-			}
+			},
+			lastRegexFindCommand: {pattern: '\\d+'}
 		},
 		// buffer stub
 		{
@@ -38,7 +39,9 @@ describe('class SortWorker', function () {
 		['/\\d+/i', 'foo4baZ\nbar3bar\nbaz1frr', 'bar3bar\nfoo4baZ\nbaz1frr\n'],
 		['/[a-zA-Z]+/ri', '345c847\n123a456\n537B183', '123a456\n537B183\n345c847\n'],
 		['c3', 'foo897\nbar532\nzoo321', 'zoo321\nbar532\nfoo897\n'],
-		['c3i', '321zoo\n532bar\n897Foo', '532bar\n897Foo\n321zoo\n']
+		['c3i', '321zoo\n532bar\n897Foo', '532bar\n897Foo\n321zoo\n'],
+		// empty pattern reuses lastRegexFindCommand.pattern (here '\d+')
+		['//', 'foo4baz\nbar3bar\nbaz1frr', 'bar3bar\nfoo4baz\nbaz1frr\n']
 	];
 
 	tests.forEach(function (test, index) {
