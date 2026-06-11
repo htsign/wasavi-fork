@@ -204,7 +204,7 @@ interface WasaviRequestedState {
 interface WasaviAppKeyManager {
   lock(): void;
   unlock(): void;
-  createSequences(s: string): readonly { code: number }[];
+  createSequences(s: string): WasaviKeySequenceItem[];
   insertFnKeyHeader(s: string): string;
   isInputEvent(e: unknown): boolean;
   addListener<E>(type: string, handler: (e: E) => unknown): void;
@@ -428,14 +428,50 @@ interface WasaviLineInputHistories {
   readonly storageKey: string;
 }
 
+/**
+ * A single key event in a sequence (qeema's `VirtualInputEvent`, returned by
+ * `WasaviAppKeyManager.createSequences` and flowing through the map manager and
+ * the key-dequeue). `mapExpanded` / `isNoremap` / `overrideMap` are not set by
+ * the constructor; they are attached later while expanding map rules.
+ */
+interface WasaviKeySequenceItem {
+  nativeEvent: Event | null;
+  code: number;
+  char: string;
+  key: string;
+  shift: boolean;
+  ctrl: boolean;
+  alt: boolean;
+  isSpecial: boolean;
+  isCompositioned: boolean;
+  isCompositionedFirst: boolean;
+  isCompositionedLast: boolean;
+  mapExpanded?: boolean;
+  isNoremap?: boolean;
+  overrideMap?: string;
+  preventDefault(): void;
+  code2letter(c: number, useSpecial?: boolean): string;
+  toInternalString(): string;
+  clone(): WasaviKeySequenceItem;
+}
+
+/**
+ * Options accepted by the `WasaviMapManager` constructor and exposed via its
+ * `onexpand` / `onrecursemax` accessors.
+ */
+interface WasaviMapManagerOptions {
+  onexpand?: (sequences: WasaviKeySequenceItem[]) => void;
+  onrecursemax?: () => void;
+}
+
 /** Key-mapping manager (classes.js). */
 interface WasaviMapManager {
-  markExpanded(items: unknown): unknown;
-  markExpandedNoremap(items: unknown): unknown;
-  process(mode: string, e: unknown): unknown;
+  markExpanded(items: readonly WasaviKeySequenceItem[]): void;
+  markExpandedNoremap(items: readonly WasaviKeySequenceItem[]): void;
+  process(mode: string, e: WasaviKeySequenceItem): Promise<WasaviKeySequenceItem | undefined>;
   readonly maps: Record<string, unknown>;
-  onexpand: unknown;
-  onrecursemax: unknown;
+  onexpand: WasaviMapManagerOptions['onexpand'];
+  onrecursemax: WasaviMapManagerOptions['onrecursemax'];
   readonly isWaiting: boolean;
 }
 
@@ -1036,7 +1072,7 @@ declare var Wasavi: {
     names: readonly string[],
     value?: unknown
   ) => WasaviLineInputHistories;
-  MapManager: new (app: WasaviApp, opts?: Record<string, unknown>) => WasaviMapManager;
+  MapManager: new (app: WasaviApp, opts?: WasaviMapManagerOptions) => WasaviMapManager;
   Registers: new (app: WasaviApp, value?: unknown) => WasaviRegisters;
   Marks: new (app: WasaviApp, value?: unknown) => WasaviMarks;
   Editor: new (element: string | HTMLElement) => WasaviEditor;

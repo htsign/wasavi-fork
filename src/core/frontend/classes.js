@@ -1343,62 +1343,116 @@ Wasavi.LineInputHistories = class LineInputHistories {
 	get storageKey() {return LineInputHistories.#STORAGE_KEY}
 };
 
-Wasavi.MapManager = function MapManager (app, opts) {
-	function MapGroup (name) {
+class MapGroup {
+	/** @type {WasaviApp} */
+	#app;
+	/** @type {string} */
+	name;
+	/** @type {Record<string, string>} */
+	rules = {};
+	/** @type {Record<string, WasaviKeySequenceItem[]>} */
+	sequences = {};
+	/** @type {Record<string, WasaviKeySequenceItem[]>} */
+	sequencesExpanded = {};
+	/** @type {Record<string, {remap: boolean}>} */
+	options = {};
+
+	/**
+	 * @param {WasaviApp} app
+	 * @param {string} name
+	 */
+	constructor(app, name) {
+		this.#app = app;
 		this.name = name;
-		this.rules = {};
-		this.sequences = {};
-		this.sequencesExpanded = {};
-		this.options = {};
 	}
 
-	MapGroup.prototype = {
-		get length () {
-			return Object.keys(this.rules).length;
-		},
-		register: function (lhs, rhs, remap) {
-			this.rules[lhs] = rhs;
-			this.sequences[lhs] = app.keyManager.createSequences(lhs);
-			this.sequencesExpanded[lhs] = app.keyManager.createSequences(rhs);
-			this.options[lhs] = {remap: !!remap};
-		},
-		remove: function () {
-			for (let i = 0; i < arguments.length; i++) {
-				let lhs = arguments[i];
-				delete this.rules[lhs];
-				delete this.sequences[lhs];
-				delete this.sequencesExpanded[lhs];
-				delete this.options[lhs];
-			}
-		},
-		removeAll: function () {
-			for (let lhs in this.rules) {
-				this.remove(lhs);
-			}
-		},
-		isMapped: function (lhs) {
-			return lhs in this.rules;
-		},
-		toArray: function () {
-			let result = [];
-			for (let lhs in this.rules) {
-				result.push({
-					lhs: lhs,
-					rhs: this.rules[lhs],
-					options: this.options[lhs]
-				});
-			}
-			return result;
+	/** @returns {number} */
+	get length() {
+		return Object.keys(this.rules).length;
+	}
+
+	/**
+	 * @param {string} lhs
+	 * @param {string} rhs
+	 * @param {boolean} remap
+	 * @returns {void}
+	 */
+	register(lhs, rhs, remap) {
+		this.rules[lhs] = rhs;
+		this.sequences[lhs] = this.#app.keyManager.createSequences(lhs);
+		this.sequencesExpanded[lhs] = this.#app.keyManager.createSequences(rhs);
+		this.options[lhs] = {remap: !!remap};
+	}
+
+	/**
+	 * @param {...string} args
+	 * @returns {void}
+	 */
+	remove(...args) {
+		for (let i = 0; i < args.length; i++) {
+			let lhs = args[i];
+			delete this.rules[lhs];
+			delete this.sequences[lhs];
+			delete this.sequencesExpanded[lhs];
+			delete this.options[lhs];
 		}
-	};
+	}
 
-	const maps = {
-		normal: new MapGroup('NORMAL'),
-		bound:  new MapGroup('BOUND'),
-		input:  new MapGroup('INPUT')
-	};
+	/** @returns {void} */
+	removeAll() {
+		for (let lhs in this.rules) {
+			this.remove(lhs);
+		}
+	}
 
-	const modeToTypeTable = {
+	/**
+	 * @param {string} lhs
+	 * @returns {boolean}
+	 */
+	isMapped(lhs) {
+		return lhs in this.rules;
+	}
+
+	/** @returns {{lhs: string, rhs: string, options: {remap: boolean}}[]} */
+	toArray() {
+		let result = [];
+		for (let lhs in this.rules) {
+			result.push({
+				lhs: lhs,
+				rhs: this.rules[lhs],
+				options: this.options[lhs]
+			});
+		}
+		return result;
+	}
+}
+
+/**
+ * @typedef {object} WasaviMapWaitingInfo
+ * @property {string} mapType
+ * @property {string} lhs
+ * @property {number} index
+ * @property {number | undefined} timer
+ */
+
+/**
+ * @typedef {object} WasaviMapExpandOptions
+ * @property {boolean} remap
+ * @property {string} [overrideMap]
+ * @property {WasaviKeySequenceItem} [extraEvent]
+ * @property {string} [extraOverrideMap]
+ */
+
+Wasavi.MapManager = class MapManager {
+	static #RECURSE_MAX = /** @type {const} */ (100);
+	static #WAIT_TIMEOUT_MSECS = /** @type {const} */ (1000);
+
+	/** @type {WasaviApp} */
+	#app;
+	/** @type {Record<string, MapGroup>} */
+	#maps;
+	/** @type {Record<string, string>} */
+	#modeToTypeTable = {
 		command:    'normal',
 
 		bound:      'bound',
@@ -1408,50 +1462,84 @@ Wasavi.MapManager = function MapManager (app, opts) {
 		overwrite:  'input'
 	};
 
-	const RECURSE_MAX = 100;
-	const WAIT_TIMEOUT_MSECS = 1000;
+	/** @type {string | undefined} */
+	#currentMapType = undefined;
+	/** @type {Record<string, WasaviKeySequenceItem[]> | undefined} */
+	#currentSequence = undefined;
+	#currentIndex = 0;
+	/** @type {WasaviMapWaitingInfo | undefined} */
+	#waitingMapInfo = undefined;
+	#recurseDepth = 0;
 
-	let currentMapType = undefined;
-	let currentSequence = undefined;
-	let currentIndex = 0;
-	let waitingMapInfo = undefined;
-	let recurseDepth = 0;
+	/** @type {WasaviMapManagerOptions['onexpand']} */
+	onexpand;
+	/** @type {WasaviMapManagerOptions['onrecursemax']} */
+	onrecursemax;
 
-	opts || (opts = {});
+	/**
+	 * @param {WasaviApp} app
+	 * @param {WasaviMapManagerOptions} [opts]
+	 */
+	constructor(app, opts) {
+		this.#app = app;
+		this.#maps = {
+			normal: new MapGroup(app, 'NORMAL'),
+			bound:  new MapGroup(app, 'BOUND'),
+			input:  new MapGroup(app, 'INPUT')
+		};
 
-	function markExpanded (items) {
+		opts || (opts = {});
+		this.onexpand = opts.onexpand;
+		this.onrecursemax = opts.onrecursemax;
+	}
+
+	/**
+	 * @param {readonly WasaviKeySequenceItem[]} items
+	 * @returns {void}
+	 */
+	markExpanded(items) {
 		for (var i = 0, goal = items.length; i < goal; i++) {
 			items[i].mapExpanded =
 			items[i].isCompositioned = true;
 		}
-		items.firstItem.isCompositionedFirst = true;
-		items.lastItem.isCompositionedLast = true;
+		items[0].isCompositionedFirst = true;
+		items[items.length - 1].isCompositionedLast = true;
 	}
 
-	function markExpandedNoremap (items) {
+	/**
+	 * @param {readonly WasaviKeySequenceItem[]} items
+	 * @returns {void}
+	 */
+	markExpandedNoremap(items) {
 		for (var i = 0, goal = items.length; i < goal; i++) {
 			items[i].isNoremap =
 			items[i].mapExpanded =
 			items[i].isCompositioned = true;
 		}
-		items.firstItem.isCompositionedFirst = true;
-		items.lastItem.isCompositionedLast = true;
+		items[0].isCompositionedFirst = true;
+		items[items.length - 1].isCompositionedLast = true;
 	}
 
-	function resetMapping () {
-		currentMapType = currentSequence = undefined;
-		currentIndex = recurseDepth = 0;
-		waitingMapInfo = undefined;
+	/** @returns {void} */
+	#resetMapping() {
+		this.#currentMapType = this.#currentSequence = undefined;
+		this.#currentIndex = this.#recurseDepth = 0;
+		this.#waitingMapInfo = undefined;
 	}
 
-	function expand (sequencesExpanded, expandOptions) {
-		resetMapping();
+	/**
+	 * @param {readonly WasaviKeySequenceItem[]} sequencesExpanded
+	 * @param {WasaviMapExpandOptions} expandOptions
+	 * @returns {void}
+	 */
+	#expand(sequencesExpanded, expandOptions) {
+		this.#resetMapping();
 
-		if (recurseDepth < RECURSE_MAX) {
-			recurseDepth++;
-			if (!opts.onexpand) return;
+		if (this.#recurseDepth < MapManager.#RECURSE_MAX) {
+			this.#recurseDepth++;
+			if (!this.onexpand) return;
 
-			let remap = app.config.vars.remap && expandOptions.remap;
+			let remap = this.#app.config.vars.remap && expandOptions.remap;
 			let sequences = sequencesExpanded.map(seq => {
 				seq = seq.clone();
 				if (expandOptions.overrideMap) {
@@ -1468,8 +1556,8 @@ Wasavi.MapManager = function MapManager (app, opts) {
 				return seq;
 			});
 
-			sequences.firstItem.isCompositionedFirst = true;
-			sequences.lastItem.isCompositionedLast = true;
+			sequences[0].isCompositionedFirst = true;
+			sequences[sequences.length - 1].isCompositionedLast = true;
 
 			if (expandOptions.extraEvent) {
 				let seq = expandOptions.extraEvent.clone();
@@ -1485,45 +1573,52 @@ Wasavi.MapManager = function MapManager (app, opts) {
 				sequences.push(seq);
 			}
 
-			opts.onexpand(sequences);
+			this.onexpand(sequences);
 		}
 		else {
-			opts.onrecursemax && opts.onrecursemax();
+			this.onrecursemax && this.onrecursemax();
 		}
 	}
 
-	function process (mode, e) {
+	/**
+	 * @param {string} mode
+	 * @param {WasaviKeySequenceItem} e
+	 * @returns {Promise<WasaviKeySequenceItem | undefined>}
+	 */
+	process(mode, e) {
 		return new Promise(resolve => {
 			if (!e || !('code' in e)) {
 				throw new Error('MapManager: invalid keyboard event argument');
 			}
 
-			let mapType = e.overrideMap || modeToTypeTable[mode];
+			let mapType = e.overrideMap || this.#modeToTypeTable[mode];
 
-			if (waitingMapInfo) {
-				clearTimeout(waitingMapInfo.timer);
-				waitingMapInfo.timer = undefined;
+			if (this.#waitingMapInfo) {
+				clearTimeout(this.#waitingMapInfo.timer);
+				this.#waitingMapInfo.timer = undefined;
 			}
 
-			if (waitingMapInfo && mapType && mapType != currentMapType) {
-				let wmapType = waitingMapInfo.mapType;
-				let wlhs = waitingMapInfo.lhs;
-				expand(
-					maps[wmapType].sequencesExpanded[wlhs],
+			if (this.#waitingMapInfo && mapType && mapType != this.#currentMapType) {
+				let wmapType = this.#waitingMapInfo.mapType;
+				let wlhs = this.#waitingMapInfo.lhs;
+				this.#expand(
+					this.#maps[wmapType].sequencesExpanded[wlhs],
 					{
 						extraEvent: e,
-						overrideMap: waitingMapInfo.mapType,
+						overrideMap: this.#waitingMapInfo.mapType,
 						extraOverrideMap: mapType,
-						remap: maps[wmapType].options[wlhs].remap
+						remap: this.#maps[wmapType].options[wlhs].remap
 					});
 
-				resolve();
+				resolve(undefined);
 				return;
 			}
 
-			currentMapType = mapType;
+			this.#currentMapType = mapType;
 
+			/** @type {Record<string, WasaviKeySequenceItem[]>} */
 			let dst = {};
+			/** @type {string | undefined} */
 			let fullMatchedLhs;
 			let foundCount = 0;
 
@@ -1533,11 +1628,11 @@ Wasavi.MapManager = function MapManager (app, opts) {
 
 			if (mapType) {
 				let code = e.code;
-				let src = currentSequence || maps[mapType].sequences;
+				let src = this.#currentSequence || this.#maps[mapType].sequences;
 
 				for (let lhs in src) {
 					let sequence = src[lhs];
-					if (currentIndex < sequence.length && sequence[currentIndex].code == code) {
+					if (this.#currentIndex < sequence.length && sequence[this.#currentIndex].code == code) {
 						dst[lhs] = src[lhs];
 						foundCount++;
 
@@ -1545,7 +1640,7 @@ Wasavi.MapManager = function MapManager (app, opts) {
 						 * save that matched the whole sequence
 						 */
 
-						if (currentIndex == sequence.length - 1) {
+						if (this.#currentIndex == sequence.length - 1) {
 							fullMatchedLhs = lhs;
 						}
 					}
@@ -1557,8 +1652,8 @@ Wasavi.MapManager = function MapManager (app, opts) {
 			 */
 
 			if (foundCount) {
-				currentSequence = dst;
-				currentIndex++;
+				this.#currentSequence = dst;
+				this.#currentIndex++;
 
 				if (fullMatchedLhs != undefined) {
 					// unique match
@@ -1582,11 +1677,11 @@ Wasavi.MapManager = function MapManager (app, opts) {
 						 *   a      gg   * fullMatchedLhs
 						 */
 
-						expand(
-							maps[mapType].sequencesExpanded[fullMatchedLhs],
+						this.#expand(
+							this.#maps[mapType].sequencesExpanded[fullMatchedLhs],
 							{
-								overrideMap: currentMapType,
-								remap: maps[mapType].options[fullMatchedLhs].remap
+								overrideMap: this.#currentMapType,
+								remap: this.#maps[mapType].options[fullMatchedLhs].remap
 							});
 					}
 
@@ -1612,19 +1707,20 @@ Wasavi.MapManager = function MapManager (app, opts) {
 						 *   bb     ^
 						 */
 
-						waitingMapInfo = {
+						this.#waitingMapInfo = {
 							mapType: mapType,
 							lhs: fullMatchedLhs,
-							index: currentIndex,
+							index: this.#currentIndex,
 							timer: setTimeout(() => {
-								let mapType = waitingMapInfo.mapType;
-								let lhs = waitingMapInfo.lhs;
-								expand(
-									maps[mapType].sequencesExpanded[lhs],
+								if (!this.#waitingMapInfo) return;
+								let mapType = this.#waitingMapInfo.mapType;
+								let lhs = this.#waitingMapInfo.lhs;
+								this.#expand(
+									this.#maps[mapType].sequencesExpanded[lhs],
 									{
-										remap: maps[mapType].options[lhs].remap
+										remap: this.#maps[mapType].options[lhs].remap
 									});
-							}, WAIT_TIMEOUT_MSECS)
+							}, MapManager.#WAIT_TIMEOUT_MSECS)
 						};
 					}
 				}
@@ -1650,24 +1746,23 @@ Wasavi.MapManager = function MapManager (app, opts) {
 					 *
 					 */
 
-					waitingMapInfo = {
+					this.#waitingMapInfo = {
 						mapType: mapType,
-						lhs: Object.keys(currentSequence)[0].substring(0, currentIndex),
-						index: currentIndex,
+						lhs: Object.keys(this.#currentSequence)[0].substring(0, this.#currentIndex),
+						index: this.#currentIndex,
 						timer: setTimeout(() => {
-							let mapType = waitingMapInfo.mapType;
-							let lhs = waitingMapInfo.lhs;
-							let index = waitingMapInfo.index;
-							expand(
-								app.keyManager.createSequences(lhs),
+							if (!this.#waitingMapInfo) return;
+							let lhs = this.#waitingMapInfo.lhs;
+							this.#expand(
+								this.#app.keyManager.createSequences(lhs),
 								{
 									remap: false
 								});
-						}, WAIT_TIMEOUT_MSECS)
+						}, MapManager.#WAIT_TIMEOUT_MSECS)
 					};
 				}
 
-				resolve();
+				resolve(undefined);
 			}
 
 			/*
@@ -1675,14 +1770,13 @@ Wasavi.MapManager = function MapManager (app, opts) {
 			 */
 
 			else {
-				if (waitingMapInfo) {
-					let wmapType = waitingMapInfo.mapType;
-					let wlhs = waitingMapInfo.lhs;
-					let windex = waitingMapInfo.index;
-					let sequences = wlhs in currentSequence ?
-						maps[wmapType].sequencesExpanded[wlhs] :
-						app.keyManager.createSequences(wlhs);
-					expand(
+				if (this.#waitingMapInfo) {
+					let wmapType = this.#waitingMapInfo.mapType;
+					let wlhs = this.#waitingMapInfo.lhs;
+					let sequences = this.#currentSequence && wlhs in this.#currentSequence ?
+						this.#maps[wmapType].sequencesExpanded[wlhs] :
+						this.#app.keyManager.createSequences(wlhs);
+					this.#expand(
 						sequences,
 						{
 							extraEvent: e,
@@ -1691,7 +1785,7 @@ Wasavi.MapManager = function MapManager (app, opts) {
 							remap: false
 						});
 
-					resolve();
+					resolve(undefined);
 				}
 				else {
 					resolve(e);
@@ -1700,12 +1794,11 @@ Wasavi.MapManager = function MapManager (app, opts) {
 		});
 	}
 
-	publish(this, markExpanded, markExpandedNoremap, process, {
-		maps: () => maps,
-		onexpand: [() => opts.onexpand, (v) => {opts.onexpand = v}],
-		onrecursemax: [() => opts.onrecursemax, (v) => {opts.onrecursemax = v}],
-		isWaiting: () => currentSequence != undefined
-	});
+	/** @returns {Record<string, MapGroup>} */
+	get maps() {return this.#maps}
+
+	/** @returns {boolean} */
+	get isWaiting() {return this.#currentSequence != undefined}
 };
 
 Wasavi.Registers = function (app, value) {
