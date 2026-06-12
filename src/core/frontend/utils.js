@@ -141,6 +141,15 @@ g.extend = function (dest, src) {
 	return /** @type {T & U} */ (dest);
 };
 /**
+ * @template {object} T
+ * @param {T} target
+ * @param {string} key
+ * @returns {key is keyof T}
+ */
+g.isKeyOf = function (target, key) {
+	return Object.keys(target).includes(key);
+};
+/**
  * @param {string} src
  * @returns {unknown}
  */

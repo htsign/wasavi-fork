@@ -44,6 +44,8 @@ declare function $call(...fns: readonly unknown[]): void;
 
 declare function extend<T extends object, U extends object>(dest: T, src: U): T & U;
 
+declare function isKeyOf<T extends object>(target: T, key: string): key is keyof T;
+
 /** Parse JSON, returning `null` instead of throwing on malformed input. */
 declare function parseJson(src: string): unknown;
 
