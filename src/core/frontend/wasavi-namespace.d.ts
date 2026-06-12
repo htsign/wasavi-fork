@@ -638,6 +638,14 @@ interface WasaviEditor {
   scrollLeft: number;
 }
 
+/** Result of {@link WasaviLiteralInput} processing a key (classes.js). */
+interface WasaviLiteralInputResult {
+  processor: string;
+  sequence?: readonly string[];
+  error?: string;
+  trail?: string;
+}
+
 /** Numeric/codepoint literal input state machine (classes.js). */
 interface WasaviLiteralInput {
   value: string;
@@ -646,11 +654,11 @@ interface WasaviLiteralInput {
   processor: string;
   maxLength: number;
   message: string;
-  process(c: string): unknown;
-  process_0(c: string, code: number): unknown;
-  process_codepoint(c: string, code: number): unknown;
-  process_literal(c: string, code: number): unknown;
-  getResult(c: string): unknown;
+  process(c: string): WasaviLiteralInputResult | null;
+  process_0(c: string, code: number): WasaviLiteralInputResult | null;
+  process_codepoint(c: string, code: number): WasaviLiteralInputResult | null;
+  process_literal(c: string, code: number): WasaviLiteralInputResult;
+  getResult(c?: string): WasaviLiteralInputResult;
 }
 
 /** Insert-mode input bookkeeping (classes.js). */

@@ -4042,58 +4042,86 @@ whole:
 	};
 };
 
-Wasavi.LiteralInput = function () {
-	this.value = '';
-	this.radix = 10;
-	this.pattern;
-	this.processor = '0';
-	this.maxLength = 0;
-	this.message = '';
-};
-Wasavi.LiteralInput.prototype = {
-	PROCESSOR_LITERAL: 'literal',
-	PROCESSOR_CODEPOINT: 'codepoint',
+Wasavi.LiteralInput = class LiteralInput {
+	static #PROCESSOR_LITERAL = /** @type {const} */ ('literal');
+	static #PROCESSOR_CODEPOINT = /** @type {const} */ ('codepoint');
 
-	process: function (c) {
-		return this['process_' + this.processor].call(this, c, c.charCodeAt(0));
-	},
-	process_0: function (c, code) {
+	/** @type {string} */
+	value = '';
+	/** @type {number} */
+	radix = 10;
+	/** @type {RegExp | undefined} */
+	pattern;
+	/** @type {string} */
+	processor = '0';
+	/** @type {number} */
+	maxLength = 0;
+	/** @type {string} */
+	message = '';
+
+	/**
+	 * @param {string} c
+	 * @returns {WasaviLiteralInputResult | null}
+	 */
+	process(c) {
+		switch (this.processor) {
+		case LiteralInput.#PROCESSOR_LITERAL:
+			return this.process_literal(c, c.charCodeAt(0));
+		case LiteralInput.#PROCESSOR_CODEPOINT:
+			return this.process_codepoint(c, c.charCodeAt(0));
+		default:
+			return this.process_0(c, c.charCodeAt(0));
+		}
+	}
+
+	/**
+	 * @param {string} c
+	 * @param {number} code
+	 * @returns {WasaviLiteralInputResult | null}
+	 */
+	process_0(c, code) {
 		if (code >= 48 && code <= 57) {
 			this.radix = 10;
 			this.pattern = /^[0-9]$/;
-			this.processor = this.PROCESSOR_CODEPOINT;
+			this.processor = LiteralInput.#PROCESSOR_CODEPOINT;
 			this.maxLength = 3;
 			this.message = _('dec:');
-			return this.process.call(this, c);
+			return this.process(c);
 		}
 		else if (c == 'o' || c == 'O') {
 			this.radix = 8;
 			this.pattern = /^[0-7]$/;
-			this.processor = this.PROCESSOR_CODEPOINT;
+			this.processor = LiteralInput.#PROCESSOR_CODEPOINT;
 			this.message = _('oct:');
 			this.maxLength = 3;
 		}
 		else if (c == 'x' || c == 'X') {
 			this.radix = 16;
 			this.pattern = /^[0-9a-f]$/i;
-			this.processor = this.PROCESSOR_CODEPOINT;
+			this.processor = LiteralInput.#PROCESSOR_CODEPOINT;
 			this.message = _('hex:');
 			this.maxLength = 2;
 		}
 		else if (c == 'u' || c == 'U') {
 			this.radix = 16;
 			this.pattern = /^[0-9a-f]$/i;
-			this.processor = this.PROCESSOR_CODEPOINT;
+			this.processor = LiteralInput.#PROCESSOR_CODEPOINT;
 			this.message = _('unicode hex:');
 			this.maxLength = c == 'u' ? 4 : 6;
 		}
 		else {
-			this.processor = this.PROCESSOR_LITERAL;
-			return this.process.call(this, c);
+			this.processor = LiteralInput.#PROCESSOR_LITERAL;
+			return this.process(c);
 		}
 		return null;
-	},
-	process_codepoint: function (c, code) {
+	}
+
+	/**
+	 * @param {string} c
+	 * @param {number} code
+	 * @returns {WasaviLiteralInputResult | null}
+	 */
+	process_codepoint(c, code) {
 		if (code == 27) {
 			this.value = '';
 			return this.getResult();
@@ -4106,7 +4134,7 @@ Wasavi.LiteralInput.prototype = {
 			this.message = this.message.replace(/.$/, '');
 			return null;
 		}
-		if (this.pattern.test(c)) {
+		if (this.pattern?.test(c)) {
 			this.value += c;
 			this.message += c;
 			if (this.value.length >= this.maxLength) {
@@ -4117,11 +4145,23 @@ Wasavi.LiteralInput.prototype = {
 			return this.getResult(c);
 		}
 		return null;
-	},
-	process_literal: function (c, code) {
+	}
+
+	/**
+	 * @param {string} c
+	 * @param {number} code
+	 * @returns {WasaviLiteralInputResult}
+	 */
+	process_literal(c, code) {
 		return {processor:this.processor, sequence:[c]};
-	},
-	getResult: function (c) {
+	}
+
+	/**
+	 * @param {string} [c]
+	 * @returns {WasaviLiteralInputResult}
+	 */
+	getResult(c) {
+		/** @type {WasaviLiteralInputResult} */
 		var result = {processor:this.processor};
 		if (this.value != '') {
 			var value = parseInt(this.value, this.radix);
@@ -4129,14 +4169,19 @@ Wasavi.LiteralInput.prototype = {
 				result.error = _('Invalid codepoint.');
 				return result;
 			}
-			result.sequence = this.toUTF16(value);
+			result.sequence = this.#toUTF16(value);
 		}
 		if (c != undefined) {
 			result.trail = c;
 		}
 		return result;
-	},
-	toUTF16: function (cp) {
+	}
+
+	/**
+	 * @param {number} cp
+	 * @returns {string[]}
+	 */
+	#toUTF16(cp) {
 		/*
 		 * U+10FFFF (1 0000 1111 1111 1111 1111)
 		 *           * **** HHHH HHLL LLLL LLLL
