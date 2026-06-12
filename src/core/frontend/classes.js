@@ -5288,27 +5288,54 @@ Wasavi.Surrounding = function (app) {
 	);
 };
 
-Wasavi.IncDec = function IncDec (app, defaultOpts) {
-	/* privates */
+Wasavi.IncDec = class IncDec {
+	static #UPPER_ALPHABET = /** @type {const} */ ('ABCDEFGHIJKLMNOPQRSTUVWXYZ');
+	static #LOWER_ALPHABET = /** @type {const} */ ('abcdefghijklmnopqrstuvwxyz');
 
-	const UPPER_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-	const LOWER_ALPHABET = 'abcdefghijklmnopqrstuvwxyz';
+	static #FORMAT_ALPHA = /** @type {const} */ ('alpha');
+	static #FORMAT_BIN = /** @type {const} */ ('bin');
+	static #FORMAT_HEX = /** @type {const} */ ('hex');
+	static #FORMAT_OCTAL = /** @type {const} */ ('octal');
+	static #FORMAT_DECIMAL = /** @type {const} */ ('decimal');
+	static #FORMAT_DEFAULT =
+		/** @type {const} */ (`${IncDec.#FORMAT_BIN},${IncDec.#FORMAT_OCTAL},${IncDec.#FORMAT_HEX}`);
 
-	const FORMAT_ALPHA = 'alpha';
-	const FORMAT_BIN = 'bin';
-	const FORMAT_HEX = 'hex';
-	const FORMAT_OCTAL = 'octal';
-	const FORMAT_DECIMAL = 'decimal';
-	const FORMAT_DEFAULT = [FORMAT_BIN, FORMAT_OCTAL, FORMAT_HEX].join(',');
+	static #PATTERN_ALPHA = /** @type {const} */ ('(\\b[a-zA-Z]\\b)');
+	static #PATTERN_BIN = /** @type {const} */ ('(0b[01]+)');
+	static #PATTERN_HEX = /** @type {const} */ ('(0[xX][0-9a-fA-F]+)');
+	static #PATTERN_OCTAL = /** @type {const} */ ('(0[0-9]*)');
+	static #PATTERN_DECIMAL = /** @type {const} */ ('(-?[0-9]+)');
 
-	const PATTERN_ALPHA = '(\\b[a-zA-Z]\\b)';
-	const PATTERN_BIN = '(0b[01]+)';
-	const PATTERN_HEX = '(0[xX][0-9a-fA-F]+)';
-	const PATTERN_OCTAL = '(0[0-9]*)';
-	const PATTERN_DECIMAL = '(-?[0-9]+)';
+	/** @type {WasaviApp} */
+	#app;
+	/** @type {WasaviIncDecOpts | undefined} */
+	#defaultOpts;
+	/** @type {Record<WasaviIncDecFormat, (result: WasaviIncDecResult, item: WasaviIncDecItem, count: number) => void>} */
+	#replaceMap;
 
-	function getAlphabetReplacement (result, item, count) {
-		const alphabet = /[a-z]/.test(item.text) ? LOWER_ALPHABET : UPPER_ALPHABET;
+	/**
+	 * @param {WasaviApp} app
+	 * @param {WasaviIncDecOpts} [defaultOpts]
+	 */
+	constructor(app, defaultOpts) {
+		this.#app = app;
+		this.#defaultOpts = defaultOpts;
+		this.#replaceMap = {
+			[IncDec.#FORMAT_ALPHA]: this.#getAlphabetReplacement,
+			[IncDec.#FORMAT_BIN]: this.#getBinaryReplacement,
+			[IncDec.#FORMAT_HEX]: this.#getHexReplacement,
+			[IncDec.#FORMAT_OCTAL]: this.#getOctalReplacement,
+			[IncDec.#FORMAT_DECIMAL]: this.#getDecimalReplacement
+		};
+	}
+
+	/**
+	 * @param {WasaviIncDecResult} result
+	 * @param {WasaviIncDecItem} item
+	 * @param {number} count
+	 */
+	#getAlphabetReplacement(result, item, count) {
+		const alphabet = /[a-z]/.test(item.text) ? IncDec.#LOWER_ALPHABET : IncDec.#UPPER_ALPHABET;
 		const alphabetIndex = item.text.charCodeAt(0) - alphabet.charCodeAt(0);
 
 		count %= alphabet.length;
@@ -5321,7 +5348,12 @@ Wasavi.IncDec = function IncDec (app, defaultOpts) {
 		}
 	}
 
-	function getBinaryReplacement (result, item, count) {
+	/**
+	 * @param {WasaviIncDecResult} result
+	 * @param {WasaviIncDecItem} item
+	 * @param {number} count
+	 */
+	#getBinaryReplacement(result, item, count) {
 		const radix = 2;
 		const headerLength = 2; // length of '0b'
 		const originalLength = item.text.length - headerLength;
@@ -5335,7 +5367,12 @@ Wasavi.IncDec = function IncDec (app, defaultOpts) {
 		result.replacement = item.text.substring(0, headerLength) + value;
 	}
 
-	function getHexReplacement (result, item, count) {
+	/**
+	 * @param {WasaviIncDecResult} result
+	 * @param {WasaviIncDecItem} item
+	 * @param {number} count
+	 */
+	#getHexReplacement(result, item, count) {
 		const radix = 16;
 		const headerLength = 2; // length of '0x' or '0X'
 		const originalLength = item.text.length - headerLength;
@@ -5358,7 +5395,12 @@ Wasavi.IncDec = function IncDec (app, defaultOpts) {
 		result.replacement = item.text.substring(0, headerLength) + value;
 	}
 
-	function getOctalReplacement (result, item, count) {
+	/**
+	 * @param {WasaviIncDecResult} result
+	 * @param {WasaviIncDecItem} item
+	 * @param {number} count
+	 */
+	#getOctalReplacement(result, item, count) {
 		const radix = 8;
 		const headerLength = 1; // length of '0'
 		const originalLength = item.text.length - headerLength;
@@ -5372,7 +5414,12 @@ Wasavi.IncDec = function IncDec (app, defaultOpts) {
 		result.replacement = item.text.substring(0, headerLength) + value;
 	}
 
-	function getDecimalReplacement (result, item, count) {
+	/**
+	 * @param {WasaviIncDecResult} result
+	 * @param {WasaviIncDecItem} item
+	 * @param {number} count
+	 */
+	#getDecimalReplacement(result, item, count) {
 		const radix = 10;
 
 		var value = new Int32Array([parseInt(item.text, radix) + count])[0].toString(radix);
@@ -5380,60 +5427,58 @@ Wasavi.IncDec = function IncDec (app, defaultOpts) {
 		result.replacement = value;
 	}
 
-	const replaceMap = {};
-	replaceMap[FORMAT_ALPHA] =   getAlphabetReplacement;
-	replaceMap[FORMAT_BIN] =     getBinaryReplacement;
-	replaceMap[FORMAT_HEX] =     getHexReplacement;
-	replaceMap[FORMAT_OCTAL] =   getOctalReplacement;
-	replaceMap[FORMAT_DECIMAL] = getDecimalReplacement;
-
-	/* publics */
-
-	function extractTargets (s, pos, opts) {
-		var optsHash = {};
+	/**
+	 * @param {string} s
+	 * @param {number} pos
+	 * @param {WasaviIncDecOpts} [opts]
+	 * @returns {WasaviIncDecMatches}
+	 */
+	extractTargets(s, pos, opts) {
+		/** @type {Set<string>} */
+		var optsHash = new Set;
 		var patterns = [];
 		var patternIndex = 1;
+		/** @type {WasaviIncDecFormat[]} */
 		var patternIndices = [];
-		var matches = [];
+		/** @type {WasaviIncDecMatches} */
+		var matches = Object.assign([], {foundIndex: -1});
 		var pattern, re;
 
 		if (opts == undefined) {
-			opts = defaultOpts || {
+			opts = this.#defaultOpts ?? {
 				firstReturn: false,
-				formats: FORMAT_DEFAULT
+				formats: IncDec.#FORMAT_DEFAULT
 			};
 		}
 
-		if (opts.formats == undefined) {
-			opts.formats = FORMAT_DEFAULT;
+		var formats = opts.formats ?? IncDec.#FORMAT_DEFAULT;
+
+		formats.split(',').forEach(a => optsHash.add(a.replace(/^\s+|\s+$/g, '')));
+
+		if (optsHash.has('alpha')) {
+			patterns.push(IncDec.#PATTERN_ALPHA);
+			patternIndices[patternIndex++] = IncDec.#FORMAT_ALPHA;
+		}
+		if (optsHash.has('bin')) {
+			patterns.push(IncDec.#PATTERN_BIN);
+			patternIndices[patternIndex++] = IncDec.#FORMAT_BIN;
+		}
+		if (optsHash.has('hex')) {
+			patterns.push(IncDec.#PATTERN_HEX);
+			patternIndices[patternIndex++] = IncDec.#FORMAT_HEX;
+		}
+		if (optsHash.has('octal')) {
+			patterns.push(IncDec.#PATTERN_OCTAL);
+			patternIndices[patternIndex++] = IncDec.#FORMAT_OCTAL;
 		}
 
-		opts.formats.split(',').forEach(a => optsHash[a.replace(/^\s+|\s+$/g, '')] = 1);
-
-		if (optsHash.alpha) {
-			patterns.push(PATTERN_ALPHA);
-			patternIndices[patternIndex++] = FORMAT_ALPHA;
-		}
-		if (optsHash.bin) {
-			patterns.push(PATTERN_BIN);
-			patternIndices[patternIndex++] = FORMAT_BIN;
-		}
-		if (optsHash.hex) {
-			patterns.push(PATTERN_HEX);
-			patternIndices[patternIndex++] = FORMAT_HEX;
-		}
-		if (optsHash.octal) {
-			patterns.push(PATTERN_OCTAL);
-			patternIndices[patternIndex++] = FORMAT_OCTAL;
-		}
-
-		patterns.push(PATTERN_DECIMAL);
-		patternIndices[patternIndex++] = FORMAT_DECIMAL;
+		patterns.push(IncDec.#PATTERN_DECIMAL);
+		patternIndices[patternIndex++] = IncDec.#FORMAT_DECIMAL;
 
 		pattern = new RegExp(patterns.join('|'), 'g');
-		matches.foundIndex = -1;
 
 		while ((re = pattern.exec(s))) {
+			/** @type {WasaviIncDecItem} */
 			var item = {
 				text: '',
 				index: -1,
@@ -5445,8 +5490,8 @@ Wasavi.IncDec = function IncDec (app, defaultOpts) {
 					item.text = re[i];
 					item.index = re.index;
 					item.type = patternIndices[i];
-					if (item.type == FORMAT_OCTAL && /[89]/.test(item.text)) {
-						item.type = FORMAT_DECIMAL;
+					if (item.type == IncDec.#FORMAT_OCTAL && /[89]/.test(item.text)) {
+						item.type = IncDec.#FORMAT_DECIMAL;
 					}
 					break;
 				}
@@ -5467,7 +5512,12 @@ Wasavi.IncDec = function IncDec (app, defaultOpts) {
 		return matches;
 	}
 
-	function getReplacement (matches, count) {
+	/**
+	 * @param {WasaviIncDecMatches} matches
+	 * @param {number} count
+	 * @returns {WasaviIncDecResult | null}
+	 */
+	getReplacement(matches, count) {
 		var foundIndex = matches.foundIndex;
 
 		if (typeof foundIndex != 'number') {
@@ -5485,9 +5535,9 @@ Wasavi.IncDec = function IncDec (app, defaultOpts) {
 			replacement: item.text
 		};
 
-		if (item.type in replaceMap) {
+		if (item.type != null && item.type in this.#replaceMap) {
 			if (count) {
-				replaceMap[item.type](result, item, count);
+				this.#replaceMap[item.type](result, item, count);
 			}
 		}
 		else {
@@ -5497,14 +5547,23 @@ Wasavi.IncDec = function IncDec (app, defaultOpts) {
 		return result;
 	}
 
-	function getAllReplacements (matches, count) {
+	/**
+	 * @param {WasaviIncDecMatches} matches
+	 * @param {number} count
+	 * @returns {WasaviIncDecResult[]}
+	 */
+	getAllReplacements(matches, count) {
 		var oldFoundIndex = matches.foundIndex;
+		/** @type {WasaviIncDecResult[]} */
 		var result = [];
 
 		try {
 			for (var i = 0, goal = matches.length; i < goal; i++) {
 				matches.foundIndex = i;
-				result.push(getReplacement(matches, count));
+				var rep = this.getReplacement(matches, count);
+				if (rep) {
+					result.push(rep);
+				}
 			}
 		}
 		finally {
@@ -5514,9 +5573,12 @@ Wasavi.IncDec = function IncDec (app, defaultOpts) {
 		return result;
 	}
 
-	function applyReplacement (rep) {
-		var buffer = app.buffer;
-		var editor = app.edit;
+	/**
+	 * @param {WasaviIncDecResult} rep
+	 */
+	applyReplacement(rep) {
+		var buffer = this.#app.buffer;
+		var editor = this.#app.edit;
 		var n = new Wasavi.Position(buffer.selectionStartRow, rep.index);
 
 		buffer.isLineOrientSelection = false;
@@ -5538,10 +5600,6 @@ Wasavi.IncDec = function IncDec (app, defaultOpts) {
 			editor.deleteSelection();
 		}
 	}
-
-	publish(this,
-		extractTargets, getReplacement, getAllReplacements, applyReplacement
-	);
 };
 
 /**

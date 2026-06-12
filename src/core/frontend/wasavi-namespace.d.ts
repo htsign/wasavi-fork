@@ -725,12 +725,40 @@ interface WasaviSurrounding {
   dispose(): void;
 }
 
-/** Ctrl-A / Ctrl-X number increment/decrement (classes.js). */
+/** Number format recognized by {@link WasaviIncDec}. */
+type WasaviIncDecFormat = 'alpha' | 'bin' | 'hex' | 'octal' | 'decimal';
+
+/** Options controlling {@link WasaviIncDec.extractTargets}. */
+type WasaviIncDecOpts = {
+  formats?: string;
+  firstReturn?: boolean;
+  quickReturn?: boolean;
+};
+
+/** A single number/alphabet target found by {@link WasaviIncDec.extractTargets}. */
+type WasaviIncDecItem = {
+  text: string;
+  index: number;
+  match: boolean;
+  type?: WasaviIncDecFormat;
+};
+
+/** The list of {@link WasaviIncDecItem} with the index of the matched item. */
+type WasaviIncDecMatches = WasaviIncDecItem[] & {foundIndex: number};
+
+/** A computed replacement for one target. */
+type WasaviIncDecResult = {
+  index: number;
+  text: string;
+  replacement: string;
+};
+
+/** Ctrl-A / Ctrl-X number increment/decrement (classes.js, ES class). */
 interface WasaviIncDec {
-  extractTargets(s: string, pos: WasaviPositionLike, opts?: Record<string, unknown>): unknown;
-  getReplacement(matches: unknown, count: number): unknown;
-  getAllReplacements(matches: unknown, count: number): unknown;
-  applyReplacement(rep: unknown): unknown;
+  extractTargets(s: string, pos: number, opts?: WasaviIncDecOpts): WasaviIncDecMatches;
+  getReplacement(matches: WasaviIncDecMatches, count: number): WasaviIncDecResult | null;
+  getAllReplacements(matches: WasaviIncDecMatches, count: number): WasaviIncDecResult[];
+  applyReplacement(rep: WasaviIncDecResult): void;
 }
 
 /** `:sort` worker (classes.js, ES class). */
@@ -1119,7 +1147,7 @@ declare var Wasavi: {
   Completer: new (appProxy: WasaviApp, alist?: unknown) => WasaviCompleter;
   StrokeRecorder: new () => WasaviStrokeRecorder;
   Surrounding: new (app: WasaviApp) => WasaviSurrounding;
-  IncDec: new (app: WasaviApp, defaultOpts?: Record<string, unknown>) => WasaviIncDec;
+  IncDec: new (app: WasaviApp, defaultOpts?: WasaviIncDecOpts) => WasaviIncDec;
   SortWorker: new (app: WasaviApp, t: WasaviEditor, a: WasaviExCommandArg) => WasaviSortWorker;
 
   // --- classes (other files) ---
