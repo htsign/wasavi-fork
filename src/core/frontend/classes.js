@@ -2319,102 +2319,202 @@ Wasavi.Registers = class Registers {
 	}
 };
 
-Wasavi.Marks = function (app, value) {
-	var buffer = app.buffer;
-	var marks;
+Wasavi.Marks = class {
+	/** @type {WasaviApp} */
+	#app;
+	/** @type {WasaviEditor} */
+	#buffer;
+	/**
+	 * Marks may be stored either as real `WasaviPosition` instances (via
+	 * `#restore`) or as plain `{row, col}` pairs (via `set`/`setPrivate` from
+	 * serialized undo data), hence the lenient value type.
+	 * @type {Record<string, WasaviPositionLike>}
+	 */
+	#marks = {};
 
-	function serialize () {
+	/**
+	 * @param {WasaviApp} app
+	 * @param {unknown} [value]
+	 */
+	constructor(app, value) {
+		this.#app = app;
+		this.#buffer = app.buffer;
+		this.load(value);
+	}
+
+	/** @returns {string} */
+	#serialize() {
 		var result = [];
-		for (var i in marks) {
-			result.push([i, marks[i].row, marks[i].col].join('\t'));
+		for (var i in this.#marks) {
+			result.push([i, this.#marks[i].row, this.#marks[i].col].join('\t'));
 		}
 		return window.btoa(result.join('\n'));
 	}
-	function unserialize (value) {
+
+	/**
+	 * @param {unknown} value
+	 * @returns {Record<string, { row: number, col: number }>}
+	 */
+	#unserialize(value) {
+		/** @type {Record<string, { row: number, col: number }>} */
 		var result = {};
 		isString(value) && window.atob(value)
 			.split('\n')
 			.forEach(function (line) {
-				line = line.split('\t');
-				if (line[0].length) {
-					result[line[0]] = {
-						row: parseInt(line[1], 10),
-						col: parseInt(line[2], 10)
+				var fields = line.split('\t');
+				if (fields[0].length) {
+					result[fields[0]] = {
+						row: parseInt(fields[1], 10),
+						col: parseInt(fields[2], 10)
 					};
 				}
 			});
 		return result;
 	}
-	function restore (src) {
-		src = unserialize(src);
 
-		for (var i in src) {
-			if (!isValidName(i)) continue;
-			if (!isObject(src[i])) continue;
-			if (!isNumber(src[i].row)) continue;
-			if (!isNumber(src[i].col)) continue;
+	/**
+	 * @param {unknown} src
+	 * @returns {void}
+	 */
+	#restore(src) {
+		var unserialized = this.#unserialize(src);
 
-			var row = src[i].row;
-			var col = src[i].col;
+		for (var i in unserialized) {
+			if (!this.isValidName(i)) continue;
+			var item = unserialized[i];
+			if (!isObject(item)) continue;
+			if (!isNumber(item.row)) continue;
+			if (!isNumber(item.col)) continue;
+
+			var row = item.row;
+			var col = item.col;
 			if (isNaN(row) || isNaN(col)) continue;
 
-			marks[i] = (new Wasavi.Position(row, col)).round(buffer);
+			this.#marks[i] = (new Wasavi.Position(row, col)).round(this.#buffer);
 		}
 	}
-	function save () {
-		return serialize();
+
+	/** @returns {string} */
+	save() {
+		return this.#serialize();
 	}
-	function load (value) {
-		marks = {};
-		restore(value || '');
+
+	/**
+	 * @param {unknown} [value]
+	 * @returns {void}
+	 */
+	load(value) {
+		this.#marks = {};
+		this.#restore(value || '');
 	}
-	function isValidName (name) {
+
+	/**
+	 * @param {string} name
+	 * @returns {boolean}
+	 */
+	isValidName(name) {
 		return /^[a-z'\^<>]/.test(name);
 	}
-	function regalizeName (name) {
+
+	/**
+	 * @param {string} name
+	 * @returns {string}
+	 */
+	#regalizeName(name) {
 		if (name == '`') {
 			name = "'";
 		}
 		return name;
 	}
-	function set (name, pos) {
-		name = regalizeName(name);
-		if (isValidName(name)) {
-			marks[name] = pos;
+
+	/**
+	 * @param {string} name
+	 * @param {WasaviPositionLike} pos
+	 * @returns {void}
+	 */
+	set(name, pos) {
+		name = this.#regalizeName(name);
+		if (this.isValidName(name)) {
+			this.#marks[name] = pos;
 		}
 	}
-	function setPrivate (name, pos) {
+
+	/**
+	 * @param {string} name
+	 * @param {WasaviPositionLike | null} [pos]
+	 * @returns {void}
+	 */
+	setPrivate(name, pos) {
 		name = '$' + name;
 		if (pos) {
-			marks[name] = pos;
+			this.#marks[name] = pos;
 		}
 		else {
-			delete marks[name];
+			delete this.#marks[name];
 		}
 	}
-	function get (name) {
-		name = regalizeName(name);
-		return isValidName(name) && name in marks ? marks[name] : undefined;
+
+	/**
+	 * @param {string} name
+	 * @returns {WasaviPositionLike | undefined}
+	 */
+	get(name) {
+		name = this.#regalizeName(name);
+		return this.isValidName(name) && name in this.#marks
+			? this.#marks[name]
+			: undefined;
 	}
-	function getPrivate (name) {
+
+	/**
+	 * @param {string} name
+	 * @returns {WasaviPositionLike | undefined}
+	 */
+	getPrivate(name) {
 		name = '$' + name;
-		return name in marks ? marks[name] : undefined;
+		return name in this.#marks ? this.#marks[name] : undefined;
 	}
-	function setJumpBaseMark (pos) {
-		set("'", pos || app.buffer.selectionStart);
+
+	/**
+	 * @param {WasaviPosition} [pos]
+	 * @returns {void}
+	 */
+	setJumpBaseMark(pos) {
+		this.set("'", pos || this.#app.buffer.selectionStart);
 	}
-	function setInputOriginMark (pos) {
-		set('^', pos || app.buffer.selectionStart);
+
+	/**
+	 * @param {WasaviPosition} [pos]
+	 * @returns {void}
+	 */
+	setInputOriginMark(pos) {
+		this.set('^', pos || this.#app.buffer.selectionStart);
 	}
-	function getJumpBaseMark () {
-		return get("'");
+
+	/** @returns {WasaviPositionLike | undefined} */
+	getJumpBaseMark() {
+		return this.get("'");
 	}
-	function getInputOriginMark () {
-		return get('^');
+
+	/** @returns {WasaviPositionLike | undefined} */
+	getInputOriginMark() {
+		return this.get('^');
 	}
-	function update (pos, func) {
-		function setMarks () {
-			var usedMarks = {};
+
+	/**
+	 * @param {WasaviPositionLike} pos
+	 * @param {((registerFoldedMark: (fragment: ParentNode) => void) => void) | null | undefined} [func]
+	 * @returns {void}
+	 */
+	update(pos, func) {
+		var buffer = this.#buffer;
+		var marks = this.#marks;
+		/** @type {Set<string>} */
+		var foldedMarks = new Set();
+
+		/** @returns {Set<string>} */
+		const setMarks = () => {
+			/** @type {Set<string>} */
+			var usedMarks = new Set();
 			var r = document.createRange();
 			for (var i in marks) {
 				var m = marks[i];
@@ -2423,17 +2523,17 @@ Wasavi.Marks = function (app, value) {
 					m.row = m.col = 0;
 				}
 				if (m.row > pos.row || m.row == pos.row && m.col >= pos.col) {
-					usedMarks[i] = true;
+					usedMarks.add(i);
 
 					var iter = document.createNodeIterator(
 						buffer.rowNodes(m),
-						window.NodeFilter.SHOW_TEXT, null, false);
+						window.NodeFilter.SHOW_TEXT);
 					var totalLength = 0;
 					var done = false;
 					var node;
 
 					while ((node = iter.nextNode())) {
-						var next = totalLength + node.nodeValue.length;
+						var next = totalLength + (node.nodeValue?.length ?? 0);
 						if (totalLength <= m.col && m.col < next) {
 							r.setStart(node, m.col - totalLength);
 							r.setEnd(node, m.col - totalLength);
@@ -2456,50 +2556,71 @@ Wasavi.Marks = function (app, value) {
 				}
 			}
 			return usedMarks;
-		}
-		function releaseMarks (usedMarks) {
+		};
+
+		/**
+		 * @param {Set<string>} usedMarks
+		 * @returns {void}
+		 */
+		const releaseMarks = usedMarks => {
 			var nodes = buffer.getSpans(Wasavi.MARK_CLASS);
 			for (var i = 0, goal = nodes.length; i < goal; i++) {
 				var span = nodes[i];
-				var index = span.dataset.index;
+				if (!(span instanceof HTMLElement) || span.parentNode == null) continue;
+				var index = span.dataset.index ?? '';
 				marks[index].row = buffer.indexOf(span.parentNode);
 				marks[index].col = calcColumn(span);
 				var pa = span.parentNode;
 				pa.removeChild(span);
 				pa.normalize();
-				delete usedMarks[index];
+				usedMarks.delete(index);
 			}
 
 			var ss = buffer.selectionStart;
-			for (var i in usedMarks) {
-				if (i in foldedMarks) {
-					marks[i] = ss;
+			for (const key of usedMarks) {
+				if (foldedMarks.has(key)) {
+					marks[key] = ss;
 				}
 				else {
-					delete marks[i];
+					delete marks[key];
 				}
 			}
-		}
-		function calcColumn (span) {
+		};
+
+		/**
+		 * @param {HTMLElement} span
+		 * @returns {number}
+		 */
+		const calcColumn = span => {
 			var result = 0;
-			var nodes = span.parentNode.childNodes;
+			var parent = span.parentNode;
+			if (parent == null) return result;
+			var nodes = parent.childNodes;
 			for (var i = 0, goal = nodes.length; i < goal && nodes[i] != span; i++) {
 				var node = nodes[i];
 				if (node.nodeType == 3) {
-					result += node.nodeValue.length;
+					result += node.nodeValue?.length ?? 0;
 				}
 			}
 			return result;
-		}
-		function registerFoldedMark (fragment) {
-			var marks = fragment.querySelectorAll('span.' + Wasavi.MARK_CLASS);
-			for (var i = 0, goal = marks.length; i < goal; i++) {
-				var index = marks[i].dataset.index;
-				foldedMarks[index] = true;
+		};
+
+		/**
+		 * @param {ParentNode} fragment
+		 * @returns {void}
+		 */
+		const registerFoldedMark = fragment => {
+			var foldNodes = fragment.querySelectorAll('span.' + Wasavi.MARK_CLASS);
+			for (var i = 0, goal = foldNodes.length; i < goal; i++) {
+				var node = foldNodes[i];
+				if (!(node instanceof HTMLElement)) continue;
+				var index = node.dataset.index ?? '';
+				foldedMarks.add(index);
 			}
-		}
-		var usedMarks;
-		var foldedMarks = {};
+		};
+
+		/** @type {Set<string>} */
+		var usedMarks = new Set();
 		try {
 			usedMarks = setMarks();
 			func && func(registerFoldedMark);
@@ -2508,47 +2629,44 @@ Wasavi.Marks = function (app, value) {
 			releaseMarks(usedMarks);
 		}
 	}
-	function clear () {
-		marks = {};
+
+	/** @returns {void} */
+	clear() {
+		this.#marks = {};
 	}
-	function dump () {
+
+	/** @returns {readonly string[]} */
+	dump() {
 		var a = [
 		//     mark  line   col  text
 		//     a    00000  0000  aaaaaaaaaa
 			_('*** marks ***'),
 			  'mark  line   col   text',
 			  '====  =====  ====  ===='];
-		for (var i in marks) {
+		for (var i in this.#marks) {
 			if (i.charAt(0) == '$') continue;
 			a.push(
 				' ' + i + '  ' +
-				'  ' + ('    ' + (marks[i].row + 1)).substr(-5) +
-				'  ' + ('   ' + (marks[i].col)).substr(-4) +
-				'  ' + toVisibleString(buffer.rows(marks[i]))
+				'  ' + ('    ' + (this.#marks[i].row + 1)).substr(-5) +
+				'  ' + ('   ' + (this.#marks[i].col)).substr(-4) +
+				'  ' + toVisibleString(this.#buffer.rows(this.#marks[i]))
 			);
 		}
 		return a;
 	}
-	function dumpData () {
+
+	/** @returns {Record<string, { row: number, col: number }>} */
+	dumpData() {
+		/** @type {Record<string, { row: number, col: number }>} */
 		var result = {};
-		for (var i in marks) {
+		for (var i in this.#marks) {
 			result[i] = {
-				row:marks[i].row,
-				col:marks[i].col
+				row:this.#marks[i].row,
+				col:this.#marks[i].col
 			};
 		}
 		return result;
 	}
-	function dispose () {
-		buffer = null;
-	}
-
-	publish(this,
-		set, get, setPrivate, getPrivate,
-		setJumpBaseMark, setInputOriginMark, getJumpBaseMark, getInputOriginMark,
-		update, dump, dumpData, save, load, isValidName, clear, dispose
-	);
-	load(value);
 };
 
 Wasavi.Editor = function (element) {

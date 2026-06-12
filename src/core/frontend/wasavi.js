@@ -1491,7 +1491,7 @@ function uninstall (implicit) {
 	lastSubstituteInfo = undefined;
 	requestedState = undefined;
 	inputHandler = inputHandler.dispose();
-	marks = marks.dispose();
+	marks = undefined;
 	cursor = cursor.dispose();
 	scroller = scroller.dispose();
 	editLogger = editLogger.dispose();

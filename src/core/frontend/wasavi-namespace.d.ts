@@ -536,22 +536,24 @@ interface WasaviRegisters {
 
 /** Mark store (classes.js). */
 interface WasaviMarks {
-  set(name: string, pos: WasaviPositionLike): unknown;
-  get(name: string): WasaviPosition | undefined;
-  setPrivate(name: string, pos: WasaviPositionLike): unknown;
-  getPrivate(name: string): WasaviPosition | undefined;
-  setJumpBaseMark(pos: WasaviPositionLike): unknown;
-  setInputOriginMark(pos: WasaviPositionLike): unknown;
-  getJumpBaseMark(): WasaviPosition | undefined;
-  getInputOriginMark(): WasaviPosition | undefined;
-  update(pos: WasaviPositionLike, func?: unknown): unknown;
-  dump(): unknown;
+  set(name: string, pos: WasaviPositionLike): void;
+  get(name: string): WasaviPositionLike | undefined;
+  setPrivate(name: string, pos?: WasaviPositionLike | null): void;
+  getPrivate(name: string): WasaviPositionLike | undefined;
+  setJumpBaseMark(pos?: WasaviPositionLike): void;
+  setInputOriginMark(pos?: WasaviPositionLike): void;
+  getJumpBaseMark(): WasaviPositionLike | undefined;
+  getInputOriginMark(): WasaviPositionLike | undefined;
+  update(
+    pos: WasaviPositionLike,
+    func?: ((registerFoldedMark: (fragment: ParentNode) => void) => void) | null
+  ): void;
+  dump(): readonly string[];
   dumpData(): Record<string, { row: number; col: number }>;
-  save(): unknown;
-  load(value?: unknown): unknown;
+  save(): string;
+  load(value?: unknown): void;
   isValidName(name: string): boolean;
-  clear(): unknown;
-  dispose(): void;
+  clear(): void;
 }
 
 /** The text editor / buffer (classes.js). Heavily used as `app.buffer`. */
