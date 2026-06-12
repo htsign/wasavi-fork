@@ -4840,12 +4840,12 @@ Wasavi.StrokeRecorder = class {
 	}
 };
 
-Wasavi.Surrounding = function (app) {
-	const charwiseTagPrefix = /^[<Tt]$/;
-	const linewiseTagPrefix = /^(?:[\u0014,]|<A-T>)$/;
-	const singleCharsTable = '!#$%&*+,\\-.:;=?@^_|~"\'`';
+Wasavi.Surrounding = class Surrounding {
+	static #charwiseTagPrefix = /^[<Tt]$/;
+	static #linewiseTagPrefix = /^(?:[\u0014,]|<A-T>)$/;
+	static #singleCharsTable = /** @type {const} */ ('!#$%&*+,\\-.:;=?@^_|~"\'`');
 
-	const basicTable = {
+	static #basicTable = /** @type {const} */ ({
 		'a':'<>',
 		'b':'()',
 		'B':'{  }',
@@ -4857,49 +4857,66 @@ Wasavi.Surrounding = function (app) {
 		'}':'{}',
 		'(':'(  )',
 		')':'()'
-	};
+	});
 
-	const insertionTable = {
+	static #insertionTable = /** @type {const} */ ({
 		'p':['\n', '\n\n'],
 		's':[' ', ''],
 		':':[':', '']
-	};
+	});
+
+	/** @type {WasaviApp} */
+	#app;
+
+	/** @param {WasaviApp} app */
+	constructor(app) {
+		this.#app = app;
+	}
 
 	/*
 	 * private methods
 	 */
 
-	function getPair (item) {
+	/**
+	 * @param {unknown} item
+	 * @returns {[string, string]}
+	 */
+	#getPair(item) {
 		var head = '', tail = '';
 		if (isString(item)) {
 			head = item.substr(0, Math.floor(item.length / 2));
 			tail = item.substr(Math.floor(item.length / 2));
 		}
 		else if (isArray(item)) {
-			head = item[0];
-			tail = item[1];
+			head = String(item[0] ?? '');
+			tail = String(item[1] ?? '');
 		}
 		else if (isObject(item)) {
-			head = item.head;
-			tail = item.tail;
+			head = String(item.head ?? '');
+			tail = String(item.tail ?? '');
 		}
 		return [head, tail];
 	}
 
-	function getPairFromId (id) {
-		var head = '', tail = '';
-		if (id in basicTable) {
-			var pair = getPair(basicTable[id]);
-			head = pair[0];
-			tail = pair[1];
+	/**
+	 * @param {string} id
+	 * @returns {[string, string]}
+	 */
+	#getPairFromId(id) {
+		if (isKeyOf(Surrounding.#basicTable, id)) {
+			return this.#getPair(Surrounding.#basicTable[id]);
 		}
-		else if (singleCharsTable.indexOf(id) >= 0) {
-			head = tail = id;
+		if (Surrounding.#singleCharsTable.indexOf(id) >= 0) {
+			return [id, id];
 		}
-		return [head, tail];
+		return ['', ''];
 	}
 
-	function getPairFromString (s) {
+	/**
+	 * @param {string} s
+	 * @returns {[string, string]}
+	 */
+	#getPairFromString(s) {
 		var head = '', tail = '', extra = '';
 		var re;
 		if (/^ .+/.test(s)) {
@@ -4910,15 +4927,11 @@ Wasavi.Surrounding = function (app) {
 			head = re[0];
 			tail = '</' + re[1] + '>';
 		}
-		else if (s in insertionTable) {
-			var pair = getPair(insertionTable[s]);
-			head = pair[0];
-			tail = pair[1];
+		else if (isKeyOf(Surrounding.#insertionTable, s)) {
+			[head, tail] = this.#getPair(Surrounding.#insertionTable[s]);
 		}
 		else {
-			var pair = getPairFromId(s);
-			head = pair[0];
-			tail = pair[1];
+			[head, tail] = this.#getPairFromId(s);
 		}
 
 		if (extra != '' && (head != '' || tail != '')) {
@@ -4929,8 +4942,12 @@ Wasavi.Surrounding = function (app) {
 		return [head, tail];
 	}
 
-	function getPositions (id) {
-		var pair = getPairFromId(id);
+	/**
+	 * @param {string} id
+	 * @returns {WasaviSurroundingPositions | false}
+	 */
+	#getPositions(id) {
+		var pair = this.#getPairFromId(id);
 
 		if (pair[0] == '' && pair[1] == '') {
 			return false;
@@ -4943,7 +4960,7 @@ Wasavi.Surrounding = function (app) {
 			id = '<';
 		}
 
-		var buffer = app.buffer;
+		var buffer = this.#app.buffer;
 		var outerStart, outerEnd;
 		var innerStart, innerEnd;
 
@@ -4959,7 +4976,7 @@ Wasavi.Surrounding = function (app) {
 			// +----------------------------- outerStart
 
 			// inner positions
-			if (!app.searchUtils.dispatchRangeSymbol(1, id)) {
+			if (!this.#app.searchUtils.dispatchRangeSymbol(1, id)) {
 				buffer.setSelectionRange(ss);
 				return false;
 			}
@@ -4967,7 +4984,7 @@ Wasavi.Surrounding = function (app) {
 			innerEnd = buffer.selectionEnd;
 
 			// outer positions
-			if (!app.searchUtils.dispatchRangeSymbol(1, id, true)) {
+			if (!this.#app.searchUtils.dispatchRangeSymbol(1, id, true)) {
 				buffer.setSelectionRange(ss);
 				return false;
 			}
@@ -4995,7 +5012,7 @@ Wasavi.Surrounding = function (app) {
 		// simple one char
 		else {
 			var ss = buffer.selectionStart;
-			var range = app.searchUtils.findQuoteRange(buffer.rows(ss), ss.col, id);
+			var range = this.#app.searchUtils.findQuoteRange(buffer.rows(ss), ss.col, id);
 			if (!range) {
 				return false;
 			}
@@ -5014,53 +5031,55 @@ Wasavi.Surrounding = function (app) {
 		};
 	}
 
-	function doInsertAsCharwise (pair) {
+	/** @param {[string, string]} pair */
+	#doInsertAsCharwise(pair) {
 		const mark = 'surround-right';
-		var buffer = app.buffer;
+		var buffer = this.#app.buffer;
 		var ss = buffer.selectionStart;
 		var se = buffer.selectionEnd;
 
 		buffer.isLineOrientSelection = false;
 
 		// mark the position of right item
-		app.marks.setPrivate(mark, se.clone());
+		this.#app.marks.setPrivate(mark, se.clone());
 
 		// insert left item
 		buffer.setSelectionRange(ss);
-		app.edit.insert(pair[0]);
+		this.#app.edit.insert(pair[0]);
 
 		// insert right item
-		buffer.setSelectionRange(app.marks.getPrivate(mark));
-		app.edit.insert(pair[1]);
+		buffer.setSelectionRange(this.#app.marks.getPrivate(mark));
+		this.#app.edit.insert(pair[1]);
 
 		// locate a cursor on the left item
 		buffer.setSelectionRange(ss);
-		app.marks.setPrivate(mark);
+		this.#app.marks.setPrivate(mark);
 	}
 
-	function doInsertAsLinewise (pair) {
+	/** @param {[string, string]} pair */
+	#doInsertAsLinewise(pair) {
 		const mark = 'surround-left';
-		var buffer = app.buffer;
+		var buffer = this.#app.buffer;
 		var ss = buffer.selectionStart;
 		var se = buffer.selectionEnd;
-		var indent = app.config.vars.autoindent ?
+		var indent = this.#app.config.vars.autoindent ?
 			buffer.getIndent(buffer.selectionStart) : '';
 
 		buffer.isLineOrientSelection = false;
 
 		// mark the position of left item
-		app.marks.setPrivate(mark, ss.clone());
+		this.#app.marks.setPrivate(mark, ss.clone());
 
 		// insert right item
 		buffer.setSelectionRange(se);
-		app.edit.insert('\n' + indent + pair[1].replace(spc('^S+'), ''));
+		this.#app.edit.insert('\n' + indent + pair[1].replace(spc('^S+'), ''));
 
 		// insert left item
 		var content = buffer.rows(ss);
 		buffer.setSelectionRange(
 			new Wasavi.Position(ss.row, 0),
-			new Wasavi.Position(ss.row, /^[ \t]*/.exec(content)[0].length));
-		app.edit.insert(indent + pair[0].replace(spc('S+$'), '') + '\n');
+			new Wasavi.Position(ss.row, (/^[ \t]*/.exec(content)?.[0] ?? '').length));
+		this.#app.edit.insert(indent + pair[0].replace(spc('S+$'), '') + '\n');
 
 		// shift right the inner contents
 		var indentExpanded = indent;
@@ -5069,43 +5088,55 @@ Wasavi.Surrounding = function (app) {
 		if (re) {
 			indentExpanded = indentExpanded.replace(
 				regex,
-				multiply(' ', re[0].length * app.config.vars.tabstop));
+				multiply(' ', re[0].length * this.#app.config.vars.tabstop));
 		}
-		var shiftCount = Math.floor(indentExpanded.length / app.config.vars.shiftwidth);
-		buffer.setSelectionRange(app.marks.getPrivate(mark));
-		app.edit.shift(se.row - ss.row + 1, shiftCount + 1);
+		var shiftCount = Math.floor(indentExpanded.length / this.#app.config.vars.shiftwidth);
+		buffer.setSelectionRange(this.#app.marks.getPrivate(mark));
+		this.#app.edit.shift(se.row - ss.row + 1, shiftCount + 1);
 
 		// locate a cursor on the left item
 		buffer.setSelectionRange(ss);
-		app.marks.setPrivate(mark);
+		this.#app.marks.setPrivate(mark);
 	}
 
-	function doRemoveSingleLine (outerStart, innerStart, innerEnd, outerEnd) {
-		var buffer = app.buffer;
+	/**
+	 * @param {WasaviPosition} outerStart
+	 * @param {WasaviPosition} innerStart
+	 * @param {WasaviPosition} innerEnd
+	 * @param {WasaviPosition} outerEnd
+	 */
+	#doRemoveSingleLine(outerStart, innerStart, innerEnd, outerEnd) {
+		var buffer = this.#app.buffer;
 
 		buffer.isLineOrientSelection = false;
 
 		// delete left item
 		buffer.setSelectionRange(outerStart, innerStart);
-		app.edit.deleteSelection();
+		this.#app.edit.deleteSelection();
 
 		// delete right item
 		innerEnd.col -= innerStart.col - outerStart.col;
 		outerEnd.col -= innerStart.col - outerStart.col;
 		buffer.setSelectionRange(innerEnd, outerEnd);
-		app.edit.deleteSelection();
+		this.#app.edit.deleteSelection();
 
 		// locate a cursor on the left item
 		buffer.setSelectionRange(outerStart);
 	}
 
-	function doRemoveMultiLine (outerStart, innerStart, innerEnd, outerEnd) {
-		var buffer = app.buffer;
+	/**
+	 * @param {WasaviPosition} outerStart
+	 * @param {WasaviPosition} innerStart
+	 * @param {WasaviPosition} innerEnd
+	 * @param {WasaviPosition} outerEnd
+	 */
+	#doRemoveMultiLine(outerStart, innerStart, innerEnd, outerEnd) {
+		var buffer = this.#app.buffer;
 
 		buffer.isLineOrientSelection = false;
 
 		var line = buffer.rows(outerStart);
-		var indent = spc('^S*').exec(line)[0];
+		var indent = spc('^S*').exec(line)?.[0] ?? '';
 		var mid = outerStart.clone();
 
 		// left item
@@ -5116,7 +5147,7 @@ Wasavi.Surrounding = function (app) {
 			buffer.setSelectionRange(
 				new Wasavi.Position(outerStart.row, 0),
 				new Wasavi.Position(outerStart.row, line.length + 1));
-			app.edit.deleteSelection();
+			this.#app.edit.deleteSelection();
 			buffer.isLineOrientSelection = false;
 
 			innerEnd.row--;
@@ -5131,7 +5162,7 @@ Wasavi.Surrounding = function (app) {
 				innerStart.col++;
 			}
 			buffer.setSelectionRange(outerStart, innerStart);
-			app.edit.deleteSelection();
+			this.#app.edit.deleteSelection();
 
 			mid.row++;
 		}
@@ -5142,22 +5173,22 @@ Wasavi.Surrounding = function (app) {
 
 			buffer.setSelectionRange(
 				new Wasavi.Position(mid.row, 0),
-				new Wasavi.Position(mid.row, re[0].length));
-			app.edit.insert(indent);
+				new Wasavi.Position(mid.row, (re?.[0] ?? '').length));
+			this.#app.edit.insert(indent);
 
 			mid.row++;
 		}
 
 		// right item
-		var line = buffer.rows(outerEnd);
-		if (spc('^S*$').test(line.substring(0, innerEnd.col))
-		&&  spc('^S*$').test(line.substring(outerEnd.col))) {
+		var lineEnd = buffer.rows(outerEnd);
+		if (spc('^S*$').test(lineEnd.substring(0, innerEnd.col))
+		&&  spc('^S*$').test(lineEnd.substring(outerEnd.col))) {
 			// orphan, delete a whole line
 			buffer.isLineOrientSelection = true;
 			buffer.setSelectionRange(
 				new Wasavi.Position(outerEnd.row, 0),
-				new Wasavi.Position(outerEnd.row, line.length + 1));
-			app.edit.deleteSelection();
+				new Wasavi.Position(outerEnd.row, lineEnd.length + 1));
+			this.#app.edit.deleteSelection();
 			buffer.isLineOrientSelection = false;
 		}
 		else {
@@ -5165,27 +5196,34 @@ Wasavi.Surrounding = function (app) {
 			// zzz....}....
 			//    ^^^^^
 
-			while (innerEnd.col > 0 && spc('^S$').test(line.charAt(innerEnd.col - 1))) {
+			while (innerEnd.col > 0 && spc('^S$').test(lineEnd.charAt(innerEnd.col - 1))) {
 				innerEnd.col--;
 			}
 			buffer.setSelectionRange(innerEnd, outerEnd);
-			app.edit.deleteSelection();
+			this.#app.edit.deleteSelection();
 		}
 
 		// locate a cursor on the left item
 		buffer.setSelectionRange(outerStart);
 	}
 
-	function doReplace (pair, outerStart, innerStart, innerEnd, outerEnd) {
-		var buffer = app.buffer;
+	/**
+	 * @param {[string, string]} pair
+	 * @param {WasaviPosition} outerStart
+	 * @param {WasaviPosition} innerStart
+	 * @param {WasaviPosition} innerEnd
+	 * @param {WasaviPosition} outerEnd
+	 */
+	#doReplace(pair, outerStart, innerStart, innerEnd, outerEnd) {
+		var buffer = this.#app.buffer;
 		var ss, se;
 		const mark = 'surround-right';
 
 		buffer.isLineOrientSelection = false;
 
 		// mark the position of right item
-		app.marks.setPrivate(mark + '-1', innerEnd.clone());
-		app.marks.setPrivate(mark + '-2', outerEnd.clone());
+		this.#app.marks.setPrivate(mark + '-1', innerEnd.clone());
+		this.#app.marks.setPrivate(mark + '-2', outerEnd.clone());
 
 		// replace left item
 		ss = outerStart;
@@ -5194,98 +5232,110 @@ Wasavi.Surrounding = function (app) {
 		if (spc('^S*$').test(buffer.rows(se).substring(se.col))) {
 			pair[0] = pair[0].replace(spc('S*$'), '');
 		}
-		app.edit.insert(pair[0]);
+		this.#app.edit.insert(pair[0]);
 
 		// replace right item
-		ss = app.marks.getPrivate(mark + '-1');
-		se = app.marks.getPrivate(mark + '-2');
+		ss = this.#app.marks.getPrivate(mark + '-1');
+		se = this.#app.marks.getPrivate(mark + '-2');
 		buffer.setSelectionRange(ss, se);
-		if (spc('^S*$').test(buffer.rows(ss).substring(0, ss.col))) {
+		if (ss != null && spc('^S*$').test(buffer.rows(ss).substring(0, ss.col))) {
 			pair[1] = pair[1].replace(spc('^S*'), '');
 		}
-		app.edit.insert(pair[1]);
+		this.#app.edit.insert(pair[1]);
 
 		// locate a cursor on the left item
 		buffer.setSelectionRange(outerStart);
-		app.marks.setPrivate(mark + '-1');
-		app.marks.setPrivate(mark + '-2');
+		this.#app.marks.setPrivate(mark + '-1');
+		this.#app.marks.setPrivate(mark + '-2');
 	}
 
 	/*
 	 * public methods
 	 */
 
-	function insert (s, isLineOrient) {
-		var pair = getPairFromString(s);
+	/**
+	 * @param {string} s
+	 * @param {boolean} [isLineOrient]
+	 * @returns {boolean}
+	 */
+	insert(s, isLineOrient) {
+		var pair = this.#getPairFromString(s);
 		if (pair[0] == '' && pair[1] == '') {
 			return false;
 		}
 
-		app.editLogger.open('surround', function () {
-			(isLineOrient ? doInsertAsLinewise : doInsertAsCharwise)(
-				pair
+		this.#app.editLogger.open('surround', () => {
+			(isLineOrient ? this.#doInsertAsLinewise : this.#doInsertAsCharwise).call(this, pair);
+		});
+
+		return true;
+	}
+
+	/**
+	 * @param {string} id
+	 * @returns {boolean}
+	 */
+	remove(id) {
+		const p = this.#getPositions(id);
+		if (!p) {
+			return false;
+		}
+
+		this.#app.editLogger.open('desurround', () => {
+			(p.outerStart.row == p.outerEnd.row ? this.#doRemoveSingleLine : this.#doRemoveMultiLine).call(
+				this, p.outerStart, p.innerStart, p.innerEnd, p.outerEnd
 			);
 		});
 
 		return true;
 	}
 
-	function remove (id) {
-		var p = getPositions(id);
+	/**
+	 * @param {string} id
+	 * @param {string} s
+	 * @returns {boolean}
+	 */
+	replace(id, s) {
+		const p = this.#getPositions(id);
 		if (!p) {
 			return false;
 		}
 
-		app.editLogger.open('desurround', function () {
-			(p.outerStart.row == p.outerEnd.row ? doRemoveSingleLine : doRemoveMultiLine)(
-				p.outerStart, p.innerStart, p.innerEnd, p.outerEnd
-			);
-		});
-
-		return true;
-	}
-
-	function replace (id, s) {
-		var p = getPositions(id);
-		if (!p) {
-			return false;
-		}
-
-		var pair = getPairFromString(s);
+		var pair = this.#getPairFromString(s);
 		if (pair[0] == '' && pair[1] == '') {
 			return false;
 		}
 
-		app.editLogger.open('resurround', function () {
-			doReplace(
-				pair, p.outerStart, p.innerStart, p.innerEnd, p.outerEnd
-			);
+		this.#app.editLogger.open('resurround', () => {
+			this.#doReplace(pair, p.outerStart, p.innerStart, p.innerEnd, p.outerEnd);
 		});
 
 		return true;
 	}
 
-	function isCharwiseTagPrefix (line) {
-		return charwiseTagPrefix.test(line);
+	/**
+	 * @param {string} line
+	 * @returns {boolean}
+	 */
+	isCharwiseTagPrefix(line) {
+		return Surrounding.#charwiseTagPrefix.test(line);
 	}
 
-	function isLinewiseTagPrefix (line) {
-		return linewiseTagPrefix.test(line);
+	/**
+	 * @param {string} line
+	 * @returns {boolean}
+	 */
+	isLinewiseTagPrefix(line) {
+		return Surrounding.#linewiseTagPrefix.test(line);
 	}
 
-	function isTagPrefix (line) {
-		return isCharwiseTagPrefix(line) || isLinewiseTagPrefix(line);
+	/**
+	 * @param {string} line
+	 * @returns {boolean}
+	 */
+	isTagPrefix(line) {
+		return this.isCharwiseTagPrefix(line) || this.isLinewiseTagPrefix(line);
 	}
-
-	function dispose () {
-		app = null;
-	}
-
-	publish(this,
-		insert, remove, replace,
-		isCharwiseTagPrefix, isLinewiseTagPrefix, isTagPrefix,
-		dispose
-	);
 };
 
 Wasavi.IncDec = class IncDec {

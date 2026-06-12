@@ -715,14 +715,21 @@ interface WasaviStrokeRecorder {
 }
 
 /** vim-surround style operations (classes.js). */
+/** Inner/outer boundary positions of a surrounding pair resolved by {@link WasaviSurrounding}. */
+type WasaviSurroundingPositions = {
+  outerStart: WasaviPosition;
+  innerStart: WasaviPosition;
+  innerEnd: WasaviPosition;
+  outerEnd: WasaviPosition;
+};
+
 interface WasaviSurrounding {
-  insert(s: string, isLineOrient?: boolean): unknown;
-  remove(id: string): unknown;
-  replace(id: string, s: string): unknown;
+  insert(s: string, isLineOrient?: boolean): boolean;
+  remove(id: string): boolean;
+  replace(id: string, s: string): boolean;
   isCharwiseTagPrefix(line: string): boolean;
   isLinewiseTagPrefix(line: string): boolean;
   isTagPrefix(line: string): boolean;
-  dispose(): void;
 }
 
 /** Number format recognized by {@link WasaviIncDec}. */

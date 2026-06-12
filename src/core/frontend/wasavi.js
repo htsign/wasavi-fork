@@ -1497,7 +1497,7 @@ function uninstall (implicit) {
 	editLogger = editLogger.dispose();
 	l10n = undefined;
 	recordedStrokes = undefined;
-	surrounding = surrounding.dispose();
+	surrounding = undefined;
 	executingMacroInfo = undefined;
 
 	keyManager.dispose();
