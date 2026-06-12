@@ -1064,6 +1064,8 @@ interface WasaviScroller {
 interface WasaviBacklogLine {
   text: string;
   emphasis?: boolean;
+  pseudoCursor?: boolean;
+  preserveLastMessage?: boolean;
 }
 
 /** Console / backlog pager (classes_ui.js). */

@@ -1476,24 +1476,18 @@ function uninstall (implicit) {
 
 	// clear all objects
 	inputModeStack = undefined;
-	prefixInput = undefined;
 	pairBracketsIndicator && pairBracketsIndicator.dispose();
 	pairBracketsIndicator = undefined;
-	backlog = backlog.dispose();
-	searchUtils = searchUtils.dispose();
-	notifier = notifier.dispose();
+	backlog.dispose();
+	searchUtils.dispose();
+	notifier.dispose();
 	lastHorzFindCommand = undefined;
 	lastRegexFindCommand = undefined;
 	lastSubstituteInfo = undefined;
 	requestedState = undefined;
-	inputHandler = undefined;
-	marks = undefined;
-	cursor = cursor.dispose();
-	scroller = scroller.dispose();
-	editLogger = editLogger.dispose();
-	l10n = undefined;
-	recordedStrokes = undefined;
-	surrounding = undefined;
+	cursor.dispose();
+	scroller.dispose();
+	editLogger.dispose();
 	executingMacroInfo = undefined;
 
 	keyManager.dispose();
@@ -2253,7 +2247,7 @@ function processInputCompletion (result) {
 			}
 			else {
 				if (backlog.buffer.length == 1) {
-					var line = backlog.buffer[0];
+					let line = backlog.buffer[0];
 					showMessageCore(
 						line.text, line.emphasis,
 						line.pseudoCursor, line.preserveLastMessage);
@@ -2272,7 +2266,7 @@ function processInputCompletion (result) {
 		requestedState.console = requestedState.message = null;
 	}
 
-	if (!keyManager.isLocked && (result.needEmitEvent !== false || prefixInput == '')) {
+	if (!keyManager.isLocked && (result.needEmitEvent !== false || prefixInput.toString() == '')) {
 		requestedState.updateCursor = true;
 		notifyCommandComplete(
 			isString(result.needEmitEvent) ? result.needEmitEvent : null);
@@ -6983,8 +6977,8 @@ const commandMap = {
 				break;
 
 			case 'g':// motion
-				var index = prefixInput.count;
-				var n = new Position(index - 1, 0);
+				var countIndex = prefixInput.count;
+				var n = new Position(countIndex - 1, 0);
 
 				marks.setJumpBaseMark();
 				isVerticalMotion = true;
@@ -8815,6 +8809,7 @@ var devMode;
 var logMode;
 var fstab;
 var resizeHandlerInvokeTimer;
+/** @type {WasaviL10n} */
 var l10n;
 var ffttDictionary;
 var lineBreaker;
@@ -8825,14 +8820,22 @@ var fileSystemIndex;
 var preferredNewline;
 var terminated;
 var state;
+/** @type {WasaviRegisters} */
 var registers;
+/** @type {WasaviLineInputHistories} */
 var lineInputHistories;
 var lineInputInfo;
+/** @type {WasaviMarks} */
 var marks;
+/** @type {WasaviCursorUI} */
 var cursor;
+/** @type {WasaviScroller} */
 var scroller;
+/** @type {WasaviEditLogger} */
 var editLogger;
+/** @type {WasaviPrefixInput} */
 var prefixInput;
+/** @type {WasaviInputHandler} */
 var inputHandler;
 var inputModeStack;
 var inputMode;
@@ -8841,16 +8844,21 @@ var lineHeight;
 var charWidth;
 var idealWidthPixels;
 var idealDenotativeWidthPixels;
+/** @type {WasaviBacklog} */
 var backlog;
 var pairBracketsIndicator;
 var exvm;
+/** @type {WasaviSearchUtils} */
 var searchUtils;
+/** @type {WasaviStrokeRecorder} */
 var recordedStrokes;
 var literalInput;
+/** @type {WasaviNotifier} */
 var notifier;
 var compositionLevel;
 var containerRect;
 var statusLineHeight;
+/** @type {WasaviSurrounding} */
 var surrounding;
 var executingMacroInfo;
 var commandCompleteTimer;
