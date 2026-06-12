@@ -1941,192 +1941,281 @@ Wasavi.MapManager = class MapManager {
 	get isWaiting() {return this.#currentSequence != undefined}
 };
 
-Wasavi.Registers = function (app, value) {
-	/*
-	 * available registers:
-	 *
-	 * - unnamed register
-	 *  "       equiv to the last used register's content [vim compatible]
-	 *
-	 * - named register
-	 *  1 - 9   implicit register, and its histories. 1 is latest.
-	 *  a - z   general named register
-	 *  A - Z   write: general named register for append
-	 *          read: special purpose content,
-	 *  @       last executed command via :@ in ex mode or @ in vi mode
-	 *  .       last edited text (read only) [vim compatible]
-	 *  :       last executed ex command (read only) [vim compatible]
-	 *  *       system clipboard, if available [vim compatible]
-	 *  +       system clipboard, if available [vim compatible]
-	 *  /       last searched text (read only) [vim compatible]
-	 *  ^       last input position (read only) [vim compatible]
-	 *  =       last computed result of simple math-expression (readonly) [vim compatible]
-	 *  ;       wasavi uses internally
+class RegisterItem {
+	/** @type {boolean} */
+	isLineOrient = false;
+	/** @type {boolean} */
+	locked = false;
+	/** @type {string} */
+	data = '';
+
+	/**
+	 * @param {unknown} data
+	 * @param {boolean} [isLineOrient]
+	 * @returns {void}
 	 */
-
-	function RegisterItem () {
-		this.isLineOrient = false;
-		this.locked = false;
-		this.data = '';
-	}
-	RegisterItem.prototype = {
-		set: function (data, isLineOrient) {
-			if (isLineOrient != undefined) {
-				this.isLineOrient = isLineOrient;
-			}
-			this.setData(data);
-		},
-		setData: function (data) {
-			if (this.locked) return;
-			data = (data || '').toString();
-			if (this.isLineOrient) {
-				this.data = data.replace(/\n$/, '') + '\n';
-			}
-			else {
-				this.data = data;
-			}
-		},
-		appendData: function (data) {
-			if (this.locked) return;
-			data = (data || '').toString();
-			if (this.isLineOrient) {
-				this.data += data.replace(/\n$/, '') + '\n';
-			}
-			else {
-				this.data += data;
-			}
+	set(data, isLineOrient) {
+		if (isLineOrient != undefined) {
+			this.isLineOrient = isLineOrient;
 		}
-	};
-
-	const storageKey = 'wasavi_registers';
-	const writableRegex = /^[1-9a-zA-Z@]$/;
-	const readableRegex = /^["1-9a-zA-Z@.:*+\/\^=;]$/;
-	var unnamed;
-	var named;
-	var isLatest = false;
-
-	function serialize () {
-		return {unnamed:unnamed, named:named};
+		this.setData(data);
 	}
-	function restore (src) {
+
+	/**
+	 * @param {unknown} data
+	 * @returns {void}
+	 */
+	setData(data) {
+		if (this.locked) return;
+		var s = (data || '').toString();
+		if (this.isLineOrient) {
+			this.data = s.replace(/\n$/, '') + '\n';
+		}
+		else {
+			this.data = s;
+		}
+	}
+
+	/**
+	 * @param {unknown} data
+	 * @returns {void}
+	 */
+	appendData(data) {
+		if (this.locked) return;
+		var s = (data || '').toString();
+		if (this.isLineOrient) {
+			this.data += s.replace(/\n$/, '') + '\n';
+		}
+		else {
+			this.data += s;
+		}
+	}
+}
+
+/*
+ * available registers:
+ *
+ * - unnamed register
+ *  "       equiv to the last used register's content [vim compatible]
+ *
+ * - named register
+ *  1 - 9   implicit register, and its histories. 1 is latest.
+ *  a - z   general named register
+ *  A - Z   write: general named register for append
+ *          read: special purpose content,
+ *  @       last executed command via :@ in ex mode or @ in vi mode
+ *  .       last edited text (read only) [vim compatible]
+ *  :       last executed ex command (read only) [vim compatible]
+ *  *       system clipboard, if available [vim compatible]
+ *  +       system clipboard, if available [vim compatible]
+ *  /       last searched text (read only) [vim compatible]
+ *  ^       last input position (read only) [vim compatible]
+ *  =       last computed result of simple math-expression (readonly) [vim compatible]
+ *  ;       wasavi uses internally
+ */
+Wasavi.Registers = class Registers {
+	static #STORAGE_KEY = /** @type {const} */ ('wasavi_registers');
+	static #WRITABLE_REGEX = /^[1-9a-zA-Z@]$/;
+	static #READABLE_REGEX = /^["1-9a-zA-Z@.:*+\/\^=;]$/;
+
+	/** @type {WasaviApp} */
+	#app;
+	/** @type {RegisterItem} */
+	#unnamed = new RegisterItem();
+	/** @type {Record<string, RegisterItem | undefined>} */
+	#named = {};
+	#isLatest = false;
+
+	/**
+	 * @param {WasaviApp} app
+	 * @param {unknown} [value]
+	 */
+	constructor(app, value) {
+		this.#app = app;
+		this.load(value);
+	}
+
+	#serialize() {
+		return {unnamed:this.#unnamed, named:this.#named};
+	}
+
+	/**
+	 * @param {unknown} src
+	 * @returns {void}
+	 */
+	#restore(src) {
 		if (!isObject(src)) return;
 		if (!isObject(src.unnamed)) return;
 		if (!isObject(src.named)) return;
+		var named = src.named;
 
-		function doRestore (k, v) {
-			if (!isReadable(k)) return;
+		/**
+		 * @param {string} k
+		 * @param {unknown} v
+		 * @returns {void}
+		 */
+		const doRestore = (k, v) => {
+			if (!this.isReadable(k)) return;
 			if (!isObject(v)) return;
 			if (!isBoolean(v.isLineOrient)) return;
 			if (!isString(v.data)) return;
 
-			findItem(k).set(v.data, v.isLineOrient);
-		}
+			this.#findItem(k).set(v.data, v.isLineOrient);
+		};
 
 		doRestore('"', src.unnamed);
-		for (var i in src.named) {
-			doRestore(i, src.named[i]);
+		for (var i in named) {
+			doRestore(i, named[i]);
 		}
 	}
-	function save () {
-		app.low.setLocalStorage(storageKey, serialize());
-		isLatest = true;
+
+	/** @returns {void} */
+	save() {
+		this.#app.low.setLocalStorage(Registers.#STORAGE_KEY, this.#serialize());
+		this.#isLatest = true;
 	}
-	function load (value) {
-		if (isLatest) {
-			isLatest = false;
+
+	/**
+	 * @param {unknown} [value]
+	 * @returns {void}
+	 */
+	load(value) {
+		if (this.#isLatest) {
+			this.#isLatest = false;
 			return;
 		}
 
-		unnamed = new RegisterItem();
-		named = {};
-		restore(value || '');
+		this.#unnamed = new RegisterItem();
+		this.#named = {};
+		this.#restore(value || '');
 	}
-	function isWritable (name) {
-		return writableRegex.test(name.charAt(0));
+
+	/**
+	 * @param {string} name
+	 * @returns {boolean}
+	 */
+	isWritable(name) {
+		return Registers.#WRITABLE_REGEX.test(name.charAt(0));
 	}
-	function isReadable (name) {
-		return readableRegex.test(name.charAt(0));
+
+	/**
+	 * @param {string} name
+	 * @returns {boolean}
+	 */
+	isReadable(name) {
+		return Registers.#READABLE_REGEX.test(name.charAt(0));
 	}
-	function isClipboard (name) {
+
+	/**
+	 * @param {string} name
+	 * @returns {boolean}
+	 */
+	isClipboard(name) {
 		return '*+'.indexOf(name) >= 0;
 	}
-	function resolveAlias (name) {
+
+	/**
+	 * @param {string} name
+	 * @returns {string}
+	 */
+	#resolveAlias(name) {
 		if (name == '+') {
 			name = '*';
 		}
 		return name;
 	}
-	function exists (name) {
-		name = resolveAlias(name.charAt(0));
-		if (!isReadable(name)) {
+
+	/**
+	 * @param {string} name
+	 * @returns {boolean}
+	 */
+	exists(name) {
+		name = this.#resolveAlias(name.charAt(0));
+		if (!this.isReadable(name)) {
 			return false;
 		}
 		if (/^[A-Z"]$/.test(name)) {
 			return true;
 		}
-		return !!named[name];
+		return !!this.#named[name];
 	}
-	function findItem (name) {
-		name = resolveAlias(name.charAt(0));
+
+	/**
+	 * @param {string} name
+	 * @returns {RegisterItem}
+	 */
+	#findItem(name) {
+		name = this.#resolveAlias(name.charAt(0));
 		if (name == '"') {
-			return unnamed;
+			return this.#unnamed;
 		}
-		if (!named[name]) {
-			named[name] = new RegisterItem();
-		}
-		return named[name];
+		return this.#named[name] ??= new RegisterItem();
 	}
-	function set (name, data, isLineOrient, isInteractive) {
+
+	/**
+	 * @param {string} name
+	 * @param {unknown} data
+	 * @param {boolean} [isLineOrient]
+	 * @param {boolean} [isInteractive]
+	 * @returns {void}
+	 */
+	set(name, data, isLineOrient, isInteractive) {
 		if (data == '') return;
 
-		name = resolveAlias(name);
+		name = this.#resolveAlias(name);
 
 		// unnamed register
 		if (typeof name != 'string' || name == '') {
 			// case of several deletion operation or data of two or more lines,
 			// update "1 too.
-			if (app.state == 'normal') {
-				if (app.prefixInput.operation == 'd' && '%`/?()Nn{}'.indexOf(app.prefixInput.motion) >= 0
-				||  (data.match(/\n/g) || []).length >= 2) {
-					set('1', data, isLineOrient);
+			if (this.#app.state == 'normal') {
+				if (this.#app.prefixInput.operation == 'd' && '%`/?()Nn{}'.indexOf(this.#app.prefixInput.motion) >= 0
+				||  (String(data ?? '').match(/\n/g) || []).length >= 2) {
+					this.set('1', data, isLineOrient);
 				}
 			}
-			unnamed.set(data, isLineOrient);
+			this.#unnamed.set(data, isLineOrient);
 		}
 		// named register
 		else {
 			if (name == '1') {
 				for (var i = 9; i > 1; i--) {
-					named[i] = named[i - 1];
+					this.#named[i] = this.#named[i - 1];
 				}
-				named['1'] = undefined;
-				findItem(name).set(data, isLineOrient);
-				unnamed.set(data, isLineOrient);
+				this.#named['1'] = undefined;
+				this.#findItem(name).set(data, isLineOrient);
+				this.#unnamed.set(data, isLineOrient);
 			}
 			else if (/^[2-9a-z*]$/.test(name)) {
-				var item = findItem(name);
+				var item = this.#findItem(name);
 				item.set(data, isLineOrient);
-				unnamed.set(data, isLineOrient);
-				name == '*' && app.extensionChannel.setClipboard(item.data);
+				this.#unnamed.set(data, isLineOrient);
+				name == '*' && this.#app.extensionChannel.setClipboard(item.data);
 			}
 			else if (/^[@.:\/\^]$/.test(name) && !isInteractive) {
-				var item = findItem(name);
+				var item = this.#findItem(name);
 				item.set(data, isLineOrient);
 			}
 			else if (/^[A-Z]$/.test(name)) {
 				name = name.toLowerCase();
-				findItem(name).appendData(data);
-				unnamed.set(named[name].data, named[name].isLineOrient);
+				this.#findItem(name).appendData(data);
+				var lower = this.#named[name];
+				lower && this.#unnamed.set(lower.data, lower.isLineOrient);
 			}
 		}
-		save();
+		this.save();
 	}
-	function get (name) {
+
+	/**
+	 * @param {string} name
+	 * @returns {RegisterItem}
+	 */
+	get(name) {
 		if (typeof name != 'string' || name == '') {
-			return unnamed;
+			return this.#unnamed;
 		}
-		name = resolveAlias(name.charAt(0));
-		if (isReadable(name)) {
+		name = this.#resolveAlias(name.charAt(0));
+		if (this.isReadable(name)) {
 			var item;
 
 			if (/^[A-Z]$/.test(name)) {
@@ -2137,32 +2226,38 @@ Wasavi.Registers = function (app, value) {
 					item.set(window.navigator.userAgent);
 					break;
 				case 'C':
-					app.devMode && item.set(app.config.dumpData());
+					this.#app.devMode && item.set(this.#app.config.dumpData());
 					break;
 				case 'D':
-					item.set(strftime(app.config.vars.datetime));
+					item.set(strftime(this.#app.config.vars.datetime));
 					break;
 				case 'T':
-					item.set(app.targetElement.title);
+					item.set(this.#app.targetElement?.title);
 					break;
 				case 'U':
-					item.set(app.targetElement.url);
+					item.set(this.#app.targetElement?.url);
 					break;
 				case 'W':
-					item.set('wasavi/' + app.version);
+					item.set('wasavi/' + this.#app.version);
 					break;
 				}
 			}
 			else {
-				item = findItem(name);
+				item = this.#findItem(name);
 			}
 
 			return item;
 		}
 		return new RegisterItem();
 	}
-	function dump () {
-		function dumpItem (item) {
+
+	/** @returns {string[]} */
+	dump() {
+		/**
+		 * @param {RegisterItem} item
+		 * @returns {string}
+		 */
+		const dumpItem = item => {
 			const MAX_LENGTH = 32;
 			var orientString = item.isLineOrient ? 'L' : 'C';
 			var data = item.data;
@@ -2170,54 +2265,58 @@ Wasavi.Registers = function (app, value) {
 				data = data.substring(0, MAX_LENGTH) + '...';
 			}
 			return _('  {0}  {1}', orientString, toVisibleString(data));
-		}
+		};
 		var a = [];
-		a.push('""' + dumpItem(unnamed));
-		for (var i in named) {
-			named[i] && a.push('"' + i + dumpItem(named[i]));
+		a.push('""' + dumpItem(this.#unnamed));
+		for (var i in this.#named) {
+			var item = this.#named[i];
+			item && a.push('"' + i + dumpItem(item));
 		}
 		a.sort();
 		a.unshift(_('*** registers ***'));
 		return a;
 	}
-	function dumpData () {
-		function dumpItem (name, item) {
-			return {
-				isLineOrient:item.isLineOrient,
-				name:name,
-				data:toNativeControl(item.data)
-			};
-		}
+
+	/** @returns {{ isLineOrient: boolean, name: string, data: string }[]} */
+	dumpData() {
+		/**
+		 * @param {string} name
+		 * @param {RegisterItem} item
+		 * @returns {{ isLineOrient: boolean, name: string, data: string }}
+		 */
+		const dumpItem = (name, item) => ({
+			isLineOrient:item.isLineOrient,
+			name:name,
+			data:toNativeControl(item.data)
+		});
 		var a = [];
-		a.push(dumpItem('"', unnamed));
-		for (var i in named) {
-			named[i] && a.push(dumpItem(i, named[i]));
+		a.push(dumpItem('"', this.#unnamed));
+		for (var i in this.#named) {
+			var item = this.#named[i];
+			item && a.push(dumpItem(i, item));
 		}
-		a.sort(function (a, b) {return a.name.localeCompare(b.name);});
+		a.sort((a, b) => a.name.localeCompare(b.name));
 		return a;
 	}
 
-	publish(this,
-		set, get, isWritable, isReadable, isClipboard,
-		exists, dump, dumpData, save, load,
-		{
-			storageKey:function () {return storageKey},
-			writableList:function () {
-				return writableRegex.source
-					.replace(/^\^\[/, '')
-					.replace(/\]\$$/, '')
-					.replace(/\\/g, '');
-			},
-			readableList:function () {
-				return readableRegex.source
-					.replace(/^\^\[/, '')
-					.replace(/\]\$$/, '')
-					.replace(/\\/g, '');
-			}
-		}
-	);
-	load(value);
-	value = null;
+	/** @returns {string} */
+	get storageKey() {return Registers.#STORAGE_KEY}
+
+	/** @returns {string} */
+	get writableList() {
+		return Registers.#WRITABLE_REGEX.source
+			.replace(/^\^\[/, '')
+			.replace(/\]\$$/, '')
+			.replace(/\\/g, '');
+	}
+
+	/** @returns {string} */
+	get readableList() {
+		return Registers.#READABLE_REGEX.source
+			.replace(/^\^\[/, '')
+			.replace(/\]\$$/, '')
+			.replace(/\\/g, '');
+	}
 };
 
 Wasavi.Marks = function (app, value) {

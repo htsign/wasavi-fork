@@ -519,16 +519,16 @@ interface WasaviRegisterItem {
 
 /** Register store (classes.js). */
 interface WasaviRegisters {
-  set(name: string, data: unknown, isLineOrient?: boolean, isInteractive?: boolean): unknown;
+  set(name: string, data: unknown, isLineOrient?: boolean, isInteractive?: boolean): void;
   get(name: string): WasaviRegisterItem;
   isWritable(name: string): boolean;
   isReadable(name: string): boolean;
   isClipboard(name: string): boolean;
   exists(name: string): boolean;
-  dump(): unknown;
-  dumpData(): unknown;
-  save(): unknown;
-  load(value?: unknown): unknown;
+  dump(): string[];
+  dumpData(): { isLineOrient: boolean; name: string; data: string }[];
+  save(): void;
+  load(value?: unknown): void;
   readonly storageKey: string;
   readonly writableList: string;
   readonly readableList: string;
