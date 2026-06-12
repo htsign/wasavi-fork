@@ -663,7 +663,7 @@ interface WasaviLiteralInput {
 
 /** Insert-mode input bookkeeping (classes.js). */
 interface WasaviInputHandler {
-  app: unknown;
+  app: WasaviApp;
   inputHeadPosition: WasaviPosition | null;
   count: number;
   countOrig: number;
@@ -671,29 +671,28 @@ interface WasaviInputHandler {
   text: string;
   textFragment: string;
   stroke: string;
-  overwritten: unknown;
-  prevLengthText: readonly unknown[];
-  prevLengthStroke: boolean;
-  stackText: readonly unknown[];
-  stackStroke: readonly unknown[];
-  dispose(): void;
-  reset(count?: number, suffix?: string, position?: unknown, initStartPosition?: unknown): unknown;
-  close(): unknown;
-  newState(position: unknown): unknown;
-  setStartPosition(pos: WasaviPositionLike): unknown;
+  overwritten: string | null;
+  prevLengthText: [number | undefined, number | undefined];
+  prevLengthStroke: number | false;
+  stackText: (readonly [number, number, number | undefined, number | undefined])[];
+  stackStroke: [number, number | false][];
+  reset(count?: number, suffix?: string, position?: WasaviPosition, initStartPosition?: boolean): void;
+  close(): void;
+  newState(position?: WasaviPosition): void;
+  setStartPosition(pos: WasaviPosition): void;
   getStartPosition(): WasaviPosition | undefined;
-  invalidateHeadPosition(): unknown;
-  pushText(...args: readonly unknown[]): unknown;
-  popText(...args: readonly unknown[]): unknown;
-  appendText(e: unknown): unknown;
-  ungetText(...args: readonly unknown[]): unknown;
-  pushStroke(...args: readonly unknown[]): unknown;
-  popStroke(...args: readonly unknown[]): unknown;
-  appendStroke(e: unknown): unknown;
-  ungetStroke(...args: readonly unknown[]): unknown;
-  updateHeadPosition(...args: readonly unknown[]): unknown;
-  updateOverwritten(...args: readonly unknown[]): unknown;
-  flush(...args: readonly unknown[]): unknown;
+  invalidateHeadPosition(): void;
+  pushText(): void;
+  popText(): void;
+  appendText(e: string | WasaviKeySequenceItem): string | undefined;
+  ungetText(): void;
+  pushStroke(): void;
+  popStroke(): void;
+  appendStroke(e: string | WasaviKeySequenceItem): string | undefined;
+  ungetStroke(): void;
+  updateHeadPosition(): WasaviPosition;
+  updateOverwritten(): string;
+  flush(): void;
 }
 
 /** Completion engine (classes.js). */
@@ -1097,7 +1096,7 @@ interface WasaviEditLogger {
   clear(): WasaviEditLogger;
   open(tag: unknown, func?: unknown): WasaviEditLogger;
   close(): WasaviEditLogger;
-  write(type: unknown): unknown;
+  write(type: number, ...args: readonly unknown[]): unknown;
   undo(): unknown;
   redo(): unknown;
   dump(): unknown;

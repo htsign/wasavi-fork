@@ -4204,43 +4204,83 @@ Wasavi.LiteralInput = class LiteralInput {
 	}
 };
 
-Wasavi.InputHandler = function (appProxy) {
-	this.app = appProxy;
-	this.inputHeadPosition = null;
-	this.count = this.countOrig = 1
-	this.suffix = '';
-	this.text = this.textFragment = this.stroke = '';
-	this.overwritten = null;
-	this.prevLengthText = [];
-	this.prevLengthStroke = false;
-	this.stackText = [];
-	this.stackStroke = [];
-};
-Wasavi.InputHandler.prototype = {
-	dispose: function () {
-		this.app = this.inputHeadPosition = null;
-	},
-	reset: function (count, suffix, position, initStartPosition) {
+Wasavi.InputHandler = class {
+	/** @type {WasaviApp} */
+	app;
+	/** @type {WasaviPosition | null} */
+	inputHeadPosition = null;
+	/** @type {number} */
+	count = 1;
+	/** @type {number} */
+	countOrig = 1;
+	/** @type {string} */
+	suffix = '';
+	/** @type {string} */
+	text = '';
+	/** @type {string} */
+	textFragment = '';
+	/** @type {string} */
+	stroke = '';
+	/** @type {string | null} */
+	overwritten = null;
+	/** @type {[number | undefined, number | undefined]} */
+	prevLengthText = [undefined, undefined];
+	/** @type {number | false} */
+	prevLengthStroke = false;
+	/** @type {(readonly [number, number, number | undefined, number | undefined])[]} */
+	stackText = [];
+	/** @type {[number, number | false][]} */
+	stackStroke = [];
+
+	/**
+	 * @param {WasaviApp} appProxy
+	 */
+	constructor(appProxy) {
+		this.app = appProxy;
+	}
+
+	/**
+	 * @param {number} [count]
+	 * @param {string} [suffix]
+	 * @param {WasaviPosition} [position]
+	 * @param {boolean} [initStartPosition]
+	 * @returns {void}
+	 */
+	reset(count, suffix, position, initStartPosition) {
 		this.inputHeadPosition = position || null;
 		this.count = this.countOrig = count || 1;
 		this.suffix = suffix || '';
 		this.text = this.textFragment = this.stroke = '';
 		this.overwritten = null;
-		initStartPosition && this.setStartPosition(this.inputHeadPosition);
-	},
-	close: function () {
+		if (initStartPosition && this.inputHeadPosition) {
+			this.setStartPosition(this.inputHeadPosition);
+		}
+	}
+
+	/** @returns {void} */
+	close() {
 		this.flush();
 		this.reset();
-	},
-	newState: function (position) {
+	}
+
+	/**
+	 * @param {WasaviPosition} [position]
+	 * @returns {void}
+	 */
+	newState(position) {
 		this.flush();
 		this.inputHeadPosition = position || null;
 		this.text = this.textFragment = this.stroke = '';
 		this.overwritten = null;
 		this.app.editLogger.close();
 		this.app.editLogger.open('log-editing');
-	},
-	setStartPosition: function (pos) {
+	}
+
+	/**
+	 * @param {WasaviPosition} pos
+	 * @returns {void}
+	 */
+	setStartPosition(pos) {
 		var p = pos.clone();
 		if (p.row == 0 && p.col == 0) {
 			p.col--;
@@ -4249,40 +4289,54 @@ Wasavi.InputHandler.prototype = {
 			p = this.app.buffer.leftClusterPos(p);
 		}
 		this.app.marks.setInputOriginMark(p);
-	},
-	getStartPosition: function () {
-		var p = this.app.marks.getInputOriginMark();
-		if (p) {
-			p = p.clone();
+	}
+
+	/** @returns {WasaviPosition | undefined} */
+	getStartPosition() {
+		var m = this.app.marks.getInputOriginMark();
+		if (m instanceof Wasavi.Position) {
+			var p = m.clone();
 			if (p.col < 0) {
 				p.col = 0;
 			}
 			else {
 				p = this.app.buffer.rightClusterPos(p);
 			}
+			return p;
 		}
-		return p;
-	},
-	invalidateHeadPosition: function () {
+	}
+
+	/** @returns {void} */
+	invalidateHeadPosition() {
 		this.inputHeadPosition = null;
-	},
-	pushText: function () {
+	}
+
+	/** @returns {void} */
+	pushText() {
 		this.stackText.push([
 			this.text.length, this.textFragment.length,
 			this.prevLengthText[0], this.prevLengthText[1]
 		]);
-	},
-	popText: function () {
+	}
+
+	/** @returns {void} */
+	popText() {
 		if (this.stackText.length == 0) {
 			throw new Error('popText: stackText is empty.');
 		}
 		var o = this.stackText.pop();
+		if (!o) return;
 		this.text = this.text.substring(0, o[0]);
 		this.textFragment = this.textFragment.substring(0, o[1]);
 		this.prevLengthText[0] = o[2];
 		this.prevLengthText[1] = o[3];
-	},
-	appendText: function (e) {
+	}
+
+	/**
+	 * @param {string | WasaviKeySequenceItem} e
+	 * @returns {string | undefined}
+	 */
+	appendText(e) {
 		var result;
 		if (isString(e)) {
 			result = e;
@@ -4298,8 +4352,10 @@ Wasavi.InputHandler.prototype = {
 		this.text += result;
 		this.textFragment += result;
 		return result;
-	},
-	ungetText: function () {
+	}
+
+	/** @returns {void} */
+	ungetText() {
 		let t = this.text;
 		let tf = this.textFragment;
 		if (this.prevLengthText[0] !== undefined) {
@@ -4310,21 +4366,32 @@ Wasavi.InputHandler.prototype = {
 			this.textFragment = this.textFragment.substring(0, this.prevLengthText[1]);
 			this.prevLengthText[1] -= tf.length - this.prevLengthText[1];
 		}
-	},
-	pushStroke: function () {
+	}
+
+	/** @returns {void} */
+	pushStroke() {
 		this.stackStroke.push([
 			this.stroke.length, this.prevLengthStroke
 		]);
-	},
-	popStroke: function () {
+	}
+
+	/** @returns {void} */
+	popStroke() {
 		if (this.stackStroke.length == 0) {
 			throw new Error('popStroke: stackStroke is empty.');
 		}
 		var o = this.stackStroke.pop();
+		if (!o) return;
 		this.stroke = this.stroke.substring(0, o[0]);
 		this.prevLengthStroke = o[1];
-	},
-	appendStroke: function (e) {
+	}
+
+	/**
+	 * @param {string | WasaviKeySequenceItem} e
+	 * @returns {string | undefined}
+	 */
+	appendStroke(e) {
+		/** @type {string} */
 		var result;
 		if (isString(e)) {
 			result = e;
@@ -4346,26 +4413,38 @@ Wasavi.InputHandler.prototype = {
 		this.prevLengthStroke = this.stroke.length;
 		this.stroke += result;
 		return result;
-	},
-	ungetStroke: function () {
+	}
+
+	/** @returns {void} */
+	ungetStroke() {
 		if (this.prevLengthStroke !== undefined) {
-			this.stroke = this.stroke.substring(0, this.prevLengthStroke);
+			this.stroke = this.stroke.substring(0, this.prevLengthStroke || 0);
 		}
-	},
-	updateHeadPosition: function () {
+	}
+
+	/** @returns {WasaviPosition} */
+	updateHeadPosition() {
 		if (this.inputHeadPosition === null) {
 			this.inputHeadPosition = this.app.buffer.selectionStart;
 		}
 		return this.inputHeadPosition;
-	},
-	updateOverwritten: function () {
+	}
+
+	/** @returns {string} */
+	updateOverwritten() {
 		if (this.overwritten === null) {
 			this.overwritten = this.app.buffer.rows(this.app.buffer.selectionStartRow);
 		}
 		return this.overwritten;
-	},
-	flush: function () {
-		function resolveEscape (s) {
+	}
+
+	/** @returns {void} */
+	flush() {
+		/**
+		 * @param {string} s
+		 * @returns {string}
+		 */
+		function resolveEscape(s) {
 			var result = s;
 			result = result.replace(/\u0016[\s\S]|[\s\S]/g, function (a) {
 				return a.charAt(a.length == 2 ? 1 : 0);

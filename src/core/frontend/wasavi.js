@@ -1490,7 +1490,7 @@ function uninstall (implicit) {
 	lastRegexFindCommand = undefined;
 	lastSubstituteInfo = undefined;
 	requestedState = undefined;
-	inputHandler = inputHandler.dispose();
+	inputHandler = undefined;
 	marks = undefined;
 	cursor = cursor.dispose();
 	scroller = scroller.dispose();
