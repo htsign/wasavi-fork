@@ -883,7 +883,6 @@ interface WasaviSearchUtils {
     targetChar: string,
     initialPos?: WasaviPositionLike
   ): WasaviPairBracketsIndicator | null;
-  dispose(): void;
 }
 
 /**
@@ -1054,7 +1053,6 @@ interface WasaviCursorUI {
 /** Smooth scroller (classes_ui.js). */
 interface WasaviScroller {
   run(dest: number): Promise<boolean>;
-  dispose(): void;
   readonly running: boolean;
   consumeMsecs: number;
   timerPrecision: number;
@@ -1076,7 +1074,6 @@ interface WasaviBacklog {
   hide(): void;
   clear(): void;
   open(byLine?: boolean): void;
-  dispose(): void;
   readonly buffer: readonly WasaviBacklogLine[];
   readonly queued: boolean;
   readonly rows: number;
@@ -1093,7 +1090,6 @@ interface WasaviNotifier {
   register(message: WasaviNotifierMessage, intervalMsecs?: number, delayMsecs?: number): void;
   show(message: WasaviNotifierMessage, intervalMsecs?: number): void;
   hide(): void;
-  dispose(): void;
 }
 
 /** Undo/redo logger (classes_undo.js). */
@@ -1106,7 +1102,6 @@ interface WasaviEditLogger {
   redo(): unknown;
   dump(): unknown;
   notifySave(): unknown;
-  dispose(): void;
   logMax: number;
   readonly clusterNestLevel: number;
   readonly logLength: number;

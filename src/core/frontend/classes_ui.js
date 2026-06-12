@@ -828,9 +828,6 @@ class Scroller {
 		});
 	}
 
-	dispose() {
-	}
-
 	get running() {return this.#running}
 }
 Wasavi.Scroller = Scroller;
@@ -992,9 +989,6 @@ class Backlog {
 							_('Press any key to continue, or enter more ex command:'),
 			false, true, true);
 	}
-	dispose() {
-	}
-
 	/** @returns {BacklogLine[]} */
 	get buffer() {
 		return this.#buffer;
@@ -1088,8 +1082,6 @@ class Notifier {
 		this.#showTimer && clearTimeout(this.#showTimer);
 		this.#hideTimer && clearTimeout(this.#hideTimer);
 		this.#showTimer = this.#hideTimer = null;
-	}
-	dispose() {
 	}
 }
 Wasavi.Notifier = Notifier;

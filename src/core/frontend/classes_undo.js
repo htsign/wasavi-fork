@@ -839,9 +839,6 @@ class EditLogger {
 		function notifySave() {
 			savedAt = logs.item(currentPosition) || null;
 		}
-		function dispose() {
-		}
-
 		// `publish` installs the real surface below (enumerable, with computed
 		// accessors) but is opaque to the type checker. Naming the members here
 		// gives the instance the `WasaviEditLogger` shape; `publish` then
@@ -854,7 +851,6 @@ class EditLogger {
 		this.redo = redo;
 		this.dump = dump;
 		this.notifySave = notifySave;
-		this.dispose = dispose;
 		this.logMax = max;
 		this.clusterNestLevel = -1;
 		this.logLength = 0;
@@ -862,7 +858,7 @@ class EditLogger {
 		this.isClean = false;
 
 		publish(this,
-			clear, open, close, write, undo, redo, dump, notifySave, dispose,
+			clear, open, close, write, undo, redo, dump, notifySave,
 			{
 				logMax:[
 					function () {

@@ -1257,9 +1257,6 @@ sequential at:
 			}
 			return null;
 		}
-		function dispose() {
-		}
-
 		this.findQuoteRange = findQuoteRange;
 		this.findSentenceBoundary = findSentenceBoundary;
 		this.findParagraphBoundary = findParagraphBoundary;
@@ -1273,7 +1270,6 @@ sequential at:
 		this.setParagraphMacros = setParagraphMacros;
 		this.setSectionMacros = setSectionMacros;
 		this.getPairBracketsIndicator = getPairBracketsIndicator;
-		this.dispose = dispose;
 	}
 }
 Wasavi.SearchUtils = SearchUtils;

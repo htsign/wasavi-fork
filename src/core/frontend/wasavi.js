@@ -1478,16 +1478,11 @@ function uninstall (implicit) {
 	inputModeStack = undefined;
 	pairBracketsIndicator && pairBracketsIndicator.dispose();
 	pairBracketsIndicator = undefined;
-	backlog.dispose();
-	searchUtils.dispose();
-	notifier.dispose();
 	lastHorzFindCommand = undefined;
 	lastRegexFindCommand = undefined;
 	lastSubstituteInfo = undefined;
 	requestedState = undefined;
 	cursor.dispose();
-	scroller.dispose();
-	editLogger.dispose();
 	executingMacroInfo = undefined;
 
 	keyManager.dispose();
