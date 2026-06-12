@@ -114,6 +114,7 @@ interface WasaviApp {
   scroller: WasaviScroller;
   searchUtils: WasaviSearchUtils;
   low: WasaviAppLow;
+  notifier: WasaviNotifier;
   config: WasaviConfigurator;
   edit: WasaviEditOps;
   exvm: WasaviExViewModel;
@@ -697,10 +698,13 @@ interface WasaviInputHandler {
 
 /** Completion engine (classes.js). */
 interface WasaviCompleter {
-  add(patterns: unknown, index: unknown, handler: unknown): unknown;
+  add(
+    patterns: RegExp | readonly RegExp[],
+    index: number,
+    handler?: WasaviCompleterRequestCandidates,
+  ): WasaviCompleter;
   reset(): void;
-  run(value: string, pos: WasaviPositionLike, invert?: boolean, callback?: unknown): unknown;
-  dispose(): void;
+  run(value: string, pos: number, invert: boolean, callback: WasaviCompleterRunCallback): void;
   readonly running: boolean;
 }
 
@@ -1150,7 +1154,7 @@ declare var Wasavi: {
   Editor: new (element: string | HTMLElement) => WasaviEditor;
   LiteralInput: new () => WasaviLiteralInput;
   InputHandler: new (appProxy: WasaviApp) => WasaviInputHandler;
-  Completer: new (appProxy: WasaviApp, alist?: unknown) => WasaviCompleter;
+  Completer: new (appProxy: WasaviApp, alist?: readonly WasaviCompleterItemArgs[]) => WasaviCompleter;
   StrokeRecorder: new () => WasaviStrokeRecorder;
   Surrounding: new (app: WasaviApp) => WasaviSurrounding;
   IncDec: new (app: WasaviApp, defaultOpts?: WasaviIncDecOpts) => WasaviIncDec;

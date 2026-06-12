@@ -4472,20 +4472,79 @@ Wasavi.InputHandler = class {
 	}
 };
 
-Wasavi.Completer = function (appProxy, alist) {
+/**
+ * @typedef {(prefix: string, notifyCandidates: (candidates: readonly string[]) => void, value: string) => void} WasaviCompleterRequestCandidates
+ */
 
-	function CompleteItem (patterns, index, onRequestCandidates, opts) {
-		this.candidates = null;
-		this.candidatesFiltered = null;
-		this.currentIndex = -1;
-		this.prefix = false;
-		this.lastLoad = 0;
-		this.lastInvert = null;
+/**
+ * @typedef {object} WasaviCompleterFoundContext
+ * @property {string[]} subPieces
+ * @property {number} cursorOffset
+ * @property {number} subPieceIndex
+ */
 
+/**
+ * @typedef {object} WasaviCompleterItemOptions
+ * @property {(matched: string, cursorOffset: number) => WasaviCompleterFoundContext} [onFoundContext]
+ * @property {(prefix: string) => string | void} [onSetPrefix]
+ * @property {(newValue: string, oldValue: string) => string | null | void} [onComplete]
+ * @property {number} [ttlSecs]
+ * @property {boolean} [isVolatile]
+ */
+
+/**
+ * @typedef {[
+ *   patterns: RegExp | readonly RegExp[],
+ *   index: number,
+ *   onRequestCandidates: WasaviCompleterRequestCandidates,
+ *   opts?: WasaviCompleterItemOptions
+ * ]} WasaviCompleterItemArgs
+ */
+
+/**
+ * @typedef {object} WasaviCompleterPiece
+ * @property {number} index
+ * @property {string} piece
+ */
+
+class CompleteItem {
+	/** @type {readonly string[] | null} */
+	candidates = null;
+	/** @type {readonly string[] | null} */
+	candidatesFiltered = null;
+	currentIndex = -1;
+	/** @type {string | null} */
+	prefix = null;
+	lastLoad = 0;
+	/** @type {boolean | null} */
+	lastInvert = null;
+
+	/** @type {readonly RegExp[]} */
+	patterns;
+	/** @type {number} */
+	index;
+	/** @type {WasaviCompleterRequestCandidates | undefined} */
+	onRequestCandidates;
+	ttlMsecs = 0;
+
+	/** @type {WasaviCompleterItemOptions['onFoundContext']} */
+	onFoundContext;
+	/** @type {WasaviCompleterItemOptions['onSetPrefix']} */
+	onSetPrefix;
+	/** @type {WasaviCompleterItemOptions['onComplete']} */
+	onComplete;
+	isVolatile = false;
+
+	/**
+	 * @param {RegExp | readonly RegExp[]} patterns
+	 * @param {number} index
+	 * @param {WasaviCompleterRequestCandidates} [onRequestCandidates]
+	 * @param {WasaviCompleterItemOptions} [opts]
+	 */
+	constructor(patterns, index, onRequestCandidates, opts) {
 		this.patterns = patterns instanceof Array ? patterns : [patterns];
 		this.index = index;
 		this.onRequestCandidates = onRequestCandidates;
-		this.ttlMsecs = 0;
 
 		if (opts) {
 			if ('onFoundContext' in opts) {
@@ -4498,127 +4557,186 @@ Wasavi.Completer = function (appProxy, alist) {
 				this.onComplete = opts.onComplete;
 			}
 			if ('ttlSecs' in opts) {
-				this.ttlMsecs = (opts.ttlSecs || 0) * 1000;
+				this.ttlMsecs = (opts.ttlSecs ?? 0) * 1000;
 			}
 			if ('isVolatile' in opts) {
 				this.isVolatile = !!opts.isVolatile;
 			}
 		}
 	}
-	CompleteItem.prototype = {
-		get isCandidatesAvailable () {
-			return this.candidates !== null
-				&& (this.ttlMsecs == 0 || Date.now() - this.lastLoad < this.ttlMsecs);
-		},
 
-		//
-		reset: function () {
-			this.prefix = false;
-			if (this.isVolatile) {
-				this.candidates = null;
-			}
-		},
-		prev: function () {
-			return this.next(true);
-		},
-		next: function (invert) {
-			var index;
-			var result;
+	/** @returns {boolean} */
+	get isCandidatesAvailable() {
+		return this.candidates !== null
+			&& (this.ttlMsecs == 0 || Date.now() - this.lastLoad < this.ttlMsecs);
+	}
 
-			if (!this.candidates) {
-				return result;
-			}
-			if (!this.candidatesFiltered) {
-				this.candidatesFiltered = this.updateFilteredCandidates();
-			}
-			if (!this.candidatesFiltered || this.candidatesFiltered.length == 0) {
-				return result;
-			}
-			if (this.currentIndex < 0 || this.currentIndex >= this.candidatesFiltered.length) {
-				this.currentIndex = this.findIndex();
-			}
+	/** @returns {void} */
+	reset() {
+		this.prefix = null;
+		if (this.isVolatile) {
+			this.candidates = null;
+		}
+	}
 
-			invert = !!invert;
-			if (typeof this.lastInvert == 'boolean' && this.lastInvert != invert) {
-				this.currentIndex = (
-					this.currentIndex +
-					(invert ? this.candidatesFiltered.length - 2 : 2)
-				) % this.candidatesFiltered.length;
-			}
+	/** @returns {WasaviCompleterPiece | undefined} */
+	prev() {
+		return this.next(true);
+	}
 
-			index = this.currentIndex;
-			result = this.candidatesFiltered[this.currentIndex];
+	/**
+	 * @param {boolean} [invert]
+	 * @returns {WasaviCompleterPiece | undefined}
+	 */
+	next(invert) {
+		var index;
+		var result;
 
+		if (!this.candidates) {
+			return result;
+		}
+		if (!this.candidatesFiltered) {
+			this.candidatesFiltered = this.updateFilteredCandidates();
+		}
+		if (!this.candidatesFiltered || this.candidatesFiltered.length == 0) {
+			return result;
+		}
+		if (this.currentIndex < 0 || this.currentIndex >= this.candidatesFiltered.length) {
+			this.currentIndex = this.findIndex();
+		}
+
+		invert = !!invert;
+		if (typeof this.lastInvert == 'boolean' && this.lastInvert != invert) {
 			this.currentIndex = (
 				this.currentIndex +
-				(invert ? this.candidatesFiltered.length - 1 : 1)
+				(invert ? this.candidatesFiltered.length - 2 : 2)
 			) % this.candidatesFiltered.length;
+		}
 
-			this.lastInvert = invert;
+		index = this.currentIndex;
+		result = this.candidatesFiltered[this.currentIndex];
 
-			return {
-				index:index,
-				piece:result
-			};
-		},
+		this.currentIndex = (
+			this.currentIndex +
+			(invert ? this.candidatesFiltered.length - 1 : 1)
+		) % this.candidatesFiltered.length;
 
-		//
-		findIndex: function () {
-			var result = 0;
-			for (var i = 0, goal = this.candidatesFiltered.length; i < goal; i++) {
-				if (this.candidatesFiltered[i].indexOf(this.prefix) == 0) {
-					result = i;
-					break;
-				}
-			}
-			return result;
-		},
-		setPrefix: function (prefix, force) {
-			if (this.prefix === false || force) {
-				if (this.onSetPrefix) {
-					var tmp = this.onSetPrefix(prefix);
-					if (typeof tmp == 'string') {
-						prefix = tmp;
-					}
-				}
-				this.prefix = prefix;
-				this.currentIndex = -1;
-				this.candidatesFiltered = null;
-			}
-		},
-		updateFilteredCandidates: function () {
-			return this.candidates.filter(function (a) {
-				return a.indexOf(this.prefix) == 0;
-			}, this);
-		},
-		requestCandidates: function (value, callback) {
-			function initCandidates (candidates) {
-				var saved = {
-					candidates:this.candidates,
-					currentIndex:this.currentIndex,
-					lastLoad:this.lastLoad
-				};
+		this.lastInvert = invert;
 
-				this.candidates = candidates;
-				this.currentIndex = -1;
-				this.lastLoad = Date.now();
+		return {
+			index:index,
+			piece:result
+		};
+	}
 
-				if (!callback()) {
-					this.candidates = saved.candidates;
-					this.currentIndex = saved.currentIndex;
-					this.lastLoad = saved.lastLoad;
-				}
-			}
-			if (typeof this.onRequestCandidates == 'function') {
-				this.onRequestCandidates(this.prefix, initCandidates.bind(this), value);
-			}
-			else {
-				initCandidates.call(this, []);
+	/** @returns {number} */
+	findIndex() {
+		var result = 0;
+		/** @type {readonly string[]} */
+		var candidatesFiltered = this.candidatesFiltered ?? [];
+		var prefix = this.prefix ?? '';
+		for (var i = 0, goal = candidatesFiltered.length; i < goal; i++) {
+			if (candidatesFiltered[i].indexOf(prefix) == 0) {
+				result = i;
+				break;
 			}
 		}
-	};
+		return result;
+	}
 
-	function CompleteContext (item, pos, offset, pieceIndex, subPieceIndex, pieces, subPieces) {
+	/**
+	 * @param {string} prefix
+	 * @param {boolean} [force]
+	 * @returns {void}
+	 */
+	setPrefix(prefix, force) {
+		if (this.prefix === null || force) {
+			if (this.onSetPrefix) {
+				var tmp = this.onSetPrefix(prefix);
+				if (typeof tmp == 'string') {
+					prefix = tmp;
+				}
+			}
+			this.prefix = prefix;
+			this.currentIndex = -1;
+			this.candidatesFiltered = null;
+		}
+	}
+
+	/** @returns {string[]} */
+	updateFilteredCandidates() {
+		var prefix = this.prefix ?? '';
+		return (this.candidates ?? []).filter(a => a.indexOf(prefix) == 0);
+	}
+
+	/**
+	 * @param {string} value
+	 * @param {() => boolean} callback
+	 * @returns {void}
+	 */
+	requestCandidates(value, callback) {
+		/** @param {readonly string[]} candidates */
+		const initCandidates = candidates => {
+			var saved = {
+				candidates:this.candidates,
+				currentIndex:this.currentIndex,
+				lastLoad:this.lastLoad
+			};
+
+			this.candidates = candidates;
+			this.currentIndex = -1;
+			this.lastLoad = Date.now();
+
+			if (!callback()) {
+				this.candidates = saved.candidates;
+				this.currentIndex = saved.currentIndex;
+				this.lastLoad = saved.lastLoad;
+			}
+		};
+		if (typeof this.onRequestCandidates == 'function') {
+			this.onRequestCandidates(this.prefix ?? '', initCandidates, value);
+		}
+		else {
+			initCandidates([]);
+		}
+	}
+}
+
+/**
+ * @typedef {object} WasaviCompleterResult
+ * @property {number} pos
+ * @property {string} value
+ * @property {number} length
+ * @property {number} filteredLength
+ * @property {WasaviCompleterPiece} completed
+ */
+
+class CompleteContext {
+	/** @type {CompleteItem} */
+	item;
+	/** @type {number} */
+	pos;
+	/** @type {number} */
+	offset;
+	/** @type {number} */
+	pieceIndex;
+	/** @type {number} */
+	subPieceIndex;
+	/** @type {string[]} */
+	pieces;
+	/** @type {string[]} */
+	subPieces;
+
+	/**
+	 * @param {CompleteItem} item
+	 * @param {number} pos
+	 * @param {number} offset
+	 * @param {number} pieceIndex
+	 * @param {number} subPieceIndex
+	 * @param {string[]} pieces
+	 * @param {string[]} subPieces
+	 */
+	constructor(item, pos, offset, pieceIndex, subPieceIndex, pieces, subPieces) {
 		this.item = item;
 		this.pos = pos;
 		this.offset = offset;
@@ -4629,61 +4747,96 @@ Wasavi.Completer = function (appProxy, alist) {
 
 		this.item.setPrefix(this.subPieces[this.subPieceIndex].substring(0, this.offset));
 	}
-	CompleteContext.prototype = {
-		getResult: function (invert) {
-			var completedPiece = this.item.next(invert);
-			if (this.item.onComplete) {
-				var tmp = this.item.onComplete(
-					completedPiece ? completedPiece.piece : '',
-					this.subPieces[this.subPieceIndex]
-				);
-				if (typeof tmp == 'string') {
-					this.item.currentIndex = -1;
-					this.item.setPrefix(tmp, true);
-					completedPiece = this.item.next(invert);
-				}
-			}
 
-			if (!completedPiece) {
-				return false;
-			}
-
-			var subPieces = this.subPieces.slice(1);
-			var pos = this.pos - this.offset + completedPiece.piece.length;
-
-			subPieces[this.subPieceIndex - 1] = completedPiece.piece;
-			this.offset = completedPiece.piece.length;
-
-			var pieces = this.pieces.slice(0);
-			pieces[this.pieceIndex] = subPieces.join('');
-
-			return {
-				pos:pos,
-				value:pieces.join('|'),
-				length:this.item.candidates.length,
-				filteredLength:this.item.candidatesFiltered.length,
-				completed:completedPiece
+	/**
+	 * @param {boolean} [invert]
+	 * @returns {WasaviCompleterResult | false}
+	 */
+	getResult(invert) {
+		var completedPiece = this.item.next(invert);
+		if (this.item.onComplete) {
+			var tmp = this.item.onComplete(
+				completedPiece ? completedPiece.piece : '',
+				this.subPieces[this.subPieceIndex]
+			);
+			if (typeof tmp == 'string') {
+				this.item.currentIndex = -1;
+				this.item.setPrefix(tmp, true);
+				completedPiece = this.item.next(invert);
 			}
 		}
-	};
 
-	const COMPLETION_NOTIFY_TTL_SECS = 60;
-	const COMPLETION_NOTIFY_DELAY_SECS = 0.1;
-	const TIMEOUT_SECS = 30;
+		if (!completedPiece) {
+			return false;
+		}
 
-	var list;
-	var running = false;
-	var notifierTimer;
-	var timeoutTimer;
+		var subPieces = this.subPieces.slice(1);
+		var pos = this.pos - this.offset + completedPiece.piece.length;
 
-	// privates
-	function init (alist) {
-		list = (alist || []).map(function (arg) {
-			var o = Object.create(CompleteItem.prototype);
-			return CompleteItem.apply(o, arg) || o;
-		});
+		subPieces[this.subPieceIndex - 1] = completedPiece.piece;
+		this.offset = completedPiece.piece.length;
+
+		var pieces = this.pieces.slice(0);
+		pieces[this.pieceIndex] = subPieces.join('');
+
+		return {
+			pos:pos,
+			value:pieces.join('|'),
+			length:(this.item.candidates ?? []).length,
+			filteredLength:(this.item.candidatesFiltered ?? []).length,
+			completed:completedPiece
+		};
 	}
-	function getExCommandParseResult (value) {
+}
+
+/**
+ * @typedef {object} WasaviCompleterCommand
+ * @property {string} range
+ * @property {string} rest
+ */
+
+/**
+ * @typedef {((result?: WasaviCompleterResult | string | false) => void) & { __timed_out__?: boolean }} WasaviCompleterRunCallback
+ */
+
+Wasavi.Completer = class Completer {
+	static #COMPLETION_NOTIFY_TTL_SECS = /** @type {const} */ (60);
+	static #COMPLETION_NOTIFY_DELAY_SECS = /** @type {const} */ (0.1);
+	static #TIMEOUT_SECS = /** @type {const} */ (30);
+
+	/** @type {WasaviApp} */
+	#appProxy;
+	/** @type {CompleteItem[]} */
+	#list = [];
+	#running = false;
+	/** @type {number | undefined} */
+	#notifierTimer;
+	/** @type {number | undefined} */
+	#timeoutTimer;
+
+	/**
+	 * @param {WasaviApp} appProxy
+	 * @param {readonly WasaviCompleterItemArgs[]} [alist]
+	 */
+	constructor(appProxy, alist) {
+		this.#appProxy = appProxy;
+		this.#init(alist);
+	}
+
+	/**
+	 * @param {readonly WasaviCompleterItemArgs[]} [alist]
+	 * @returns {void}
+	 */
+	#init(alist) {
+		this.#list = (alist ?? []).map(arg => new CompleteItem(...arg));
+	}
+
+	/**
+	 * @param {string} value
+	 * @returns {WasaviCompleterCommand[]}
+	 */
+	#getExCommandParseResult(value) {
+		/** @type {WasaviCompleterCommand[]} */
 		var result = [];
 
 		do {
@@ -4715,13 +4868,13 @@ Wasavi.Completer = function (appProxy, alist) {
 			 *     ,
 			 *     ;
 			 */
-			var range = /^(?:\s*(?:\.|\$|\d+|'[a-z`']|\/(?:\\\/|[^\/])*\/|\?(?:\\\?|[^\?])*\?|[+\-]\d*)(?:[+\-]\d*)?)?(?:(?:\s*[,;])(?:\s*(?:\.|\$|\d+|'[a-z`']|\/(?:\\\/|[^\/])*\/|\?(?:\\\?|[^\?])*\?|[+\-]\d*)(?:[+\-]\d*)?)?)*\s*/.exec(value);
+			var range = /^(?:\s*(?:\.|\$|\d+|'[a-z`']|\/(?:\\\/|[^\/])*\/|\?(?:\\\?|[^\?])*\?|[+\-]\d*)(?:[+\-]\d*)?)?(?:(?:\s*[,;])(?:\s*(?:\.|\$|\d+|'[a-z`']|\/(?:\\\/|[^\/])*\/|\?(?:\\\?|[^\?])*\?|[+\-]\d*)(?:[+\-]\d*)?)?)*\s*/.exec(value) ?? [''];
 			value = value.substring(range[0].length);
 
 			/*
 			 * rest
 			 */
-			var rest = /^(?:\\\||[^\|])*/.exec(value);
+			var rest = /^(?:\\\||[^\|])*/.exec(value) ?? [''];
 			value = value.substring(rest[0].length);
 			result.push({range:range[0], rest:rest[0]});
 			if (value.charAt(0) == '|') {
@@ -4732,21 +4885,31 @@ Wasavi.Completer = function (appProxy, alist) {
 
 		return result;
 	}
-	function findCompleteContext (value, pos) {
-		var result = null, errorMessage = null;
-		var commands = getExCommandParseResult(value);
 
-		list.some(function (item) {
+	/**
+	 * @param {string} value
+	 * @param {number} pos
+	 * @returns {CompleteContext | string | null}
+	 */
+	#findCompleteContext(value, pos) {
+		/** @type {CompleteContext | null} */
+		var result = null;
+		/** @type {string | null} */
+		var errorMessage = null;
+		var commands = this.#getExCommandParseResult(value);
+
+		this.#list.some(item => {
 			var offset = 0;
+			/** @type {string[]} */
 			var pieces = [];
 
-			commands.forEach(function (command) {
+			commands.forEach(command => {
 				var args = command.range + command.rest;
 				pieces.push(args);
 
 				var argsForMatch = multiply(' ', command.range.length) + command.rest;
 
-				item.patterns.forEach(function (pattern) {
+				item.patterns.forEach(pattern => {
 					var re = pattern.exec(argsForMatch);
 					if (!re) return;
 
@@ -4760,8 +4923,7 @@ Wasavi.Completer = function (appProxy, alist) {
 
 						if (item.onFoundContext) {
 							var a = item.onFoundContext(re[i], pos - subOffset);
-							a.subPieces.unshift(i, 1);
-							re.splice.apply(re, a.subPieces);
+							re.splice(i, 1, ...a.subPieces);
 							result = new CompleteContext(
 								item, pos, a.cursorOffset,
 								pieces.length - 1, i + a.subPieceIndex,
@@ -4783,54 +4945,76 @@ Wasavi.Completer = function (appProxy, alist) {
 			return !!result || errorMessage != null;
 		});
 
-		return errorMessage || result;
+		return errorMessage ?? result;
 	}
-	function startNotifierTimer (callback) {
-		stopNotifierTimer();
 
-		notifierTimer = setTimeout(function () {
-			notifierTimer = null;
-			appProxy.notifier.show(_('completing...'), 1000 * COMPLETION_NOTIFY_TTL_SECS);
-		}, 1000 * COMPLETION_NOTIFY_DELAY_SECS);
+	/**
+	 * @param {WasaviCompleterRunCallback} callback
+	 * @returns {void}
+	 */
+	#startNotifierTimer(callback) {
+		this.#stopNotifierTimer();
 
-		timeoutTimer = setTimeout(function () {
-			timeoutTimer = null;
-			stopNotifierTimer();
-			appProxy.keyManager.unlock();
-			appProxy.low.notifyActivity('', '', 'completion timed out');
-			running = false;
+		this.#notifierTimer = setTimeout(() => {
+			this.#notifierTimer = undefined;
+			this.#appProxy.notifier.show(_('completing...'), 1000 * Completer.#COMPLETION_NOTIFY_TTL_SECS);
+		}, 1000 * Completer.#COMPLETION_NOTIFY_DELAY_SECS);
+
+		this.#timeoutTimer = setTimeout(() => {
+			this.#timeoutTimer = undefined;
+			this.#stopNotifierTimer();
+			this.#appProxy.keyManager.unlock();
+			this.#appProxy.low.notifyActivity('', '', 'completion timed out');
+			this.#running = false;
 			callback(_('completion timed out'));
 			callback.__timed_out__ = true;
-		}, 1000 * TIMEOUT_SECS);
+		}, 1000 * Completer.#TIMEOUT_SECS);
 	}
-	function stopNotifierTimer () {
-		if (notifierTimer) {
-			clearTimeout(notifierTimer);
-			notifierTimer = null;
+
+	/** @returns {void} */
+	#stopNotifierTimer() {
+		if (this.#notifierTimer) {
+			clearTimeout(this.#notifierTimer);
+			this.#notifierTimer = undefined;
 		}
-		if (timeoutTimer) {
-			clearTimeout(timeoutTimer);
-			timeoutTimer = null;
+		if (this.#timeoutTimer) {
+			clearTimeout(this.#timeoutTimer);
+			this.#timeoutTimer = undefined;
 		}
 	}
 
-	// publics
-	function add (patterns, index, handler) {
-		list.push(new CompleteItem(patterns, index, handler));
+	/**
+	 * @param {RegExp | readonly RegExp[]} patterns
+	 * @param {number} index
+	 * @param {WasaviCompleterRequestCandidates} [handler]
+	 * @returns {this}
+	 */
+	add(patterns, index, handler) {
+		this.#list.push(new CompleteItem(patterns, index, handler));
 		return this;
 	}
-	function reset () {
-		list.forEach(function (item) {
+
+	/** @returns {void} */
+	reset() {
+		this.#list.forEach(item => {
 			item.reset();
 		});
 	}
-	function run (value, pos, invert, callback) {
-		if (running) {
+
+	/**
+	 * @param {string} value
+	 * @param {number} pos
+	 * @param {boolean} invert
+	 * @param {WasaviCompleterRunCallback} callback
+	 * @returns {void}
+	 */
+	run(value, pos, invert, callback) {
+		if (this.#running) {
 			callback();
 			return;
 		}
 
-		var ctx = findCompleteContext(value, pos);
+		const ctx = this.#findCompleteContext(value, pos);
 		if (typeof ctx == 'string') {
 			callback(ctx);
 			return;
@@ -4845,11 +5029,11 @@ Wasavi.Completer = function (appProxy, alist) {
 			return;
 		}
 
-		running = true;
-		startNotifierTimer(callback);
-		ctx.item.requestCandidates(value, function () {
-			stopNotifierTimer();
-			running = false;
+		this.#running = true;
+		this.#startNotifierTimer(callback);
+		ctx.item.requestCandidates(value, () => {
+			this.#stopNotifierTimer();
+			this.#running = false;
 			if (callback.__timed_out__) {
 				return false;
 			}
@@ -4859,17 +5043,11 @@ Wasavi.Completer = function (appProxy, alist) {
 			}
 		});
 	}
-	function dispose () {
-		appProxy = list = null;
-	}
 
-	publish(this,
-		add, reset, run, dispose,
-		{
-			running:function () {return running}
-		}
-	);
-	init(alist);
+	/** @returns {boolean} */
+	get running() {
+		return this.#running;
+	}
 };
 
 /** @typedef {{ strokes: string } & Record<string, unknown>} StrokeItem */
