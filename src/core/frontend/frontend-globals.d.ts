@@ -46,6 +46,9 @@ declare function extend<T extends object, U extends object>(dest: T, src: U): T 
 
 declare function isKeyOf<T extends object>(target: T, key: string): key is keyof T;
 
+declare function isTextNode(node: Node | null): node is Text;
+declare function isElementNode(node: Node | null): node is Element;
+
 /** Parse JSON, returning `null` instead of throwing on malformed input. */
 declare function parseJson(src: string): unknown;
 
@@ -129,8 +132,35 @@ interface UnistringWords extends Array<UnistringWord> {
   wordIndexOf(index: number): number;
 }
 
+/** A grapheme-cluster-aware string instance produced by calling `Unistring(s)`. */
+interface UnistringInstance {
+  readonly length: number;
+  toString(): string;
+  charAt(index: number): string;
+  charCodeAt(index: number): number;
+  codePointsAt(index?: number): number[] | undefined;
+  clusterAt(index?: number): string;
+  rawStringAt(index?: number): string;
+  rawIndexAt(index?: number): number;
+  getClusterIndexFromUTF16Index(index: number): number;
+  delete(start?: number, length?: number): UnistringInstance;
+  insert(s: string | UnistringInstance, start?: number): UnistringInstance;
+  append(s: string | UnistringInstance): UnistringInstance;
+  concat(s: string | UnistringInstance): UnistringInstance;
+  substring(start?: number, end?: number): UnistringInstance;
+  substr(start?: number, length?: number): UnistringInstance;
+  slice(start?: number, end?: number): UnistringInstance;
+  indexOf(s: string | UnistringInstance): number;
+  lastIndexOf(s: string | UnistringInstance): number;
+  toLowerCase(useLocale?: boolean): UnistringInstance;
+  toUpperCase(useLocale?: boolean): UnistringInstance;
+  forEach(callback: (g: unknown, index: number, array: readonly unknown[]) => void): void;
+}
+
 /** Minimal surface of the vendored Unistring global (src/core/frontend/unistring.js). */
-declare var Unistring: {
+interface UnistringStatic {
+  (s: string | UnistringInstance): UnistringInstance;
+  new (s: string | UnistringInstance): UnistringInstance;
   WBP: Record<string, number>;
   GBP: Record<string, number>;
   SBP: Record<string, number>;
@@ -148,7 +178,9 @@ declare var Unistring: {
   getScriptProp(cp: number): number;
   getUTF16FromCodePoint(cp: number): string;
   getCodePointString(cp: number, type?: string): string;
-};
+}
+
+declare var Unistring: UnistringStatic;
 
 /** Frozen helper bag from src/core/frontend/unicode_utils.js. */
 declare var unicodeUtils: {

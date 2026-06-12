@@ -943,11 +943,8 @@ function Buffer () {
 }
 Buffer.prototype = Object.create(Wasavi.Editor.prototype, {
 	deleteRangeEx: {value: function (start, end, foldedMarkRegisterer, callback) {
-		var args = [];
 		var that = this;
-		start && args.push(start);
-		end   && args.push(end);
-		args.push(function (content, fragment) {
+		return this.deleteRange(start ?? undefined, end ?? undefined, function (content, fragment) {
 			var deleteMarks = fragment.querySelectorAll('span.' + Wasavi.MARK_CLASS);
 			var deleteMarksDest = {};
 			for (var i = 0; i < deleteMarks.length; i++) {
@@ -964,7 +961,6 @@ Buffer.prototype = Object.create(Wasavi.Editor.prototype, {
 				callback(content, fragment, deleteMarksDest);
 			}
 		});
-		return this.deleteRange.apply(this, args);
 	}},
 	emphasisBound: {value: (function () {
 		function createSpan (content) {

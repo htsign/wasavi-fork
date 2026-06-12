@@ -561,7 +561,6 @@ interface WasaviMarks {
 interface WasaviEditor {
   elm: HTMLElement;
   isLineOrientSelection: boolean;
-  unicodeCacheMax: number;
 
   isEndOfText(...args: readonly unknown[]): boolean;
   isNewline(...args: readonly unknown[]): boolean;
@@ -569,14 +568,14 @@ interface WasaviEditor {
   rowNodes(arg: unknown, newline?: unknown): Node;
   rowTextNodes(arg: unknown): unknown;
   rows(arg: unknown): string;
-  charAt(...args: readonly unknown[]): string;
+  charAt(...args: readonly unknown[]): string | undefined;
   charCodeAt(...args: readonly unknown[]): number;
-  charClassAt(a: unknown, treatNewlineAsSpace?: boolean, extraWordRegex?: RegExp): number;
-  charRectAt(position: unknown, length?: number): unknown;
+  charClassAt(a: unknown, treatNewlineAsSpace?: boolean, extraWordRegex?: RegExp): number | undefined;
+  charRectAt(position: WasaviPositionLike | undefined, length?: number): DOMRect;
   ensureNewline(...args: readonly unknown[]): unknown;
-  getSelectionRange(): unknown;
-  getSelection(from?: WasaviPositionLike, to?: WasaviPositionLike): string;
-  getSelectionLinewise(from?: WasaviPositionLike, to?: WasaviPositionLike): string;
+  getSelectionRange(from?: WasaviPosition, to?: WasaviPosition): Range;
+  getSelection(from?: WasaviPosition, to?: WasaviPosition): string;
+  getSelectionLinewise(from?: WasaviPosition, to?: WasaviPosition): string;
   leftPos(...args: readonly unknown[]): WasaviPosition;
   leftClusterPos(...args: readonly unknown[]): WasaviPosition;
   rightPos(...args: readonly unknown[]): WasaviPosition;
@@ -588,7 +587,7 @@ interface WasaviEditor {
   getLineTailOffset(...args: readonly unknown[]): WasaviPosition;
   getIndent(...args: readonly unknown[]): string;
   getBackIndent(...args: readonly unknown[]): string;
-  getSpans(className: string, start?: unknown, end?: unknown): readonly unknown[];
+  getSpans(className: string, start?: unknown, end?: unknown): NodeListOf<HTMLSpanElement>;
   invalidateUnicodeCache(): void;
   initUnicodeCache(): unknown;
   getGraphemeClusters(n?: unknown): unknown;
@@ -612,7 +611,7 @@ interface WasaviEditor {
     isExpandTab: boolean,
     indents?: unknown
   ): unknown;
-  deleteRange(...args: readonly unknown[]): unknown;
+  deleteRange(from?: WasaviPosition, to?: WasaviPosition, callback?: (content: string, fragment: DocumentFragment) => void): number;
   selectRowsLinewise(count: number): unknown;
   divideLine(n?: unknown): unknown;
   extendSelectionTo(n: unknown): unknown;

@@ -444,7 +444,7 @@ class CursorUI {
 				this.#cursorBlinkTimer = null;
 			}
 			#locate() {
-				var ch = buffer.charAt(buffer.selectionStart);
+				var ch = /** @type {string} */ (buffer.charAt(buffer.selectionStart));
 				var cursorLine = 0;
 				var cursorColumn = 0;
 				if (ch != '' && /[^\u0000-\u001f\u007f]/.test(ch)) {
@@ -575,7 +575,7 @@ class CursorUI {
 
 		/** @returns {{ left: number, top: number, right: number, bottom: number }} */
 		function getCommandCursorCoord() {
-			var r = /** @type {{ left: number, top: number, right: number, bottom: number }} */ (buffer.charRectAt(buffer.selectionStart));
+			var r = buffer.charRectAt(buffer.selectionStart);
 			var result = {
 				left:r.left + buffer.scrollLeft,
 				top:r.top + buffer.scrollTop,

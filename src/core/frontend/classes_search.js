@@ -251,10 +251,10 @@ class SearchUtils {
 		 */
 		function getSimpleCharClass(n, bigword) {
 			n || (n = buffer.selectionStart);
-			var c = buffer.charAt(n);
+			var c = /** @type {string} */ (buffer.charAt(n));
 			if (spaces.test(c)) return 0;
 			if (bigword) return 1;
-			return buffer.charClassAt(n, false, app.config.vars.iskeyword) | 0x10000;
+			return (buffer.charClassAt(n, false, app.config.vars.iskeyword) ?? 0) | 0x10000;
 		}
 		/** @param {boolean} bigword */
 		function backToBoundary(bigword) {
@@ -273,7 +273,7 @@ class SearchUtils {
 		/** @param {WasaviPosition} [pos] */
 		function findFirstBlank(pos) {
 			while (iterator.decl(pos) != -1) {
-				if (!spaces.test(buffer.charAt(pos || buffer.selectionStart))) {
+				if (!spaces.test(/** @type {string} */ (buffer.charAt(pos || buffer.selectionStart)))) {
 					iterator.incl(pos);
 					break;
 				}
@@ -427,8 +427,8 @@ class SearchUtils {
 
 					var foundDot = false;
 					while (true) {
-						var c = buffer.charAt(pos);
-						if (spaces.test(c) || (!isForward && /[.!?)\]"']/.test(buffer.charAt(pos)))) {
+						var c = /** @type {string} */ (buffer.charAt(pos));
+						if (spaces.test(c) || (!isForward && /[.!?)\]"']/.test(/** @type {string} */ (buffer.charAt(pos))))) {
 							if (/[.!?]/.test(c)) {
 								if (foundDot) break;
 								foundDot = true;
@@ -448,7 +448,7 @@ class SearchUtils {
 					var startRow = pos.row;
 					var cpo_J = true;
 					while (true) {
-						var c = buffer.charAt(pos);
+						var c = /** @type {string} */ (buffer.charAt(pos));
 						if (buffer.isNewline(pos)
 						|| pos.col == 0 && isStartOfParagraphOrSection(pos, null, false)) {
 							if (!isForward && pos.row != startRow) {
@@ -462,7 +462,7 @@ class SearchUtils {
 							while (true) {
 								moved = iterator.inc(tpos);
 								if (moved == -1) break;
-								c = buffer.charAt(tpos);
+								c = /** @type {string} */ (buffer.charAt(tpos));
 								if (!/[)\]"']/.test(c)) break;
 							}
 
@@ -484,7 +484,7 @@ class SearchUtils {
 
 				//
 				if (!noSkip) {
-					while (spaces.test(buffer.charAt(pos))) {
+					while (spaces.test(/** @type {string} */ (buffer.charAt(pos)))) {
 						if (iterator.incl(pos) == -1) break;
 					}
 				}
@@ -553,7 +553,7 @@ class SearchUtils {
 			function findBracket() {
 				var i = 0;
 				while (!buffer.isEndOfText(n) && !buffer.isNewline(n)) {
-					var c = buffer.charAt(n);
+					var c = /** @type {string} */ (buffer.charAt(n));
 					var index = BRACKETS.indexOf(c);
 					if (index < 0) {
 						var list = app.ffttDictionary.get(c);
@@ -581,7 +581,7 @@ class SearchUtils {
 				var prevn = n;
 				n = buffer.rightPos(n);
 				while (!buffer.isEndOfText(n) && n.ne(prevn)) {
-					var c = buffer.charAt(n);
+					var c = /** @type {string} */ (buffer.charAt(n));
 					if (app.ffttDictionary.match(c, current)) {
 						depth++;
 					}
@@ -604,7 +604,7 @@ class SearchUtils {
 				var prevn = n;
 				n = buffer.leftPos(n);
 				while ((n.row > 0 || n.col >= 0) && n.ne(prevn)) {
-					var c = buffer.charAt(n);
+					var c = /** @type {string} */ (buffer.charAt(n));
 					if (app.ffttDictionary.match(c, current)) {
 						depth++;
 					}
@@ -729,7 +729,7 @@ class SearchUtils {
 		 * @returns {boolean}
 		 */
 		function block(count, what, over, includeAnchor) {
-			if (app.ffttDictionary.match(buffer.charAt(buffer.selectionStart), what)) {
+			if (app.ffttDictionary.match(/** @type {string} */ (buffer.charAt(buffer.selectionStart)), what)) {
 				app.motion.right('', 1);
 				buffer.setSelectionRange(buffer.selectionEnd);
 			}
@@ -774,7 +774,7 @@ class SearchUtils {
 
 			//
 			var pos = startPos.clone();
-			while (spaces.test(buffer.charAt(pos))) {
+			while (spaces.test(/** @type {string} */ (buffer.charAt(pos)))) {
 				iterator.incl(pos);
 			}
 			if (pos.eq(buffer.selectionStart)) {
@@ -804,11 +804,11 @@ class SearchUtils {
 			if (includeAnchor) {
 				if (startBlank) {
 					findFirstBlank();
-					if (spaces.test(buffer.charAt(buffer.selectionStart))) {
+					if (spaces.test(/** @type {string} */ (buffer.charAt(buffer.selectionStart)))) {
 						iterator.decl();
 					}
 				}
-				else if (!spaces.test(buffer.charAt(buffer.selectionStart))) {
+				else if (!spaces.test(/** @type {string} */ (buffer.charAt(buffer.selectionStart)))) {
 					findFirstBlank(startPos);
 				}
 			}

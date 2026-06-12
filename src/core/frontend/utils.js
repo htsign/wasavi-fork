@@ -150,6 +150,20 @@ g.isKeyOf = function (target, key) {
 	return Object.keys(target).includes(key);
 };
 /**
+ * @param {Node | null} node
+ * @returns {node is Text}
+ */
+g.isTextNode = function (node) {
+	return node?.nodeType === Node.TEXT_NODE;
+};
+/**
+ * @param {Node | null} node
+ * @returns {node is Element}
+ */
+g.isElementNode = function (node) {
+	return node?.nodeType === Node.ELEMENT_NODE;
+};
+/**
  * @param {string} src
  * @returns {unknown}
  */

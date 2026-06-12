@@ -2669,19 +2669,37 @@ Wasavi.Marks = class {
 	}
 };
 
-Wasavi.Editor = function (element) {
-	this.elm = $(element);
-	if (!this.elm) {
-		throw new TypeError('*** wasavi: Editor constructor: invalid element: ' + element);
-	}
-	this._ssrow = this._sscol = this._serow = this._secol = 0;
-	this.isLineOrientSelection = false;
+Wasavi.Editor = class Editor {
+	static #UNICODE_CACHE_MAX = /** @type {const} */ (20);
 
-	this.unicodeCacheMax = 20;
-	this._unicodeCache = null;
-};
-Wasavi.Editor.prototype = new function () {
-	function arg2pos (args) {
+	/** @type {HTMLElement} */
+	elm;
+	/** @type {boolean} */
+	isLineOrientSelection = false;
+
+	#ssrow = 0;
+	#sscol = 0;
+	#serow = 0;
+	#secol = 0;
+	/** @type {{clusters: UnistringInstance[], clusterIndexes: number[], words: UnistringWords[], wordsIndexes: number[]} | null} */
+	#unicodeCache = null;
+
+	/**
+	 * @param {string | HTMLElement} element
+	 */
+	constructor(element) {
+		const elm = $(element);
+		if (!elm) {
+			throw new TypeError('*** wasavi: Editor constructor: invalid element: ' + element);
+		}
+		this.elm = elm;
+	}
+
+	/**
+	 * @param {IArguments | readonly unknown[]} args
+	 * @returns {WasaviPosition}
+	 */
+	#arg2pos(args) {
 		if (args[0] instanceof Wasavi.Position) {
 			return args[0].clone();
 		}
@@ -2689,57 +2707,68 @@ Wasavi.Editor.prototype = new function () {
 			return new Wasavi.Position(args[0], args[1]);
 		}
 	}
-	function popLastArg (args, type) {
-		type || (type = 'function');
-		if (args.length && typeof args.lastItem == type) {
-			var func = args.lastItem;
-			args.pop();
-			return func;
-		}
-		return null;
-	}
-	function setRange (r, pos, isEnd) {
+
+	/**
+	 * @param {Range} r
+	 * @param {WasaviPositionLike} pos
+	 * @param {boolean} [isEnd]
+	 */
+	#setRange(r, pos, isEnd) {
 		var iter = document.createNodeIterator(
-			this.rowNodes(pos), window.NodeFilter.SHOW_TEXT, null, false);
+			this.rowNodes(pos), window.NodeFilter.SHOW_TEXT, null);
 		var totalLength = 0;
 		var done = false;
-		var node, prevNode;
+		/** @type {Node | null} */
+		var node;
 		while ((node = iter.nextNode())) {
-			var next = totalLength + node.nodeValue.length;
+			var next = totalLength + (node.nodeValue ?? '').length;
 			if (totalLength <= pos.col && pos.col < next) {
 				isEnd ? r.setEnd(node, pos.col - totalLength) :
 						r.setStart(node, pos.col - totalLength);
-				prevNode = null;
 				done = true;
 				break;
 			}
 			totalLength = next;
-			prevNode = node;
 		}
 
 		if (!done) {
 			if (isEnd) {
 				var rowNode = this.rowNodes(pos);
-				var node = rowNode.lastChild;
-				if (!node) {
-					node = rowNode.appendChild(document.createTextNode(''));
+				/** @type {Node | null} */
+				var lastNode = rowNode.lastChild;
+				if (!lastNode) {
+					lastNode = rowNode.appendChild(document.createTextNode(''));
 				}
-				node.nodeType == 1 ?
-					r.setEndAfter(node) :
-					r.setEnd(node, node.nodeValue.length);
+				isElementNode(lastNode) ?
+					r.setEndAfter(lastNode) :
+					r.setEnd(lastNode, (lastNode.nodeValue ?? '').length);
 			}
 			else {
 				r.setStartBefore(this.rowNodes(pos, true));
 			}
 		}
 	}
-	function select (s, e) {
-		if (arguments.length == 0) {
+
+	/**
+	 * @param {WasaviPosition} [from]
+	 * @param {WasaviPosition} [to]
+	 * @returns {{r: Range, s: WasaviPosition, e: WasaviPosition}}
+	 */
+	#select(from, to) {
+		/** @type {WasaviPosition} */
+		var s;
+		/** @type {WasaviPosition} */
+		var e;
+		if (from === undefined) {
 			s = this.selectionStart;
 			e = this.selectionEnd;
 		}
-		else if (arguments.length != 2) {
+		else if (to === undefined) {
 			throw new TypeError('select: invalid length of argument');
+		}
+		else {
+			s = from;
+			e = to;
 		}
 
 		if (s.row > e.row || s.row == e.row && s.col > e.col) {
@@ -2749,17 +2778,31 @@ Wasavi.Editor.prototype = new function () {
 		}
 
 		var r = document.createRange();
-		setRange.call(this, r, s);
-		setRange.call(this, r, e, true);
+		this.#setRange(r, s);
+		this.#setRange(r, e, true);
 		return {r:r, s:s, e:e};
 	}
-	function selectRows (s, e) {
-		if (arguments.length == 0) {
+
+	/**
+	 * @param {WasaviPosition} [from]
+	 * @param {WasaviPosition} [to]
+	 * @returns {{r: Range, s: WasaviPosition, e: WasaviPosition}}
+	 */
+	#selectRows(from, to) {
+		/** @type {WasaviPosition} */
+		var s;
+		/** @type {WasaviPosition} */
+		var e;
+		if (from === undefined) {
 			s = this.selectionStart;
 			e = this.selectionEnd;
 		}
-		else if (arguments.length != 2) {
+		else if (to === undefined) {
 			throw new TypeError('selectRows: invalid length of argument');
+		}
+		else {
+			s = from;
+			e = to;
 		}
 
 		if (s.row > e.row || s.row == e.row && s.col > e.col) {
@@ -2777,80 +2820,110 @@ Wasavi.Editor.prototype = new function () {
 		r.setEndAfter(this.rowNodes(e, true));
 		return {r:r, s:s, e:e};
 	}
-	function appendText (text, sentinel) {
-		var row = this.elm.insertBefore(document.createElement('div'), sentinel);
+
+	/**
+	 * @param {string | null | undefined} text
+	 * @param {Node | null} [sentinel]
+	 * @returns {HTMLDivElement}
+	 */
+	#appendText(text, sentinel) {
+		var row = this.elm.insertBefore(document.createElement('div'), sentinel ?? null);
 		row.textContent = text || '';
 		return row;
 	}
-	function appendNewline (sentinel) {
-		var newline = this.elm.insertBefore(document.createElement('span'), sentinel);
+
+	/**
+	 * @param {Node | null} [sentinel]
+	 * @returns {HTMLSpanElement}
+	 */
+	#appendNewline(sentinel) {
+		var newline = this.elm.insertBefore(document.createElement('span'), sentinel ?? null);
 		newline.className = 'newline';
 		newline.textContent = '\n';
 		return newline;
 	}
-	function appendRow (text, sentinel) {
-		var row = appendText.call(this, text, sentinel);
-		var newline = appendNewline.call(this, sentinel);
+
+	/**
+	 * @param {string | null} [text]
+	 * @param {Node | null} [sentinel]
+	 * @returns {HTMLDivElement}
+	 */
+	#appendRow(text, sentinel) {
+		var row = this.#appendText(text, sentinel);
+		this.#appendNewline(sentinel);
 		return row;
 	}
-	function ensureSentinelNewline (node) {
-		if (node.lastChild && node.lastChild.nodeType == 3) {
-			node.lastChild.appendData('\n');
+
+	/**
+	 * @param {Node} node
+	 */
+	#ensureSentinelNewline(node) {
+		var lastChild = node.lastChild;
+		if (isTextNode(lastChild)) {
+			lastChild.appendData('\n');
 		}
 		else {
 			node.appendChild(document.createTextNode('\n'));
 		}
 	}
-	function removeSentinelNewline (node) {
-		if (node.lastChild) {
+
+	/**
+	 * @param {Node | null} node
+	 */
+	#removeSentinelNewline(node) {
+		if (node?.lastChild) {
 			var lastChild = node.lastChild;
-			switch (lastChild.nodeType) {
-			case 1:
-				removeSentinelNewline(lastChild);
-				break;
-			case 3:
-				if (lastChild.nodeValue.length) {
-					while (lastChild.nodeValue.substr(-1) == '\n') {
-						lastChild.deleteData(lastChild.nodeValue.length - 1, 1);
+			if (isElementNode(lastChild)) {
+				this.#removeSentinelNewline(lastChild);
+			}
+			else if (isTextNode(lastChild)) {
+				if (lastChild.data.length) {
+					while (lastChild.data.substr(-1) == '\n') {
+						lastChild.deleteData(lastChild.data.length - 1, 1);
 					}
 				}
 				else {
-					removeSentinelNewline(lastChild.previousSibling);
+					this.#removeSentinelNewline(lastChild.previousSibling);
 				}
-				break;
 			}
 		}
 	}
-	return {
-		// condition
-		isEndOfText: function () {
-			var a = arg2pos(arguments);
-			var rowLength = this.rowLength;
-			if (a.row < 0 || a.row >= rowLength) {
-				throw new RangeError(`isEndOfText: argument row (${a.row}) out of range.`);
-			}
-			if (a.row < rowLength - 1) {
-				return false;
-			}
-			if (a.row == rowLength - 1 && a.col < this.rows(rowLength - 1).length) {
-				return false;
-			}
-			return true;
-		},
-		isNewline: function () {
-			var a = arg2pos(arguments);
-			var rowLength = this.rowLength;
-			if (a.row < 0 || a.row >= rowLength) {
-				throw new RangeError(`isNewline: argument row (${a.row}) out of range.`);
-			}
-			if (a.row == rowLength - 1 || a.col < this.rows(a).length) {
-				return false;
-			}
-			return true;
-		},
 
-		// getter
-		getValue: function (from, to, newline) {
+	// condition
+	isEndOfText() {
+		var a = this.#arg2pos(arguments);
+		var rowLength = this.rowLength;
+		if (a.row < 0 || a.row >= rowLength) {
+			throw new RangeError(`isEndOfText: argument row (${a.row}) out of range.`);
+		}
+		if (a.row < rowLength - 1) {
+			return false;
+		}
+		if (a.row == rowLength - 1 && a.col < this.rows(rowLength - 1).length) {
+			return false;
+		}
+		return true;
+	}
+	isNewline() {
+		var a = this.#arg2pos(arguments);
+		var rowLength = this.rowLength;
+		if (a.row < 0 || a.row >= rowLength) {
+			throw new RangeError(`isNewline: argument row (${a.row}) out of range.`);
+		}
+		if (a.row == rowLength - 1 || a.col < this.rows(a).length) {
+			return false;
+		}
+		return true;
+	}
+
+	// getter
+	/**
+	 * @param {unknown} from
+	 * @param {unknown} to
+	 * @param {string | null} [newline]
+	 * @returns {string}
+	 */
+	getValue(from, to, newline) {
 			var result, rg;
 			var rowLength = this.rowLength;
 
@@ -2868,1178 +2941,1409 @@ Wasavi.Editor.prototype = new function () {
 			result = rg.toString();
 			result = toNativeControl(result);
 
-			if (isString(newline)) {
-				result = result.replace(/\n/g, newline);
-			}
+		if (isString(newline)) {
+			result = result.replace(/\n/g, newline);
+		}
 
-			return result;
-		},
-		rowNodes: function (arg, newline) {
-			var row = arg instanceof Wasavi.Position ? arg.row : arg;
+		return result;
+	}
+	/**
+	 * @param {unknown} arg
+	 * @param {unknown} [newline]
+	 * @returns {Node}
+	 */
+	rowNodes(arg, newline) {
+		var row = arg instanceof Wasavi.Position ? arg.row : arg;
 
-			if (typeof row != 'number' || isNaN(row)) {
-				throw new TypeError(`rowNodes: argument row is not a number`);
-			}
-			if (row < 0 || row >= this.rowLength) {
-				throw new RangeError(`rowNodes: argument row (${row}) out of range`);
-			}
+		if (typeof row != 'number' || isNaN(row)) {
+			throw new TypeError(`rowNodes: argument row is not a number`);
+		}
+		if (row < 0 || row >= this.rowLength) {
+			throw new RangeError(`rowNodes: argument row (${row}) out of range`);
+		}
 
-			var result = this.elm.childNodes[row * 2 + (newline ? 1 : 0)];
+		var result = this.elm.childNodes[row * 2 + (newline ? 1 : 0)];
 
-			if (!result.firstChild) {
-				result.appendChild(document.createTextNode(''));
-			}
+		if (!result.firstChild) {
+			result.appendChild(document.createTextNode(''));
+		}
 
-			return result;
-		},
-		rowTextNodes: function (arg) {
-			return this.rowNodes(arg).firstChild;
-		},
-		rows: function (arg) {
-			return this.rowNodes(arg).textContent;
-		},
-		charAt: function () {
-			var a = arg2pos(arguments);
-			if (a.row < 0 || a.row >= this.rowLength) {
-				return undefined;
-			}
-			var content = this.rows(a);
-			return a.col >= content.length ? '\n' : content.charAt(a.col);
-		},
-		charCodeAt: function () {
-			return this.charAt.apply(this, arguments).charCodeAt(0);
-		},
-		charClassAt: function (a, treatNewlineAsSpace, extraWordRegex) {
-			var ch = this.charAt(a);
-			if (ch == undefined) {
-				return undefined;
-			}
-			var cp = ch.charCodeAt(0);
-			if (treatNewlineAsSpace && cp == 0x0a) {
-				return 0;
-			}
-			if (extraWordRegex instanceof RegExp && extraWordRegex.test(ch)) {
-				// treat as latin1 word component
-				return 0x100 + 1;
-			}
-			return unicodeUtils.getScriptClass(cp);
-		},
-		charRectAt: function (position, length) {
-			const CLASS_NAME = 'char-rect-at';
-			try {
-				var span = this.emphasis(position, length || 1, CLASS_NAME)[0];
-				return span ?
-					span.getBoundingClientRect() :
-					this.rowNodes(position).getBoundingClientRect();
-			}
-			finally {
-				this.unEmphasis(CLASS_NAME);
-			}
-		},
-		ensureNewline: function () {
-			var a = arg2pos(arguments);
-			if (a.row < 0 || a.row >= Math.ceil(this.elm.childNodes.length / 2)) {
-				return;
-			}
-			var newline = this.rowNodes(a, true);
-			if (!newline || newline.className != 'newline') {
-				appendNewline.call(this, newline);
-			}
-		},
-		getSelectionRange: function () {
-			return this.isLineOrientSelection ?
-				selectRows.apply(this, arguments).r :
-				select.apply(this, arguments).r;
-		},
-		getSelection: function () {
-			if (this.isLineOrientSelection) {
-				return this.getSelectionLinewise.apply(this, arguments);
-			}
-			else {
-				var r = select.apply(this, arguments);
-				var content = r.r.toString();
-				return content;
-			}
-		},
-		getSelectionLinewise: function () {
-			var r = selectRows.apply(this, arguments);
+		return result;
+	}
+	/**
+	 * @param {unknown} arg
+	 * @returns {ChildNode | null}
+	 */
+	rowTextNodes(arg) {
+		return this.rowNodes(arg).firstChild;
+	}
+	/**
+	 * @param {unknown} arg
+	 * @returns {string}
+	 */
+	rows(arg) {
+		return this.rowNodes(arg).textContent ?? '';
+	}
+	/**
+	 * @returns {string | undefined}
+	 */
+	charAt() {
+		var a = this.#arg2pos(arguments);
+		if (a.row < 0 || a.row >= this.rowLength) {
+			return undefined;
+		}
+		var content = this.rows(a);
+		return a.col >= content.length ? '\n' : content.charAt(a.col);
+	}
+	/**
+	 * @returns {number}
+	 */
+	charCodeAt() {
+		return /** @type {string} */ (this.charAt(...arguments)).charCodeAt(0);
+	}
+	/**
+	 * @param {unknown} a
+	 * @param {boolean} [treatNewlineAsSpace]
+	 * @param {RegExp} [extraWordRegex]
+	 * @returns {number | undefined}
+	 */
+	charClassAt(a, treatNewlineAsSpace, extraWordRegex) {
+		var ch = this.charAt(a);
+		if (ch == undefined) {
+			return undefined;
+		}
+		var cp = ch.charCodeAt(0);
+		if (treatNewlineAsSpace && cp == 0x0a) {
+			return 0;
+		}
+		if (extraWordRegex instanceof RegExp && extraWordRegex.test(ch)) {
+			// treat as latin1 word component
+			return 0x100 + 1;
+		}
+		return unicodeUtils.getScriptClass(cp);
+	}
+	/**
+	 * @param {WasaviPositionLike | undefined} position
+	 * @param {number} [length]
+	 * @returns {DOMRect}
+	 */
+	charRectAt(position, length) {
+		const CLASS_NAME = 'char-rect-at';
+		try {
+			var span = this.emphasis(position, length || 1, CLASS_NAME)[0];
+			return span ?
+				span.getBoundingClientRect() :
+				/** @type {Element} */ (this.rowNodes(position)).getBoundingClientRect();
+		}
+		finally {
+			this.unEmphasis(CLASS_NAME);
+		}
+	}
+	ensureNewline() {
+		var a = this.#arg2pos(arguments);
+		if (a.row < 0 || a.row >= Math.ceil(this.elm.childNodes.length / 2)) {
+			return;
+		}
+		var newline = this.rowNodes(a, true);
+		if (!newline || /** @type {Element} */ (newline).className != 'newline') {
+			this.#appendNewline(newline);
+		}
+	}
+	/**
+	 * @param {WasaviPosition} [from]
+	 * @param {WasaviPosition} [to]
+	 * @returns {Range}
+	 */
+	getSelectionRange(from, to) {
+		return this.isLineOrientSelection ?
+			this.#selectRows(from, to).r :
+			this.#select(from, to).r;
+	}
+	/**
+	 * @param {WasaviPosition} [from]
+	 * @param {WasaviPosition} [to]
+	 * @returns {string}
+	 */
+	getSelection(from, to) {
+		if (this.isLineOrientSelection) {
+			return this.getSelectionLinewise(from, to);
+		}
+		else {
+			var r = this.#select(from, to);
 			var content = r.r.toString();
-			if (content.length && content.substr(-1) != '\n') {
-				content += '\n';
-			}
 			return content;
-		},
-		leftPos: function () {
-			var a = arg2pos(arguments);
-			if (a.col == 0) {
-				if (a.row > 0) {
-					a.row--;
-					a.col = this.rows(a).length;
-				}
-			}
-			else {
-				a.col--;
-			}
-			return a;
-		},
-		leftClusterPos: function () {
-			var a = arg2pos(arguments);
-			if (a.col == 0) {
-				if (a.row > 0) {
-					a.row--;
-					a.col = this.rows(a).length;
-				}
-			}
-			else {
-				var clusters = this.getGraphemeClusters(a);
-				var index = clusters.getClusterIndexFromUTF16Index(a.col);
-				a.col = clusters.rawIndexAt(index - 1);
-			}
-			return a;
-		},
-		rightPos: function () {
-			var a = arg2pos(arguments);
-			var node = this.rows(a);
-			if (a.col >= node.length) {
-				if (a.row < this.rowLength - 1) {
-					a.row++;
-					a.col = 0;
-				}
-			}
-			else {
-				a.col++;
-			}
-			return a;
-		},
-		rightClusterPos: function () {
-			var a = arg2pos(arguments);
-			var node = this.rows(a);
-			if (a.col >= node.length) {
-				if (a.row < this.rowLength - 1) {
-					a.row++;
-					a.col = 0;
-				}
-			}
-			else {
-				var clusters = this.getGraphemeClusters(a);
-				var index = clusters.getClusterIndexFromUTF16Index(a.col);
-				a.col = clusters.rawIndexAt(index + 1);
-			}
-			return a;
-		},
-		indexOf: function (node) {
-			var result = Array.prototype.indexOf.call(this.elm.children, node);
-			return result >= 0 ? result >> 1 : result;
-		},
-		getLineTopOffset: function () {
-			var a = arg2pos(arguments);
-			a.col = 0;
-			return a;
-		},
-		getLineTailOffset: function () {
-			var a = arg2pos(arguments);
-			a.col = this.rows(a).length;
-			return a;
-		},
-		getLineTopOffset2: function () {
-			var a = arg2pos(arguments);
-			var re = spc('^(S*).*$').exec(this.rows(a));
-			a.col = re ? re[1].length : 0;
-			return a;
-		},
-		getIndent: function () {
-			var a = arg2pos(arguments);
-			while (a.row >= 0 &&
-				(
-					this.rowNodes(a).getAttribute('data-indent-ignore') == '1' ||
-					this.rows(a) == ''
-				)
-			) {
+		}
+	}
+	/**
+	 * @param {WasaviPosition} [from]
+	 * @param {WasaviPosition} [to]
+	 * @returns {string}
+	 */
+	getSelectionLinewise(from, to) {
+		var r = this.#selectRows(from, to);
+		var content = r.r.toString();
+		if (content.length && content.substr(-1) != '\n') {
+			content += '\n';
+		}
+		return content;
+	}
+	leftPos() {
+		var a = this.#arg2pos(arguments);
+		if (a.col == 0) {
+			if (a.row > 0) {
 				a.row--;
+				a.col = this.rows(a).length;
 			}
-			return a.row >= 0 ? spc('^S*').exec(this.rows(a))[0] : '';
-		},
-		getBackIndent: function () {
-			var a = arg2pos(arguments);
-			while (--a.row >= 0 &&
-				(
-					this.rowNodes(a).getAttribute('data-indent-ignore') == '1' ||
-					this.rows(a) == ''
-				)
-			) {}
-			return a.row >= 0 ? spc('^S*').exec(this.rows(a))[0] : '';
-		},
-		getSpans: function (className, start, end) {
-			var q = ['#wasavi_editor>div'];
-			if (typeof start == 'number') {
-				if (start < 0) {
-					start = this.rowLength + start;
-					end = false;
-				}
-				// this factor "2" depends row structure
-				q.push(':nth-child(n+' + (start * 2 + 1) + ')');
+		}
+		else {
+			a.col--;
+		}
+		return a;
+	}
+	leftClusterPos() {
+		var a = this.#arg2pos(arguments);
+		if (a.col == 0) {
+			if (a.row > 0) {
+				a.row--;
+				a.col = this.rows(a).length;
 			}
-			if (typeof end == 'number') {
-				end = Math.min(end, this.rowLength - 1);
-				// this factor "2" depends row structure
-				q.push(':nth-child(-n+' + (end * 2 + 1) + ')');
+		}
+		else {
+			var clusters = this.getGraphemeClusters(a);
+			var index = clusters.getClusterIndexFromUTF16Index(a.col);
+			a.col = clusters.rawIndexAt(index - 1);
+		}
+		return a;
+	}
+	rightPos() {
+		var a = this.#arg2pos(arguments);
+		var node = this.rows(a);
+		if (a.col >= node.length) {
+			if (a.row < this.rowLength - 1) {
+				a.row++;
+				a.col = 0;
 			}
-			if (q.length == 3 && start == end) {
-				q.pop();
-				q.pop();
-				// this factor "2" depends row structure
-				q.push(':nth-child(' + (start * 2 + 1) + ')');
+		}
+		else {
+			a.col++;
+		}
+		return a;
+	}
+	rightClusterPos() {
+		var a = this.#arg2pos(arguments);
+		var node = this.rows(a);
+		if (a.col >= node.length) {
+			if (a.row < this.rowLength - 1) {
+				a.row++;
+				a.col = 0;
 			}
-			q.push(' span');
-			if (typeof className == 'string' && className != '') {
-				q.push('.' + className);
+		}
+		else {
+			var clusters = this.getGraphemeClusters(a);
+			var index = clusters.getClusterIndexFromUTF16Index(a.col);
+			a.col = clusters.rawIndexAt(index + 1);
+		}
+		return a;
+	}
+	/**
+	 * @param {Node} node
+	 * @returns {number}
+	 */
+	indexOf(node) {
+		var result = Array.prototype.indexOf.call(this.elm.children, node);
+		return result >= 0 ? result >> 1 : result;
+	}
+	getLineTopOffset() {
+		var a = this.#arg2pos(arguments);
+		a.col = 0;
+		return a;
+	}
+	getLineTailOffset() {
+		var a = this.#arg2pos(arguments);
+		a.col = this.rows(a).length;
+		return a;
+	}
+	getLineTopOffset2() {
+		var a = this.#arg2pos(arguments);
+		var re = spc('^(S*).*$').exec(this.rows(a));
+		a.col = re ? re[1].length : 0;
+		return a;
+	}
+	getIndent() {
+		var a = this.#arg2pos(arguments);
+		while (a.row >= 0 &&
+			(
+				/** @type {Element} */ (this.rowNodes(a)).getAttribute('data-indent-ignore') == '1' ||
+				this.rows(a) == ''
+			)
+		) {
+			a.row--;
+		}
+		return a.row >= 0 ? (spc('^S*').exec(this.rows(a)) ?? [''])[0] : '';
+	}
+	getBackIndent() {
+		var a = this.#arg2pos(arguments);
+		while (--a.row >= 0 &&
+			(
+				/** @type {Element} */ (this.rowNodes(a)).getAttribute('data-indent-ignore') == '1' ||
+				this.rows(a) == ''
+			)
+		) {}
+		return a.row >= 0 ? (spc('^S*').exec(this.rows(a)) ?? [''])[0] : '';
+	}
+	/**
+	 * @param {string} className
+	 * @param {unknown} [start]
+	 * @param {unknown} [end]
+	 * @returns {NodeListOf<HTMLSpanElement>}
+	 */
+	getSpans(className, start, end) {
+		var q = ['#wasavi_editor>div'];
+		/** @type {number | undefined} */
+		var startNum;
+		/** @type {number | undefined} */
+		var endNum;
+		if (typeof start == 'number') {
+			startNum = start;
+			if (startNum < 0) {
+				startNum = this.rowLength + startNum;
+				end = false;
 			}
-			return document.querySelectorAll(q.join(''));
-		},
-		// UAX#29
-		invalidateUnicodeCache: function () {
-			this._unicodeCache = null;
-		},
-		initUnicodeCache: function () {
-			if (!this._unicodeCache) {
-				this._unicodeCache = {
-					clusters: [],
-					clusterIndexes: [],
-					words: [],
-					wordsIndexes: []
-				};
+			// this factor "2" depends row structure
+			q.push(':nth-child(n+' + (startNum * 2 + 1) + ')');
+		}
+		if (typeof end == 'number') {
+			endNum = Math.min(end, this.rowLength - 1);
+			// this factor "2" depends row structure
+			q.push(':nth-child(-n+' + (endNum * 2 + 1) + ')');
+		}
+		if (q.length == 3 && startNum != undefined && startNum === endNum) {
+			q.pop();
+			q.pop();
+			// this factor "2" depends row structure
+			q.push(':nth-child(' + (startNum * 2 + 1) + ')');
+		}
+		q.push(' span');
+		if (typeof className == 'string' && className != '') {
+			q.push('.' + className);
+		}
+		return document.querySelectorAll(q.join(''));
+	}
+	// UAX#29
+	invalidateUnicodeCache() {
+		this.#unicodeCache = null;
+	}
+	initUnicodeCache() {
+		if (!this.#unicodeCache) {
+			this.#unicodeCache = {
+				clusters: [],
+				clusterIndexes: [],
+				words: [],
+				wordsIndexes: []
+			};
+		}
+		return this.#unicodeCache;
+	}
+	/**
+	 * @param {unknown} [n]
+	 * @returns {UnistringInstance}
+	 */
+	getGraphemeClusters(n) {
+		if (n == undefined) {
+			n = this.#ssrow;
+		}
+		else if (n instanceof Wasavi.Position) {
+			n = n.row;
+		}
+		if (typeof n != 'number' || isNaN(n)) {
+			throw new TypeError('Editor#getGraphemeClusters: invalid arg: ' + n);
+		}
+		var uc = this.initUnicodeCache();
+		if (!uc.clusters[n]) {
+			uc.clusters[n] = Unistring(this.rows(n));
+			uc.clusterIndexes.push(n);
+			while (uc.clusterIndexes.length > Editor.#UNICODE_CACHE_MAX) {
+				var top = uc.clusterIndexes.shift();
+				if (top != undefined) delete uc.clusters[top];
 			}
-			return this._unicodeCache;
-		},
-		getGraphemeClusters: function (n) {
-			if (n == undefined) {
-				n = this._ssrow;
+		}
+		return uc.clusters[n];
+	}
+	/**
+	 * @param {unknown} n
+	 * @returns {UnistringWords}
+	 */
+	getWords(n) {
+		if (n == undefined) {
+			n = this.#ssrow;
+		}
+		else if (n instanceof Wasavi.Position) {
+			n = n.row;
+		}
+		if (typeof n != 'number' || isNaN(n)) {
+			throw new TypeError('Editor#getWords: invalid arg: ' + n);
+		}
+		var uc = this.initUnicodeCache();
+		if (!uc.words[n]) {
+			uc.words[n] = Unistring.getWords(this.rows(n), true);
+			uc.wordsIndexes.push(n);
+			while (uc.wordsIndexes.length > Editor.#UNICODE_CACHE_MAX) {
+				var top = uc.wordsIndexes.shift();
+				if (top != undefined) delete uc.words[top];
 			}
-			else if (n instanceof Wasavi.Position) {
-				n = n.row;
-			}
-			if (typeof n != 'number' || isNaN(n)) {
-				throw new TypeError('Editor#getGraphemeClusters: invalid arg: ' + n);
-			}
-			var uc = this.initUnicodeCache();
-			if (!uc.clusters[n]) {
-				uc.clusters[n] = Unistring(this.rows(n));
-				uc.clusterIndexes.push(n);
-				while (uc.clusterIndexes.length > this.unicodeCacheMax) {
-					var top = uc.clusterIndexes.shift();
-					delete uc.clusters[top];
-				}
-			}
-			return uc.clusters[n];
-		},
-		getWords: function (n) {
-			if (n == undefined) {
-				n = this._ssrow;
-			}
-			else if (n instanceof Wasavi.Position) {
-				n = n.row;
-			}
-			if (typeof n != 'number' || isNaN(n)) {
-				throw new TypeError('Editor#getWords: invalid arg: ' + n);
-			}
-			var uc = this.initUnicodeCache();
-			if (!uc.words[n]) {
-				uc.words[n] = Unistring.getWords(this.rows(n), true);
-				uc.wordsIndexes.push(n);
-				while (uc.wordsIndexes.length > this.unicodeCacheMax) {
-					var top = uc.wordsIndexes.shift();
-					delete uc.words[top];
-				}
-			}
-			return uc.words[n];
-		},
-		getClosestOffsetToPixels: function (n, pixels) {
-			var clusters = this.getGraphemeClusters(n);
-			var index = clusters.getClusterIndexFromUTF16Index(n.col);
-			if (clusters.length == 0 || index < 0) {
-				n.col = 0;
-				return n;
-			}
-
-			var node = $('wasavi_singleline_scaler');
-			var row = this.rowLength - 1;
-			node.textContent = this.rows(n);
-
-			var r = document.createRange();
-			r.setStart(node.firstChild, n.col);
-			r.setEnd(node.firstChild, node.textContent.length);
-			var right = document.createElement('span');
-			right.className = 'closest';
-			r.surroundContents(right);
-
-			if (right && right.firstChild) {
-				var width = 0;
-				var widthp = 0;
-				var delta = 1;
-				var phase = 0;
-
-				var rightText = right.firstChild;
-				var left = right.parentNode.insertBefore(document.createElement('span'), right);
-				var leftText = left.appendChild(document.createTextNode(''));
-
-				left.className = 'closest';
-				//left.style.backgroundColor = 'cyan';
-				//right.style.backgroundColor = 'red';
-
-				while (index < clusters.length) {
-					var clusterLength = Math.min(delta, clusters.length - index);
-					var fragment = clusters.substr(index, clusterLength).toString();
-					var length = fragment.length;
-
-					leftText.appendData(fragment);
-					rightText.deleteData(0, length);
-
-					index += delta;
-					width = left.offsetWidth;
-
-					if (width >= pixels) {
-						if (phase == 2 || width == pixels) {
-							index -= Math.abs(widthp - pixels) <= Math.abs(width - pixels) ? 1 : 0;
-							break;
-						}
-
-						index -= delta;
-						leftText.deleteData(
-							leftText.nodeValue.length - length, length);
-						rightText.insertData(0, fragment);
-						if (phase == 1) {
-							if (delta > 2) {
-								delta = Math.max(1, delta >> 1);
-							}
-							else {
-								delta = 1;
-								phase = 2;
-							}
-						}
-						else {
-							phase = 1;
-							delta = Math.max(1, delta >> 1);
-						}
-						continue;
-					}
-
-					widthp = width;
-					if (phase == 0) {
-						delta <<= 1;
-					}
-				}
-			}
-
-			node.textContent = '';
-			n.col = clusters.rawIndexAt(minmax(0, index, clusters.length));
+		}
+		return uc.words[n];
+	}
+	/**
+	 * @param {WasaviPosition} n
+	 * @param {number} pixels
+	 * @returns {WasaviPosition}
+	 */
+	getClosestOffsetToPixels(n, pixels) {
+		var clusters = this.getGraphemeClusters(n);
+		var index = clusters.getClusterIndexFromUTF16Index(n.col);
+		if (clusters.length == 0 || index < 0) {
+			n.col = 0;
 			return n;
-		},
+		}
 
-		// setter
-		setRow: function (arg, text) {
-			var row4 = arg;
-			if (arg instanceof Wasavi.Position) {
-				row4 = arg.row;
-			}
-			this.rowNodes(row4).textContent = trimTerm(text);
-		},
-		setSelectionRange: function () {
-			if (arguments.length == 1) {
-				if (arguments[0] instanceof Wasavi.Position) {
-					this.selectionStart = arguments[0].clone();
-					this.selectionEnd = arguments[0].clone();
-				}
-				else if (typeof arguments[0] == 'number') {
-					this.selectionStart = this.linearPositionToBinaryPosition(arguments[0]);
-				}
-			}
-			else if (arguments.length > 1) {
-				if (arguments[0] instanceof Wasavi.Position) {
-					this.selectionStart = arguments[0].clone();
-				}
-				else if (typeof arguments[0] == 'number') {
-					this.selectionStart = this.linearPositionToBinaryPosition(arguments[0]);
-				}
-				if (arguments[1] instanceof Wasavi.Position) {
-					this.selectionEnd = arguments[1].clone();
-				}
-				else if (typeof arguments[1] == 'number') {
-					this.selectionEnd = this.linearPositionToBinaryPosition(arguments[1]);
-				}
-			}
-		},
+		var node = $('wasavi_singleline_scaler');
+		if (!node) {
+			return n;
+		}
+		node.textContent = this.rows(n);
 
-		// method
-		adjustBackgroundImage: function () {
-			var y = 0;
-			if (this.rowLength) {
-				var last = this.rowNodes(this.rowLength - 1);
-				y = last.offsetTop + last.offsetHeight;
-			}
-			var desc = '0 ' + y + 'px';
-			if (this.elm.style.backgroundPosition != desc) {
-				this.elm.style.backgroundPosition = desc;
-			}
-		},
-		adjustLineNumberClass: function (isAbsolute, isRelative) {
-			var newClass = '';
-			if (isAbsolute) {
-				newClass = (isRelative ? 'nar' : 'na') +
-					' n' + Math.min(
-						Wasavi.LINE_NUMBER_MAX_WIDTH,
-						(this.rowLength + '').length);
-			}
-			else if (isRelative) {
-				newClass = 'nr n' + Wasavi.LINE_NUMBER_RELATIVE_WIDTH;
-			}
-			if (this.elm.classList.contains('list')) {
-				newClass += ' list';
-			}
-			if (this.elm.className != newClass) {
-				this.elm.className = newClass;
-			}
-		},
-		adjustLineNumber: function () {
-			var desc = 'na 0 nr ' + (this.selectionStartRow + 1);
-			if (this.elm.style.counterReset != desc) {
-				this.elm.style.counterReset = desc;
-			}
-		},
-		adjustWrapGuide: function (width, unit) {
-			var o = $('wasavi_textwidth_guide'), display, left;
-			if (!o) return;
-			if (width <= 0) {
-				display = 'none';
-			}
-			else {
-				display = 'block';
-				left = (this.elm.childNodes[0].offsetLeft + width * unit) + 'px';
-			}
-			if (display !== undefined && display != o.style.display) {
-				o.style.display = display;
-			}
-			if (left !== undefined && left != o.style.left) {
-				o.style.left = left;
-				o.style.height = this.elm.offsetHeight + 'px';
-				o.textContent = width;
-			}
-		},
-		updateActiveRow: function () {
-			Array.prototype.forEach.call(
-				document.querySelectorAll('#wasavi_editor>div.current'),
-				function (node) {node.removeAttribute('class');}
-			);
-			this.rowNodes(this.selectionStartRow).className = 'current';
-		},
-		insertChars: function (pos, text) {
-			var rowNode = this.rowNodes(pos);
-			var iter = document.createNodeIterator(
-				rowNode, window.NodeFilter.SHOW_TEXT, null, false);
-			var totalLength = 0;
-			var node;
+		var r = document.createRange();
+		var nodeFirstChild = node.firstChild;
+		if (!nodeFirstChild) {
+			return n;
+		}
+		r.setStart(nodeFirstChild, n.col);
+		r.setEnd(nodeFirstChild, (node.textContent ?? '').length);
+		var right = document.createElement('span');
+		right.className = 'closest';
+		r.surroundContents(right);
 
-			ensureSentinelNewline(rowNode);
-			try {
-				while ((node = iter.nextNode())) {
-					var next = totalLength + node.nodeValue.length;
-					if (totalLength <= pos.col && pos.col < next) {
-						var pnode = node.previousSibling;
-						var index = pos.col - totalLength;
+		if (right && right.firstChild) {
+			var width = 0;
+			var widthp = 0;
+			var delta = 1;
+			var phase = 0;
 
-						if (index == 0
-						&&  pnode
-						&&  pnode.nodeName == 'SPAN'
-						&&  pnode.className == Wasavi.MARK_CLASS) {
-							pnode.parentNode.insertBefore(document.createTextNode(text), pnode);
-						}
-						else {
-							node.insertData(index, text);
-						}
+			var rightText = /** @type {Text} */ (right.firstChild);
+			var left = /** @type {HTMLElement} */ (right.parentNode).insertBefore(document.createElement('span'), right);
+			var leftText = left.appendChild(document.createTextNode(''));
 
-						pos.col += text.length;
+			left.className = 'closest';
+			//left.style.backgroundColor = 'cyan';
+			//right.style.backgroundColor = 'red';
+
+			while (index < clusters.length) {
+				var clusterLength = Math.min(delta, clusters.length - index);
+				var fragment = clusters.substr(index, clusterLength).toString();
+				var length = fragment.length;
+
+				leftText.appendData(fragment);
+				rightText.deleteData(0, length);
+
+				index += delta;
+				width = left.offsetWidth;
+
+				if (width >= pixels) {
+					if (phase == 2 || width == pixels) {
+						index -= Math.abs(widthp - pixels) <= Math.abs(width - pixels) ? 1 : 0;
 						break;
 					}
-					totalLength = next;
-				}
 
-				this.invalidateUnicodeCache();
-
-				return pos;
-			}
-			finally {
-				removeSentinelNewline(rowNode);
-			}
-		},
-		overwriteChars: function (pos, text) {
-			text = Unistring(text);
-
-			var rowNode = this.rowNodes(pos);
-			var iter = document.createNodeIterator(
-				rowNode, window.NodeFilter.SHOW_TEXT, null, false);
-			var totalLength = 0;
-			var done = false;
-			var node;
-
-			while (text.length && (node = iter.nextNode())) {
-				var next = totalLength + node.length;
-				if (!(totalLength <= pos.col && pos.col < next)) {
-					totalLength = next;
+					index -= delta;
+					leftText.deleteData(
+						leftText.data.length - length, length);
+					rightText.insertData(0, fragment);
+					if (phase == 1) {
+						if (delta > 2) {
+							delta = Math.max(1, delta >> 1);
+						}
+						else {
+							delta = 1;
+							phase = 2;
+						}
+					}
+					else {
+						phase = 1;
+						delta = Math.max(1, delta >> 1);
+					}
 					continue;
 				}
 
-				var nodeText = Unistring(node.nodeValue);
-				var nodeUTF16Offset = Math.max(pos.col - totalLength, 0);
-				var nodeClusterOffset = nodeText.getClusterIndexFromUTF16Index(nodeUTF16Offset);
-				var overwriteClusterCount = next >= this.rows(pos).length ?
-					text.length :
-					Math.min(nodeText.length - nodeClusterOffset, text.length);
-				var overwriting = text.substr(0, overwriteClusterCount);
-
-				node.nodeValue = Unistring('')
-					.append(nodeText.substring(0, nodeClusterOffset))
-					.append(overwriting)
-					.append(nodeText.substring(nodeClusterOffset + overwriteClusterCount))
-					.toString();
-				pos.col += overwriting.toString().length;
-				text = text.substr(overwriteClusterCount);
-				totalLength += node.length;
-				done = true;
+				widthp = width;
+				if (phase == 0) {
+					delta <<= 1;
+				}
 			}
+		}
 
-			if (!done) {
-				if (rowNode.lastChild && rowNode.lastChild.nodeType == 3) {
-					rowNode.lastChild.nodeValue += text;
+		node.textContent = '';
+		n.col = clusters.rawIndexAt(minmax(0, index, clusters.length));
+		return n;
+	}
+
+	// setter
+	/**
+	 * @param {unknown} arg
+	 * @param {string} text
+	 */
+	setRow(arg, text) {
+		var row4 = arg;
+		if (arg instanceof Wasavi.Position) {
+			row4 = arg.row;
+		}
+		this.rowNodes(row4).textContent = trimTerm(text);
+	}
+	setSelectionRange() {
+		if (arguments.length == 1) {
+			if (arguments[0] instanceof Wasavi.Position) {
+				this.selectionStart = arguments[0].clone();
+				this.selectionEnd = arguments[0].clone();
+			}
+			else if (typeof arguments[0] == 'number') {
+				var p = this.linearPositionToBinaryPosition(arguments[0]);
+				if (p) this.selectionStart = p;
+			}
+		}
+		else if (arguments.length > 1) {
+			if (arguments[0] instanceof Wasavi.Position) {
+				this.selectionStart = arguments[0].clone();
+			}
+			else if (typeof arguments[0] == 'number') {
+				var ps = this.linearPositionToBinaryPosition(arguments[0]);
+				if (ps) this.selectionStart = ps;
+			}
+			if (arguments[1] instanceof Wasavi.Position) {
+				this.selectionEnd = arguments[1].clone();
+			}
+			else if (typeof arguments[1] == 'number') {
+				var pe = this.linearPositionToBinaryPosition(arguments[1]);
+				if (pe) this.selectionEnd = pe;
+			}
+		}
+	}
+
+	// method
+	adjustBackgroundImage() {
+		var y = 0;
+		if (this.rowLength) {
+			var last = /** @type {HTMLElement} */ (this.rowNodes(this.rowLength - 1));
+			y = last.offsetTop + last.offsetHeight;
+		}
+		var desc = '0 ' + y + 'px';
+		if (this.elm.style.backgroundPosition != desc) {
+			this.elm.style.backgroundPosition = desc;
+		}
+	}
+	/**
+	 * @param {boolean} [isAbsolute]
+	 * @param {boolean} [isRelative]
+	 */
+	adjustLineNumberClass(isAbsolute, isRelative) {
+		var newClass = '';
+		if (isAbsolute) {
+			newClass = (isRelative ? 'nar' : 'na') +
+				' n' + Math.min(
+					Wasavi.LINE_NUMBER_MAX_WIDTH,
+					(this.rowLength + '').length);
+		}
+		else if (isRelative) {
+			newClass = 'nr n' + Wasavi.LINE_NUMBER_RELATIVE_WIDTH;
+		}
+		if (this.elm.classList.contains('list')) {
+			newClass += ' list';
+		}
+		if (this.elm.className != newClass) {
+			this.elm.className = newClass;
+		}
+	}
+	adjustLineNumber() {
+		var desc = 'na 0 nr ' + (this.selectionStartRow + 1);
+		if (this.elm.style.counterReset != desc) {
+			this.elm.style.counterReset = desc;
+		}
+	}
+	/**
+	 * @param {number} width
+	 * @param {number} unit
+	 */
+	adjustWrapGuide(width, unit) {
+		var o = $('wasavi_textwidth_guide'), display, left;
+		if (!o) return;
+		if (width <= 0) {
+			display = 'none';
+		}
+		else {
+			display = 'block';
+			left = (/** @type {HTMLElement} */ (this.elm.childNodes[0]).offsetLeft + width * unit) + 'px';
+		}
+		if (display !== undefined && display != o.style.display) {
+			o.style.display = display;
+		}
+		if (left !== undefined && left != o.style.left) {
+			o.style.left = left;
+			o.style.height = this.elm.offsetHeight + 'px';
+			o.textContent = width + '';
+		}
+	}
+	updateActiveRow() {
+		Array.prototype.forEach.call(
+			document.querySelectorAll('#wasavi_editor>div.current'),
+			function (node) {node.removeAttribute('class');}
+		);
+		/** @type {Element} */ (this.rowNodes(this.selectionStartRow)).className = 'current';
+	}
+	/**
+	 * @param {WasaviPositionLike} pos
+	 * @param {string} text
+	 * @returns {WasaviPositionLike}
+	 */
+	insertChars(pos, text) {
+		var rowNode = this.rowNodes(pos);
+		var iter = document.createNodeIterator(
+			rowNode, window.NodeFilter.SHOW_TEXT, null);
+		var totalLength = 0;
+		/** @type {Node | null} */
+		var node;
+
+		this.#ensureSentinelNewline(rowNode);
+		try {
+			while ((node = iter.nextNode())) {
+				var next = totalLength + (node.nodeValue ?? '').length;
+				if (totalLength <= pos.col && pos.col < next) {
+					var pnode = node.previousSibling;
+					var index = pos.col - totalLength;
+
+					if (index == 0
+					&&  pnode
+					&&  pnode.nodeName == 'SPAN'
+					&&  /** @type {Element} */ (pnode).className == Wasavi.MARK_CLASS) {
+						/** @type {Node} */ (pnode.parentNode).insertBefore(document.createTextNode(text), pnode);
+					}
+					else {
+						/** @type {Text} */ (node).insertData(index, text);
+					}
+
+					pos.col += text.length;
+					break;
 				}
-				else {
-					rowNode.appendChild(document.createTextNode(text));
-					rowNode.normalize();
-				}
-				pos.col += text.length;
+				totalLength = next;
 			}
 
 			this.invalidateUnicodeCache();
 
 			return pos;
-		},
-		shift: function (row, rowCount, shiftCount, shiftWidth, tabWidth, isExpandTab, indents) {
-			if (rowCount < 1) return null;
-			if (shiftWidth < 0) shiftWidth = 0;
-			if (tabWidth < 1) tabWidth = 8;
+		}
+		finally {
+			this.#removeSentinelNewline(rowNode);
+		}
+	}
+	/**
+	 * @param {WasaviPositionLike} pos
+	 * @param {string} text
+	 * @returns {WasaviPositionLike}
+	 */
+	overwriteChars(pos, text) {
+		var ustext = Unistring(text);
 
-			var shifted = multiply(' ', shiftWidth * Math.abs(shiftCount));
-			var shiftLeftRegex = shifted.length ? new RegExp('^ {1,' + shifted.length + '}') : null;
-			var currentIndents = [];
+		var rowNode = this.rowNodes(pos);
+		var iter = document.createNodeIterator(
+			rowNode, window.NodeFilter.SHOW_TEXT, null);
+		var totalLength = 0;
+		var done = false;
+		/** @type {Text | null} */
+		var node;
 
-			function expandTab (row) {
-				var marks = [];
-				var marksInfo = {};
-				var indentOriginal = '';
-				var indentExpanded = '';
-				var node = row.firstChild;
+		while (ustext.length && (node = /** @type {Text | null} */ (iter.nextNode()))) {
+			var next = totalLength + node.length;
+			if (!(totalLength <= pos.col && pos.col < next)) {
+				totalLength = next;
+				continue;
+			}
+
+			var nodeText = Unistring(node.data);
+			var nodeUTF16Offset = Math.max(pos.col - totalLength, 0);
+			var nodeClusterOffset = nodeText.getClusterIndexFromUTF16Index(nodeUTF16Offset);
+			var overwriteClusterCount = next >= this.rows(pos).length ?
+				ustext.length :
+				Math.min(nodeText.length - nodeClusterOffset, ustext.length);
+			var overwriting = ustext.substr(0, overwriteClusterCount);
+
+			node.nodeValue = Unistring('')
+				.append(nodeText.substring(0, nodeClusterOffset))
+				.append(overwriting)
+				.append(nodeText.substring(nodeClusterOffset + overwriteClusterCount))
+				.toString();
+			pos.col += overwriting.toString().length;
+			ustext = ustext.substr(overwriteClusterCount);
+			totalLength += node.length;
+			done = true;
+		}
+
+		if (!done) {
+			if (isTextNode(rowNode.lastChild)) {
+				rowNode.lastChild.data += ustext.toString();
+			}
+			else {
+				rowNode.appendChild(document.createTextNode(ustext.toString()));
+				rowNode.normalize();
+			}
+			pos.col += ustext.length;
+		}
+
+		this.invalidateUnicodeCache();
+
+		return pos;
+	}
+	/**
+	 * @param {number} row
+	 * @param {number} rowCount
+	 * @param {number} shiftCount
+	 * @param {number} shiftWidth
+	 * @param {number} tabWidth
+	 * @param {boolean} isExpandTab
+	 * @param {(string | [string, Record<string, number>])[]} [indents]
+	 * @returns {(string | [string, Record<string, number>])[] | null}
+	 */
+	shift(row, rowCount, shiftCount, shiftWidth, tabWidth, isExpandTab, indents) {
+		if (rowCount < 1) return null;
+		if (shiftWidth < 0) shiftWidth = 0;
+		if (tabWidth < 1) tabWidth = 8;
+
+		var shifted = multiply(' ', shiftWidth * Math.abs(shiftCount));
+		var shiftLeftRegex = shifted.length ? new RegExp('^ {1,' + shifted.length + '}') : null;
+		/** @type {(string | [string, Record<string, number>])[]} */
+		var currentIndents = [];
+
+		/**
+		 * @param {Node} row
+		 * @returns {[number, Node | null, string, boolean?][]}
+		 */
+		function expandTab(row) {
+			/** @type {[number, Node | null, string, boolean?][]} */
+			var marks = [];
+			/** @type {Record<string, number>} */
+			var marksInfo = {};
+			var indentOriginal = '';
+			var indentExpanded = '';
+			/** @type {Node | null} */
+			var node = row.firstChild;
 loop:			while (node) {
-					switch (node.nodeType) {
-					case 3:
-						var left = '';
-						var right = node.nodeValue;
-						while (true) {
-							var re;
-							if ((re = /^\t/.exec(right))) {
-								var nextTabCol = Math.floor(indentExpanded.length / tabWidth) * tabWidth +
-												 tabWidth;
-								var s = multiply(' ', nextTabCol - indentExpanded.length);
-								indentOriginal += re[0];
-								indentExpanded += s;
-								left += s;
-								right = right.substring(re[0].length);
-							}
-							else if ((re = /^ +/.exec(right))) {
-								indentOriginal += re[0];
-								indentExpanded += re[0];
-								left += re[0];
-								right = right.substring(re[0].length);
-							}
-							else if (right.length || !node.nextSibling) {
-								node.nodeValue = left + right;
-								break loop;
-							}
-							else {
-								node.nodeValue = left + right;
-								node = node.nextSibling;
-								break;
-							}
+				switch (node.nodeType) {
+				case Node.TEXT_NODE:
+					var left = '';
+					var right = node.nodeValue ?? '';
+					while (true) {
+						var re;
+						if ((re = /^\t/.exec(right))) {
+							var nextTabCol = Math.floor(indentExpanded.length / tabWidth) * tabWidth +
+											 tabWidth;
+							var s = multiply(' ', nextTabCol - indentExpanded.length);
+							indentOriginal += re[0];
+							indentExpanded += s;
+							left += s;
+							right = right.substring(re[0].length);
 						}
-						break;
-
-					case 1:
-						if (node.nodeName != 'SPAN' || node.className != Wasavi.MARK_CLASS) {
-							throw new TypeError('unknown node found');
+						else if ((re = /^ +/.exec(right))) {
+							indentOriginal += re[0];
+							indentExpanded += re[0];
+							left += re[0];
+							right = right.substring(re[0].length);
 						}
-						var next = node.nextSibling;
-						var markName = node.dataset.index;
-						marks.push([indentExpanded.length, node, markName]);
-						marksInfo[markName] = indentOriginal.length;
-						node.parentNode.removeChild(node);
-						node = next;
-						break;
-					}
-				}
-				if (marks.length) {
-					currentIndents.push([indentOriginal, marksInfo]);
-				}
-				else {
-					currentIndents.push(indentOriginal);
-				}
-				row.normalize();
-				return marks;
-			}
-
-			function shiftRight (row, marks) {
-				var node = row.firstChild;
-				if (!node || node.nodeType != 3) return;
-				node.insertData(0, shifted);
-				for (var i = 0, goal = marks.length; i < goal; i++) {
-					marks[i][0] += shifted.length;
-				}
-			}
-
-			function shiftLeft (row, marks) {
-				var node = row.firstChild;
-				if (!node || node.nodeType != 3) return;
-				if (!shiftLeftRegex) return;
-				var re = shiftLeftRegex.exec(node.nodeValue);
-				if (!re) return;
-				node.deleteData(0, re[0].length);
-				for (var i = 0, goal = marks.length; i < goal; i++) {
-					marks[i][0] = Math.max(0, marks[i][0] - re[0].length);
-				}
-			}
-
-			function shiftByOriginalIndent (row, marks, indentInfo) {
-				var node = row.firstChild;
-				if (!node || node.nodeType != 3) return;
-				var indent, marksInfo;
-				if (indentInfo instanceof Array) {
-					indent = indentInfo[0];
-					marksInfo = indentInfo[1];
-				}
-				else {
-					indent = indentInfo;
-				}
-				node.nodeValue = indent + node.nodeValue.replace(spc('^S+'), '');
-				if (!marksInfo) return;
-				for (var i = 0, goal = marks.length; i < goal; i++) {
-					var markName = marks[i][2];
-					if (markName in marksInfo) {
-						marks[i][0] = marksInfo[markName];
-					}
-					else {
-						marks.push([marksInfo[markName], null, markName, false]);
-					}
-				}
-			}
-
-			function collectTabs (row, marks) {
-				var node = row.firstChild;
-				if (!node || node.nodeType != 3) return;
-				var re = /^ +/.exec(node.nodeValue);
-				if (!re) return;
-				var tabs = '';
-				var left = re[0];
-				var right = node.nodeValue.substring(re[0].length);
-				var spaces = multiply(' ', tabWidth);
-				var offsetExpanded = 0;
-				var index;
-				while ((index = left.indexOf(spaces)) === 0) {
-					for (var i = 0, goal = marks.length; i < goal; i++) {
-						if (marks[i][0] >= offsetExpanded) {
-							marks[i][0] = Math.max(offsetExpanded, marks[i][0] - (tabWidth - 1));
+						else if (right.length || !node.nextSibling) {
+							node.nodeValue = left + right;
+							break loop;
+						}
+						else {
+							node.nodeValue = left + right;
+							node = node.nextSibling;
+							break;
 						}
 					}
-					offsetExpanded += tabWidth;
-					tabs += '\t';
-					left = left.substring(spaces.length);
-				}
-				node.nodeValue = tabs + left + right;
-			}
+					break;
 
-			function restoreMarks (row, marks) {
-				if (marks.length == 0) return;
-				marks.sort(function (a, b) {return b[0] - a[0]});
-				for (var i = 0, goal = marks.length; i < goal; i++) {
-					var offset = marks[i][0];
-					var mark = marks[i][1];
-					var text = row.firstChild;
-					if (!text) continue;
-					if (!mark) {
-						mark = document.createElement('span');
-						mark.className = Wasavi.MARK_CLASS;
-						mark.dataset.index = marks[i][2];
+				case Node.ELEMENT_NODE:
+					var elem = /** @type {HTMLElement} */ (node);
+					if (elem.nodeName != 'SPAN' || elem.className != Wasavi.MARK_CLASS) {
+						throw new TypeError('unknown node found');
 					}
-					if (offset == text.nodeValue.length) {
-						text.parentNode.insertBefore(mark, text.nextSibling);
-					}
-					else if (offset < text.nodeValue.length) {
-						var rest = text.splitText(offset);
-						rest.parentNode.insertBefore(mark, rest);
-					}
+					var next = node.nextSibling;
+					var markName = elem.dataset.index ?? '';
+					marks.push([indentExpanded.length, node, markName]);
+					marksInfo[markName] = indentOriginal.length;
+					/** @type {Node} */ (node.parentNode).removeChild(node);
+					node = next;
+					break;
 				}
 			}
-
-			function nop () {}
-
-			var goal = Math.min(row + rowCount, this.rowLength);
-			var doShift, doCollectTabs;
-			if (indents) {
-				doCollectTabs = isExpandTab ? nop : collectTabs;
-				for (var i = row, j = 0; i < goal; i++) {
-					var node = this.rowNodes(i);
-					var marks = expandTab(node);
-					shiftByOriginalIndent(node, marks, indents[j++]);
-					doCollectTabs(node, marks);
-					restoreMarks(node, marks);
-				}
+			if (marks.length) {
+				currentIndents.push([indentOriginal, marksInfo]);
 			}
 			else {
-				doShift = shiftCount == 0 ? nop : shiftCount < 0 ? shiftLeft : shiftRight;
-				doCollectTabs = isExpandTab ? nop : collectTabs;
-				for (var i = row; i < goal; i++) {
-					var node = this.rowNodes(i);
-					var marks = expandTab(node);
-					doShift(node, marks);
-					doCollectTabs(node, marks);
-					restoreMarks(node, marks);
-				}
+				currentIndents.push(indentOriginal);
 			}
+			/** @type {Element} */ (row).normalize();
+			return marks;
+		}
 
-			this.invalidateUnicodeCache();
+		/**
+		 * @param {Node} row
+		 * @param {[number, Node | null, string, boolean?][]} marks
+		 */
+		function shiftRight(row, marks) {
+			var node = row.firstChild;
+			if (!isTextNode(node)) return;
+			node.insertData(0, shifted);
+			for (var i = 0, goal = marks.length; i < goal; i++) {
+				marks[i][0] += shifted.length;
+			}
+		}
 
-			return currentIndents;
-		},
-		deleteRange: (function () {
-			function deleteCharwise (r, func) {
-				var content = r.r.toString();
-				var result = content.length;
+		/**
+		 * @param {Node} row
+		 * @param {[number, Node | null, string, boolean?][]} marks
+		 */
+		function shiftLeft(row, marks) {
+			var node = row.firstChild;
+			if (!isTextNode(node)) return;
+			if (!shiftLeftRegex) return;
+			var re = shiftLeftRegex.exec(node.data);
+			if (!re) return;
+			node.deleteData(0, re[0].length);
+			for (var i = 0, goal = marks.length; i < goal; i++) {
+				marks[i][0] = Math.max(0, marks[i][0] - re[0].length);
+			}
+		}
 
-				if (result == 0) {
-					return result;
-				}
-				if (func) {
-					func(content, r.r.cloneContents());
-				}
-				if (r.s.row == r.e.row) {
-					r.r.deleteContents();
-					this.rowNodes(r.s).normalize();
+		/**
+		 * @param {Node} row
+		 * @param {[number, Node | null, string, boolean?][]} marks
+		 * @param {string | [string, Record<string, number>]} indentInfo
+		 */
+		function shiftByOriginalIndent(row, marks, indentInfo) {
+			var node = row.firstChild;
+			if (!isTextNode(node)) return;
+			var indent;
+			/** @type {Record<string, number> | undefined} */
+			var marksInfo;
+			if (indentInfo instanceof Array) {
+				indent = indentInfo[0];
+				marksInfo = indentInfo[1];
+			}
+			else {
+				indent = indentInfo;
+			}
+			node.data = indent + node.data.replace(spc('^S+'), '');
+			if (!marksInfo) return;
+			for (var i = 0, goal = marks.length; i < goal; i++) {
+				var markName = marks[i][2];
+				if (markName in marksInfo) {
+					marks[i][0] = marksInfo[markName];
 				}
 				else {
-					// multiple rows
+					marks.push([marksInfo[markName], null, markName, false]);
+				}
+			}
+		}
 
-					// top line
-					var r2 = document.createRange();
-					setRange.call(this, r2, r.s);
-					setRange.call(this, r2, new Wasavi.Position(r.s.row, this.rows(r.s).length), true);
-					r2.deleteContents();
-
-					// bottom line
-					setRange.call(this, r2, r.e);
-					setRange.call(this, r2, new Wasavi.Position(r.e.row, this.rows(r.e).length), true);
-					this.rowNodes(r.s).appendChild(r2.extractContents());
-					this.rowNodes(r.s).normalize();
-
-					// middle lines
-					if (r.e.row - r.s.row >= 1) {
-						r2.setStartBefore(this.rowNodes(r.s.row + 1));
-						r2.setEndAfter(this.rowNodes(r.e.row).nextSibling);
-						r2.deleteContents();
+		/**
+		 * @param {Node} row
+		 * @param {[number, Node | null, string, boolean?][]} marks
+		 */
+		function collectTabs(row, marks) {
+			var node = row.firstChild;
+			if (!isTextNode(node)) return;
+			var re = /^ +/.exec(node.data);
+			if (!re) return;
+			var tabs = '';
+			var left = re[0];
+			var right = node.data.substring(re[0].length);
+			var spaces = multiply(' ', tabWidth);
+			var offsetExpanded = 0;
+			var index;
+			while ((index = left.indexOf(spaces)) === 0) {
+				for (var i = 0, goal = marks.length; i < goal; i++) {
+					if (marks[i][0] >= offsetExpanded) {
+						marks[i][0] = Math.max(offsetExpanded, marks[i][0] - (tabWidth - 1));
 					}
 				}
+				offsetExpanded += tabWidth;
+				tabs += '\t';
+				left = left.substring(spaces.length);
+			}
+			node.data = tabs + left + right;
+		}
+
+		/**
+		 * @param {Node} row
+		 * @param {[number, Node | null, string, boolean?][]} marks
+		 */
+		function restoreMarks(row, marks) {
+			if (marks.length == 0) return;
+			marks.sort(function (a, b) {return b[0] - a[0]});
+			for (var i = 0, goal = marks.length; i < goal; i++) {
+				var offset = marks[i][0];
+				var mark = marks[i][1];
+				var text = /** @type {Text | null} */ (row.firstChild);
+				if (!text) continue;
+				if (!mark) {
+					var span = document.createElement('span');
+					span.className = Wasavi.MARK_CLASS;
+					span.dataset.index = marks[i][2];
+					mark = span;
+				}
+				if (offset == text.data.length) {
+					/** @type {Node} */ (text.parentNode).insertBefore(mark, text.nextSibling);
+				}
+				else if (offset < text.data.length) {
+					var rest = text.splitText(offset);
+					/** @type {Node} */ (rest.parentNode).insertBefore(mark, rest);
+				}
+			}
+		}
+
+		function nop() {}
+
+		var goal = Math.min(row + rowCount, this.rowLength);
+		var doShift, doCollectTabs;
+		if (indents) {
+			doCollectTabs = isExpandTab ? nop : collectTabs;
+			for (var i = row, j = 0; i < goal; i++) {
+				var node = this.rowNodes(i);
+				var marks = expandTab(node);
+				shiftByOriginalIndent(node, marks, indents[j++]);
+				doCollectTabs(node, marks);
+				restoreMarks(node, marks);
+			}
+		}
+		else {
+			doShift = shiftCount == 0 ? nop : shiftCount < 0 ? shiftLeft : shiftRight;
+			doCollectTabs = isExpandTab ? nop : collectTabs;
+			for (var i = row; i < goal; i++) {
+				var node = this.rowNodes(i);
+				var marks = expandTab(node);
+				doShift(node, marks);
+				doCollectTabs(node, marks);
+				restoreMarks(node, marks);
+			}
+		}
+
+		this.invalidateUnicodeCache();
+
+		return currentIndents;
+	}
+	/**
+	 * @param {WasaviPosition} [from]
+	 * @param {WasaviPosition} [to]
+	 * @param {(content: string, fragment: DocumentFragment) => void} [callback]
+	 * @returns {number}
+	 */
+	deleteRange(from, to, callback) {
+		/**
+		 * @param {{r: Range, s: WasaviPosition, e: WasaviPosition}} r
+		 * @param {(content: string, fragment: DocumentFragment) => void} [func]
+		 * @returns {number}
+		 */
+		const deleteCharwise = (r, func) => {
+			var content = r.r.toString();
+			var result = content.length;
+
+			if (result == 0) {
 				return result;
 			}
-			function deleteLinewise (r, func) {
-				var content = r.r.toString();
-				var result = r.e.row - r.s.row + 1;
-
-				if (func) {
-					func(content, r.r.cloneContents());
-				}
+			if (func) {
+				func(content, r.r.cloneContents());
+			}
+			if (r.s.row == r.e.row) {
 				r.r.deleteContents();
-				if (this.rowLength == 0) {
-					appendRow.call(this);
-				}
-				if (r.s.row >= this.rowLength) {
-					r.s.row = this.rowLength - 1;
-				}
-				return result;
-			}
-			return function deleteRange () {
-				var args = toArray(arguments);
-				var func = popLastArg(args);
-				var result, rangeInfo;
-
-				if (this.isLineOrientSelection) {
-					rangeInfo = selectRows.apply(this, args);
-					result = deleteLinewise.call(this, rangeInfo, func);
-				}
-				else {
-					rangeInfo = select.apply(this, args);
-					result = deleteCharwise.call(this, rangeInfo, func);
-				}
-
-				this.selectionStart = rangeInfo.s;
-				this.selectionEnd = rangeInfo.s;
-				this.invalidateUnicodeCache();
-
-				return result;
-			};
-		})(),
-		selectRowsLinewise: function (count) {
-			var s = this.selectionStart;
-			var e = new Wasavi.Position(
-				Math.min(
-					this.selectionEndRow + count - 1,
-					this.rowLength - 1),
-				0);
-			this.isLineOrientSelection = true;
-			var r = selectRows.call(this, s, e);
-			this.selectionStart = r.s;
-			this.selectionEnd = r.e;
-			return r.e.row - r.s.row + 1;
-		},
-		divideLine: function (n) {
-			n || (n = this.selectionStart);
-			var div1 = this.rowNodes(n);
-			var div2 = appendRow.call(this, '', div1.nextSibling.nextSibling);
-			var r = document.createRange();
-			var iter = document.createNodeIterator(
-				div1, window.NodeFilter.SHOW_TEXT, null, false);
-			var totalLength = 0;
-			var done = false;
-
-			var node;
-			while ((node = iter.nextNode())) {
-				var next = totalLength + node.nodeValue.length;
-				if (totalLength <= n.col && n.col < next) {
-					r.setStart(node, n.col - totalLength);
-					done = true;
-					break;
-				}
-				else if (n.col == next) {
-					r.setStartAfter(node);
-					done = true;
-					break;
-				}
-				totalLength = next;
-			}
-
-			div1.removeAttribute('contenteditable');
-
-			if (done) {
-				r.setEndAfter(div1.lastChild);
-				div2.appendChild(r.extractContents());
-			}
-
-			n.col = 0;
-			n.row++;
-
-			this.selectionStart = n;
-			this.selectionEnd = n;
-			this.invalidateUnicodeCache();
-		},
-		extendSelectionTo: function (n) {
-			var s = this.selectionStart;
-			var e = this.selectionEnd;
-			if (typeof n == 'number') {
-				n = this.linearPositionToBinaryPosition(n);
-			}
-			if (n instanceof Wasavi.Position) {
-				if (n.lt(s)) {
-					this.selectionStart = n;
-				}
-				else if (n.gt(e)) {
-					this.selectionEnd = n;
-				}
-			}
-		},
-		linearPositionToBinaryPosition: function (n) {
-			var result;
-			var iter = document.createNodeIterator(
-				this.elm, window.NodeFilter.SHOW_TEXT, null, false);
-			var totalLength = 0;
-			var rowTopLength = 0;
-			var node;
-			var row = 0;
-
-			while ((node = iter.nextNode())) {
-				var next = totalLength + node.nodeValue.length;
-				if (totalLength <= n && n < next) {
-					result = new Wasavi.Position(row, n - rowTopLength);
-					break;
-				}
-				if (node.nodeValue == '\n') {
-					row++;
-					rowTopLength = next;
-				}
-				totalLength = next;
-			}
-
-			return result;
-		},
-		binaryPositionToLinearPosition: function (a) {
-			var r = document.createRange();
-			setRange.call(this, r, new Wasavi.Position(0, 0), false);
-			setRange.call(this, r, a, true);
-			var result = r.toString().length;
-			return result;
-		},
-		emphasis: function (pos, length, className) {
-			if (pos instanceof Wasavi.Position) {
-				pos = pos.clone();
+				this.rowNodes(r.s).normalize();
 			}
 			else {
-				pos = this.selectionStart;
-			}
-			if (typeof length != 'number') {
-				throw new TypeError('emphasis: length is not a number');
-			}
+				// multiple rows
 
-			var isInRange = false;
-			var offset = 0;
-			var r = document.createRange();
-			var result = [];
-			className || (className = Wasavi.EMPHASIS_CLASS);
+				// top line
+				var r2 = document.createRange();
+				this.#setRange(r2, r.s);
+				this.#setRange(r2, new Wasavi.Position(r.s.row, this.rows(r.s).length), true);
+				r2.deleteContents();
 
-			function surroundWithSpan (r) {
-				var span = document.createElement('span');
-				span.className = className;
+				// bottom line
+				this.#setRange(r2, r.e);
+				this.#setRange(r2, new Wasavi.Position(r.e.row, this.rows(r.e).length), true);
+				this.rowNodes(r.s).appendChild(r2.extractContents());
+				this.rowNodes(r.s).normalize();
 
-				r.surroundContents(span);
-
-				// Chrome removes text node which includes only newline.
-				if (!span.firstChild) {
-					span.appendChild(document.createTextNode(''));
+				// middle lines
+				if (r.e.row - r.s.row >= 1) {
+					r2.setStartBefore(this.rowNodes(r.s.row + 1));
+					r2.setEndAfter(/** @type {Node} */ (this.rowNodes(r.e.row).nextSibling));
+					r2.deleteContents();
 				}
-
-				result.push(span);
 			}
+			return result;
+		};
+		/**
+		 * @param {{r: Range, s: WasaviPosition, e: WasaviPosition}} r
+		 * @param {(content: string, fragment: DocumentFragment) => void} [func]
+		 * @returns {number}
+		 */
+		const deleteLinewise = (r, func) => {
+			var content = r.r.toString();
+			var result = r.e.row - r.s.row + 1;
+
+			if (func) {
+				func(content, r.r.cloneContents());
+			}
+			r.r.deleteContents();
+			if (this.rowLength == 0) {
+				this.#appendRow();
+			}
+			if (r.s.row >= this.rowLength) {
+				r.s.row = this.rowLength - 1;
+			}
+			return result;
+		};
+
+		var result, rangeInfo;
+
+		if (this.isLineOrientSelection) {
+			rangeInfo = this.#selectRows(from, to);
+			result = deleteLinewise(rangeInfo, callback);
+		}
+		else {
+			rangeInfo = this.#select(from, to);
+			result = deleteCharwise(rangeInfo, callback);
+		}
+
+		this.selectionStart = rangeInfo.s;
+		this.selectionEnd = rangeInfo.s;
+		this.invalidateUnicodeCache();
+
+		return result;
+	}
+	/**
+	 * @param {number} count
+	 * @returns {number}
+	 */
+	selectRowsLinewise(count) {
+		var s = this.selectionStart;
+		var e = new Wasavi.Position(
+			Math.min(
+				this.selectionEndRow + count - 1,
+				this.rowLength - 1),
+			0);
+		this.isLineOrientSelection = true;
+		var r = this.#selectRows(s, e);
+		this.selectionStart = r.s;
+		this.selectionEnd = r.e;
+		return r.e.row - r.s.row + 1;
+	}
+	/**
+	 * @param {WasaviPosition} [n]
+	 */
+	divideLine(n) {
+		var pos = n ?? this.selectionStart;
+		var div1 = this.rowNodes(pos);
+		var div2 = this.#appendRow('', /** @type {Node} */ (div1.nextSibling).nextSibling);
+		var r = document.createRange();
+		var iter = document.createNodeIterator(
+			div1, window.NodeFilter.SHOW_TEXT, null);
+		var totalLength = 0;
+		var done = false;
+
+		/** @type {Node | null} */
+		var node;
+		while ((node = iter.nextNode())) {
+			var next = totalLength + (node.nodeValue ?? '').length;
+			if (totalLength <= pos.col && pos.col < next) {
+				r.setStart(node, pos.col - totalLength);
+				done = true;
+				break;
+			}
+			else if (pos.col == next) {
+				r.setStartAfter(node);
+				done = true;
+				break;
+			}
+			totalLength = next;
+		}
+
+		/** @type {Element} */ (div1).removeAttribute('contenteditable');
+
+		if (done) {
+			r.setEndAfter(/** @type {Node} */ (div1.lastChild));
+			div2.appendChild(r.extractContents());
+		}
+
+		pos.col = 0;
+		pos.row++;
+
+		this.selectionStart = pos;
+		this.selectionEnd = pos;
+		this.invalidateUnicodeCache();
+	}
+	/**
+	 * @param {number | WasaviPosition} n
+	 */
+	extendSelectionTo(n) {
+		var s = this.selectionStart;
+		var e = this.selectionEnd;
+		if (typeof n == 'number') {
+			n = this.linearPositionToBinaryPosition(n) ?? new Wasavi.Position(0, 0);
+		}
+		if (n instanceof Wasavi.Position) {
+			if (n.lt(s)) {
+				this.selectionStart = n;
+			}
+			else if (n.gt(e)) {
+				this.selectionEnd = n;
+			}
+		}
+	}
+	/**
+	 * @param {number} n
+	 * @returns {WasaviPosition | null}
+	 */
+	linearPositionToBinaryPosition(n) {
+		/** @type {WasaviPosition | null} */
+		var result = null;
+		var iter = document.createNodeIterator(
+			this.elm, window.NodeFilter.SHOW_TEXT, null);
+		var totalLength = 0;
+		var rowTopLength = 0;
+		/** @type {Node | null} */
+		var node;
+		var row = 0;
+
+		while ((node = iter.nextNode())) {
+			var next = totalLength + (node.nodeValue ?? '').length;
+			if (totalLength <= n && n < next) {
+				result = new Wasavi.Position(row, n - rowTopLength);
+				break;
+			}
+			if (node.nodeValue == '\n') {
+				row++;
+				rowTopLength = next;
+			}
+			totalLength = next;
+		}
+
+		return result;
+	}
+	/**
+	 * @param {WasaviPositionLike} a
+	 * @returns {number}
+	 */
+	binaryPositionToLinearPosition(a) {
+		var r = document.createRange();
+		this.#setRange(r, new Wasavi.Position(0, 0), false);
+		this.#setRange(r, a, true);
+		var result = r.toString().length;
+		return result;
+	}
+	/**
+	 * @param {WasaviPositionLike | undefined} pos
+	 * @param {number} length
+	 * @param {string} [className]
+	 * @returns {HTMLSpanElement[]}
+	 */
+	emphasis(pos, length, className) {
+		/** @type {WasaviPosition} */
+		var p;
+		if (pos instanceof Wasavi.Position) {
+			p = pos.clone();
+		}
+		else {
+			p = this.selectionStart;
+		}
+		if (typeof length != 'number') {
+			throw new TypeError('emphasis: length is not a number');
+		}
+
+		var isInRange = false;
+		var offset = 0;
+		var r = document.createRange();
+		/** @type {HTMLSpanElement[]} */
+		var result = [];
+		var cls = className || Wasavi.EMPHASIS_CLASS;
+
+		/**
+		 * @param {Range} r
+		 */
+		function surroundWithSpan(r) {
+			var span = document.createElement('span');
+			span.className = cls;
+
+			r.surroundContents(span);
+
+			// Chrome removes text node which includes only newline.
+			if (!span.firstChild) {
+				span.appendChild(document.createTextNode(''));
+			}
+
+			result.push(span);
+		}
 
 whole:
-			for (; length >= 0 && pos.row >= 0 && pos.row < this.rowLength; pos.row++) {
-				var rowNode = this.rowNodes(pos);
-				var iter = document.createNodeIterator(
-					rowNode, window.NodeFilter.SHOW_TEXT, null, false);
-				var totalLength = 0;
-				var node;
+		for (; length >= 0 && p.row >= 0 && p.row < this.rowLength; p.row++) {
+			var rowNode = this.rowNodes(p);
+			var iter = document.createNodeIterator(
+				rowNode, window.NodeFilter.SHOW_TEXT, null);
+			var totalLength = 0;
+			/** @type {Node | null} */
+			var node;
 
-				ensureSentinelNewline(rowNode);
-				try {
-					while ((node = iter.nextNode())) {
-						if (!isInRange) {
-							var next = totalLength + node.nodeValue.length;
-							if (totalLength <= pos.col && pos.col < next) {
-								offset = pos.col - totalLength;
-								isInRange = true;
-							}
-							totalLength = next;
+			this.#ensureSentinelNewline(rowNode);
+			try {
+				while ((node = iter.nextNode())) {
+					if (!isInRange) {
+						var next = totalLength + (node.nodeValue ?? '').length;
+						if (totalLength <= p.col && p.col < next) {
+							offset = p.col - totalLength;
+							isInRange = true;
 						}
-						if (isInRange) {
-							var nodeLength = node.nodeValue.length;
-							if (offset + length <= nodeLength) {
-								r.setStart(node, offset);
-								r.setEnd(node, offset + length);
-								surroundWithSpan(r);
-								length = -1;
-								break whole;
-							}
-							else if (nodeLength > 0) {
-								r.setStart(node, offset);
-								r.setEnd(node, nodeLength);
-								surroundWithSpan(r);
-								length -= nodeLength - offset;
-								offset = 0;
-								node = iter.nextNode();
-							}
+						totalLength = next;
+					}
+					if (isInRange) {
+						var nodeLength = (node.nodeValue ?? '').length;
+						if (offset + length <= nodeLength) {
+							r.setStart(node, offset);
+							r.setEnd(node, offset + length);
+							surroundWithSpan(r);
+							length = -1;
+							break whole;
+						}
+						else if (nodeLength > 0) {
+							r.setStart(node, offset);
+							r.setEnd(node, nodeLength);
+							surroundWithSpan(r);
+							length -= nodeLength - offset;
+							offset = 0;
+							node = iter.nextNode();
 						}
 					}
 				}
-				finally {
-					removeSentinelNewline(rowNode);
-				}
 			}
-
-			return result;
-		},
-		unEmphasis: function (className, start, end) {
-			var nodes = this.getSpans(className || Wasavi.EMPHASIS_CLASS, start, end);
-			if (nodes.length) {
-				var r = document.createRange();
-				for (var i = 0; i < nodes.length; i++) {
-					var node = nodes[i];
-					var pa = node.parentNode;
-					r.selectNodeContents(node);
-					var f = r.extractContents();
-					r.setStartBefore(node);
-					r.insertNode(f);
-					r.selectNode(node);
-					r.deleteContents();
-					pa.normalize();
-				}
+			finally {
+				this.#removeSentinelNewline(rowNode);
 			}
-		},
-		offsetBy: function (s, offset, treatLastLineAsNormal) {
-			var row5 = s.row;
-			var col = s.col;
-			var last = this.rowLength - 1;
-			while (offset > 0) {
-				var text = this.rows(row5);
-				if (treatLastLineAsNormal || row5 != last) {
-					text += '\n';
-				}
-				var rest = text.length - col;
-				col += offset;
-				offset -= rest;
-				if (col >= text.length) {
-					if (row5 == last) {
-						col = text.length;
-						offset = 0;
-					}
-					else {
-						row5++;
-						col = 0;
-					}
-				}
-			}
-			return new Wasavi.Position(row5, col);
-		},
-		regalizeSelectionRelation: function () {
-			var s = this.selectionStart;
-			var e = this.selectionEnd;
-			if (s.row > e.row || s.row == e.row && s.col > e.col) {
-				this.selectionStart = e;
-				this.selectionEnd = s;
-			}
-		},
-		clipPosition: function () {
-			function doClip (s) {
-				var clipped = false;
-				var n;
-				if (s.row < 0) {
-					s.row = 0;
-					clipped = true;
-				}
-				else if (s.row > (n = this.rowLength - 1)) {
-					s.row = n;
-					clipped = true;
-				}
-				if (s.col < 0) {
-					s.col = 0;
-					clipped = true;
-				}
-				else if (s.col > (n = this.rows(s).length)) {
-					s.col = n;
-					clipped = true;
-				}
-				return clipped ? s : null;
-			}
-			var s = this.selectionStart;
-			var e = this.selectionEnd;
-			if (s.eq(e)) {
-				s = doClip.call(this, s);
-				if (s) {
-					this.selectionStart = s;
-					this.selectionEnd = s;
-				}
-			}
-			else {
-				s = doClip(this, s);
-				e = doClip(this, e);
-				s && (this.selectionStart = s);
-				e && (this.selectionEnd = e);
-			}
-		},
-
-		// getter properties
-		get rowLength () {
-			var length = this.elm.childNodes.length;
-			return (length >> 1) + (length & 1);
-		},
-		get value () {
-			return this.getValue(null, null, '\n');
-		},
-		get selected () {
-			return this.selectionStart.ne(this.selectionEnd);
-		},
-		get selectionStart () {
-			return new Wasavi.Position(this.selectionStartRow, this.selectionStartCol);
-		},
-		get selectionStartRow () {
-			return this._ssrow;
-		},
-		get selectionStartCol () {
-			return this._sscol;
-		},
-		get selectionEnd () {
-			return new Wasavi.Position(this.selectionEndRow, this.selectionEndCol);
-		},
-		get selectionEndRow () {
-			return this._serow;
-		},
-		get selectionEndCol () {
-			return this._secol;
-		},
-		get scrollTop () {
-			return this.elm.scrollTop;
-		},
-		get scrollLeft () {
-			return this.elm.scrollLeft;
-		},
-
-		// setter properties
-		set value (v) {
-			emptyNodeContents(this.elm);
-			v = v
-				//.replace(/\r?\n$/, '')
-				.replace(/\r?\n/g, '\n')
-				.replace(/[\u0000-\u0008\u000b-\u001f]/g, function (a) {
-					return String.fromCharCode(0x2400 + a.charCodeAt(0));
-				});
-
-			var from = 0, to = 0;
-			var limit = 65536;
-			while ((to = v.indexOf('\n', from)) >= 0) {
-				appendRow.call(this, v.substring(from, to));
-				from = to + 1;
-				limit--;
-				if (limit <= 0) {
-					throw new RangeError('Editor#value(set): exceeded the limit');
-				}
-			}
-
-			appendRow.call(this, v.substring(from));
-		},
-		set selectionStart (v) {
-			if (typeof v == 'number') {
-				v = this.linearPositionToBinaryPosition(v) || new Wasavi.Position(0, 0);
-			}
-			if (v instanceof Wasavi.Position) {
-				this._ssrow = v.row;
-				this._sscol = v.col;
-			}
-		},
-		set selectionEnd (v) {
-			if (typeof v == 'number') {
-				v = this.linearPositionToBinaryPosition(v) || new Wasavi.Position(0, 0);
-			}
-			if (v instanceof Wasavi.Position) {
-				this._serow = v.row;
-				this._secol = v.col;
-			}
-		},
-		set scrollTop (v) {
-			this.elm.scrollTop = v;
-		},
-		set scrollLeft (v) {
-			this.elm.scrollLeft = v;
 		}
-	};
+
+		return result;
+	}
+	/**
+	 * @param {string} [className]
+	 * @param {unknown} [start]
+	 * @param {unknown} [end]
+	 */
+	unEmphasis(className, start, end) {
+		var nodes = this.getSpans(className || Wasavi.EMPHASIS_CLASS, start, end);
+		if (nodes.length) {
+			var r = document.createRange();
+			for (var i = 0; i < nodes.length; i++) {
+				var node = nodes[i];
+				var pa = node.parentNode;
+				r.selectNodeContents(node);
+				var f = r.extractContents();
+				r.setStartBefore(node);
+				r.insertNode(f);
+				r.selectNode(node);
+				r.deleteContents();
+				/** @type {Node} */ (pa).normalize();
+			}
+		}
+	}
+	/**
+	 * @param {WasaviPositionLike} s
+	 * @param {number} offset
+	 * @param {boolean} [treatLastLineAsNormal]
+	 * @returns {WasaviPosition}
+	 */
+	offsetBy(s, offset, treatLastLineAsNormal) {
+		var row5 = s.row;
+		var col = s.col;
+		var last = this.rowLength - 1;
+		while (offset > 0) {
+			var text = this.rows(row5);
+			if (treatLastLineAsNormal || row5 != last) {
+				text += '\n';
+			}
+			var rest = text.length - col;
+			col += offset;
+			offset -= rest;
+			if (col >= text.length) {
+				if (row5 == last) {
+					col = text.length;
+					offset = 0;
+				}
+				else {
+					row5++;
+					col = 0;
+				}
+			}
+		}
+		return new Wasavi.Position(row5, col);
+	}
+	regalizeSelectionRelation() {
+		var s = this.selectionStart;
+		var e = this.selectionEnd;
+		if (s.row > e.row || s.row == e.row && s.col > e.col) {
+			this.selectionStart = e;
+			this.selectionEnd = s;
+		}
+	}
+	clipPosition() {
+		/**
+		 * @param {WasaviPosition} s
+		 * @returns {WasaviPosition | null}
+		 */
+		const doClip = s => {
+			var clipped = false;
+			var n;
+			if (s.row < 0) {
+				s.row = 0;
+				clipped = true;
+			}
+			else if (s.row > (n = this.rowLength - 1)) {
+				s.row = n;
+				clipped = true;
+			}
+			if (s.col < 0) {
+				s.col = 0;
+				clipped = true;
+			}
+			else if (s.col > (n = this.rows(s).length)) {
+				s.col = n;
+				clipped = true;
+			}
+			return clipped ? s : null;
+		};
+		var s = this.selectionStart;
+		var e = this.selectionEnd;
+		if (s.eq(e)) {
+			var clippedS = doClip(s);
+			if (clippedS) {
+				this.selectionStart = clippedS;
+				this.selectionEnd = clippedS;
+			}
+		}
+		else {
+			var cs = doClip(s);
+			var ce = doClip(e);
+			cs && (this.selectionStart = cs);
+			ce && (this.selectionEnd = ce);
+		}
+	}
+
+	// getter properties
+	get rowLength() {
+		var length = this.elm.childNodes.length;
+		return (length >> 1) + (length & 1);
+	}
+	get value() {
+		return this.getValue(null, null, '\n');
+	}
+	get selected() {
+		return this.selectionStart.ne(this.selectionEnd);
+	}
+	/**
+	 * @returns {WasaviPosition}
+	 */
+	get selectionStart() {
+		return new Wasavi.Position(this.selectionStartRow, this.selectionStartCol);
+	}
+	get selectionStartRow() {
+		return this.#ssrow;
+	}
+	get selectionStartCol() {
+		return this.#sscol;
+	}
+	/**
+	 * @returns {WasaviPosition}
+	 */
+	get selectionEnd() {
+		return new Wasavi.Position(this.selectionEndRow, this.selectionEndCol);
+	}
+	get selectionEndRow() {
+		return this.#serow;
+	}
+	get selectionEndCol() {
+		return this.#secol;
+	}
+	get scrollTop() {
+		return this.elm.scrollTop;
+	}
+	get scrollLeft() {
+		return this.elm.scrollLeft;
+	}
+
+	// setter properties
+	/**
+	 * @param {string} v
+	 */
+	set value(v) {
+		emptyNodeContents(this.elm);
+		v = v
+			//.replace(/\r?\n$/, '')
+			.replace(/\r?\n/g, '\n')
+			.replace(/[\u0000-\u0008\u000b-\u001f]/g, function (a) {
+					return String.fromCharCode(0x2400 + a.charCodeAt(0));
+			});
+
+		var from = 0, to = 0;
+		var limit = 65536;
+		while ((to = v.indexOf('\n', from)) >= 0) {
+			this.#appendRow(v.substring(from, to));
+			from = to + 1;
+			limit--;
+			if (limit <= 0) {
+				throw new RangeError('Editor#value(set): exceeded the limit');
+			}
+		}
+
+		this.#appendRow(v.substring(from));
+	}
+	/**
+	 * @param {WasaviPosition | number} v
+	 */
+	set selectionStart(v) {
+		if (typeof v == 'number') {
+			v = this.linearPositionToBinaryPosition(v) || new Wasavi.Position(0, 0);
+		}
+		if (v instanceof Wasavi.Position) {
+			this.#ssrow = v.row;
+			this.#sscol = v.col;
+		}
+	}
+	/**
+	 * @param {WasaviPosition | number} v
+	 */
+	set selectionEnd(v) {
+		if (typeof v == 'number') {
+			v = this.linearPositionToBinaryPosition(v) || new Wasavi.Position(0, 0);
+		}
+		if (v instanceof Wasavi.Position) {
+			this.#serow = v.row;
+			this.#secol = v.col;
+		}
+	}
+	/**
+	 * @param {number} v
+	 */
+	set scrollTop(v) {
+		this.elm.scrollTop = v;
+	}
+	/**
+	 * @param {number} v
+	 */
+	set scrollLeft(v) {
+		this.elm.scrollLeft = v;
+	}
 };
 
 Wasavi.LiteralInput = class LiteralInput {
@@ -5250,7 +5554,7 @@ Wasavi.Surrounding = class Surrounding {
 
 			// adjust the outerStart
 			while (outerStart.col < innerStart.col) {
-				if (!spc('S').test(buffer.charAt(outerStart))) {
+				if (!spc('S').test(/** @type {string} */ (buffer.charAt(outerStart)))) {
 					break;
 				}
 				outerStart.col++;
@@ -5259,7 +5563,7 @@ Wasavi.Surrounding = class Surrounding {
 			// adjust the outerEnd
 			while (outerEnd.col - 1 > innerEnd.col) {
 				outerEnd.col--;
-				if (!spc('S').test(buffer.charAt(outerEnd))) {
+				if (!spc('S').test(/** @type {string} */ (buffer.charAt(outerEnd)))) {
 					outerEnd.col++;
 					break;
 				}
